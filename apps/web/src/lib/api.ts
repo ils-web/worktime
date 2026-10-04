@@ -78,3 +78,23 @@ export async function apiRequest<T = any>(
 
   return await response.json();
 }
+
+export const api = {
+  get: <T = any>(url: string, options?: RequestInit) =>
+    apiRequest<T>(url, { ...options, method: 'GET' }),
+  post: <T = any>(url: string, body?: any, options?: RequestInit) =>
+    apiRequest<T>(url, {
+      ...options,
+      method: 'POST',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }),
+  put: <T = any>(url: string, body?: any, options?: RequestInit) =>
+    apiRequest<T>(url, {
+      ...options,
+      method: 'PUT',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }),
+  delete: <T = any>(url: string, options?: RequestInit) =>
+    apiRequest<T>(url, { ...options, method: 'DELETE' }),
+};
+

@@ -195,4 +195,39 @@ describe('TimeTracker API Endpoints', () => {
     expect(authRes.body.success).toBe(true);
     expect(authRes.body.periodMonth).toBeDefined();
   });
+
+  it('13. Worker offline sync processes queued events with historical timestamps', async () => {
+    const historicalTime1 = new Date(Date.now() - 3600000).toISOString();
+    const historicalTime2 = new Date(Date.now() - 1800000).toISOString();
+
+    const syncRes = await request(app)
+      .post('/api/worker/sync')
+      .send({
+        empId: testEmpId,
+        logs: [
+          {
+            empId: testEmpId,
+            action: 'CLOCK_IN',
+            lat: 32.0853,
+            lng: 34.7818,
+            dateTime: historicalTime1,
+          },
+          {
+            empId: testEmpId,
+            action: 'CLOCK_OUT',
+            lat: 32.0853,
+            lng: 34.7818,
+            dateTime: historicalTime2,
+            note: 'Офлайн смена',
+            expense: 25,
+          },
+        ],
+      });
+
+    expect(syncRes.status).toBe(200);
+    expect(syncRes.body.success).toBe(true);
+    expect(syncRes.body.count).toBe(2);
+    expect(syncRes.body.logs[0].action).toBe('CLOCK_IN');
+    expect(syncRes.body.logs[1].action).toBe('CLOCK_OUT');
+  });
 });

@@ -79,6 +79,7 @@ const workerLogSchema = z.object({
   action: z.enum(['CLOCK_IN', 'CLOCK_OUT', 'AUTO_PAUSE', 'AUTO_RESUME', 'AUTO_EXIT']),
   lat: z.number().optional().nullable(),
   lng: z.number().optional().nullable(),
+  dateTime: z.string().or(z.date()).optional(),
   note: z.string().optional(),
   expense: z.number().optional(),
 });
@@ -128,6 +129,8 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
       }
     }
 
+    const logDateTime = data.dateTime ? new Date(data.dateTime) : new Date();
+
     const log = await prisma.timeLog.create({
       data: {
         empId: employee.empId,
@@ -136,13 +139,13 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
         action: data.action,
         lat: data.lat ?? null,
         lng: data.lng ?? null,
-        dateTime: new Date(),
+        dateTime: logDateTime,
       },
     });
 
     // Save note or expense if provided (fixes bug #5: fields date & noteText)
     if (data.note || data.expense) {
-      const jerusalemParts = getJerusalemParts(new Date());
+      const jerusalemParts = getJerusalemParts(logDateTime);
       await prisma.dailyNote.create({
         data: {
           clientId: employee.clientId,
@@ -163,6 +166,78 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
     }
     console.error('Worker log error:', err);
     res.status(500).json({ error: 'Ошибка записи отметки' });
+  }
+});
+
+const workerSyncSchema = z.object({
+  empId: z.string().min(1),
+  logs: z.array(workerLogSchema),
+});
+
+/**
+ * 2.1 Batch offline logs synchronization
+ */
+workerRouter.post('/sync', async (req: Request, res: Response) => {
+  try {
+    const { empId, logs } = workerSyncSchema.parse(req.body);
+
+    const employee = await prisma.employee.findUnique({
+      where: { empId },
+      include: { client: true },
+    });
+
+    if (!employee || !employee.client.isActive) {
+      res.status(404).json({ error: 'Сотрудник не найден' });
+      return;
+    }
+
+    // Sort chronologically
+    const sortedLogs = [...logs].sort((a, b) => {
+      const timeA = a.dateTime ? new Date(a.dateTime).getTime() : 0;
+      const timeB = b.dateTime ? new Date(b.dateTime).getTime() : 0;
+      return timeA - timeB;
+    });
+
+    const createdLogs = [];
+    for (const logData of sortedLogs) {
+      const logDateTime = logData.dateTime ? new Date(logData.dateTime) : new Date();
+
+      const log = await prisma.timeLog.create({
+        data: {
+          empId: employee.empId,
+          employeeId: employee.id,
+          clientId: employee.clientId,
+          action: logData.action,
+          lat: logData.lat ?? null,
+          lng: logData.lng ?? null,
+          dateTime: logDateTime,
+        },
+      });
+      createdLogs.push(log);
+
+      if (logData.note || logData.expense) {
+        const jerusalemParts = getJerusalemParts(logDateTime);
+        await prisma.dailyNote.create({
+          data: {
+            clientId: employee.clientId,
+            empId: employee.empId,
+            employeeId: employee.id,
+            date: jerusalemParts.dateStr,
+            noteText: logData.note || 'Расход со смены (офлайн)',
+            expense: logData.expense || 0,
+          },
+        });
+      }
+    }
+
+    res.json({ success: true, count: createdLogs.length, logs: createdLogs });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Неверные параметры пакета синхронизации' });
+      return;
+    }
+    console.error('Worker sync error:', err);
+    res.status(500).json({ error: 'Ошибка синхронизации логов' });
   }
 });
 
