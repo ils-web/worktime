@@ -1,0 +1,28 @@
+{
+  "name": "timetracker-v2",
+  "version": "2.0.0",
+  "private": true,
+  "description": "TimeTracker SaaS v2 - Monorepo with React, Vite, TS, Tailwind, Neon, Prisma",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@timetracker/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm run generate --workspace=@timetracker/db",
+    "db:migrate": "npm run migrate --workspace=@timetracker/db",
+    "db:studio": "npm run studio --workspace=@timetracker/db"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "prettier": "^3.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

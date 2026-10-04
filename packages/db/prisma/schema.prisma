@@ -1,0 +1,185 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+model SaaSSettings {
+  id                Int      @id @default(autoincrement())
+  ownerPasswordHash String
+  updatedAt         DateTime @updatedAt
+}
+
+model Client {
+  id              String     @id @default(uuid())
+  username        String     @unique
+  passwordHash    String     // bcrypt
+  name            String
+  logoUrl         String?    // URL to uploaded logo in Vercel Blob
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  trialEndsAt     DateTime?
+
+  defaultShifts   Json       // { morning: {start,end}, evening: {...}, night: {...} }
+
+  tariffMode      TariffMode @default(PER_USER)
+  pricePerUser    Float      @default(0)
+  pricePerHour    Float      @default(0)
+  autoDeductLunch Boolean    @default(false)
+
+  employees       Employee[]
+  foremen         Foreman[]
+  schedules       Schedule[]
+  logs            TimeLog[]
+  invoices        Invoice[]
+  dailyNotes      DailyNote[]
+
+  @@index([username])
+}
+
+enum TariffMode {
+  PER_USER
+  PER_HOUR
+}
+
+model Employee {
+  id        Int      @id @default(autoincrement())
+  clientId  String
+  empId     String   @unique // Public alphanumeric ID for /w/:empId
+  name      String
+  isMobile  Boolean  @default(false)
+  strictGps Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  geofence  Json?    // { lat, lng, radius, address } — null for mobile
+  shifts    Json?    // Employee-level shift overrides
+
+  foremanId String?
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  foreman   Foreman? @relation(fields: [foremanId], references: [id], onDelete: SetNull)
+  logs      TimeLog[]
+  schedules Schedule[]
+  dailyNotes DailyNote[]
+
+  @@index([clientId])
+  @@index([empId])
+}
+
+model TimeLog {
+  id         Int       @id @default(autoincrement())
+  empId      String
+  employeeId Int?
+  clientId   String
+  action     LogAction
+  lat        Float?
+  lng        Float?
+  dateTime   DateTime  @default(now())
+  isManual   Boolean   @default(false)
+
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  client     Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([empId])
+  @@index([dateTime])
+}
+
+enum LogAction {
+  CLOCK_IN
+  CLOCK_OUT
+  AUTO_PAUSE
+  AUTO_RESUME
+  AUTO_EXIT
+}
+
+model Schedule {
+  id         Int      @id @default(autoincrement())
+  clientId   String
+  employeeId Int
+  dayOfWeek  Int      // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  shiftType  String   // "morning", "evening", "night", or "off"
+
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, dayOfWeek])
+  @@index([clientId])
+}
+
+model DailyNote {
+  id         Int       @id @default(autoincrement())
+  clientId   String
+  employeeId Int?
+  empId      String
+  date       String    // YYYY-MM-DD in Asia/Jerusalem
+  noteText   String
+  expense    Float?    @default(0)
+  createdAt  DateTime  @default(now())
+
+  client     Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, date])
+  @@index([empId, date])
+}
+
+model Invoice {
+  id          String    @id @default(uuid())
+  clientId    String
+  periodMonth String    // YYYY-MM
+  amount      Float
+  status      String    @default("pending") // "pending" | "paid"
+  details     Json?     // Snapshot of billing calculations
+  createdAt   DateTime  @default(now())
+  paidAt      DateTime?
+
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, periodMonth])
+  @@index([clientId])
+}
+
+model Foreman {
+  id           String     @id @default(uuid())
+  clientId     String
+  username     String     @unique
+  passwordHash String
+  name         String
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  client       Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+
+  @@index([clientId])
+}
+
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  empId     String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([empId])
+}
+
+model ContactRequest {
+  id        Int      @id @default(autoincrement())
+  name      String
+  company   String?
+  phone     String
+  email     String?
+  message   String?
+  status    String   @default("new") // "new" | "in_progress" | "closed"
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
