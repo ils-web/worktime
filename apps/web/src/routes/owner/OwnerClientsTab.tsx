@@ -1,0 +1,457 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '../../lib/api';
+import { Modal } from '../../components/ui/Modal';
+import { Badge } from '../../components/ui/Badge';
+import { Plus, Key, ToggleLeft, ToggleRight, DollarSign, Loader2 } from 'lucide-react';
+
+export function OwnerClientsTab() {
+  const queryClient = useQueryClient();
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [resetClientId, setResetClientId] = useState<string | null>(null);
+  const [tariffClientId, setTariffClientId] = useState<any | null>(null);
+
+  // Form states
+  const [createForm, setCreateForm] = useState({
+    username: '',
+    password: '',
+    name: '',
+    tariffMode: 'PER_USER',
+    pricePerUser: 10,
+    pricePerHour: 2.5,
+    trialDays: 14,
+  });
+
+  const [newPassword, setNewPassword] = useState('');
+  const [tariffForm, setTariffForm] = useState({
+    tariffMode: 'PER_USER',
+    pricePerUser: 0,
+    pricePerHour: 0,
+    trialEndsAt: '',
+  });
+
+  // Queries
+  const { data, isLoading } = useQuery({
+    queryKey: ['owner-clients'],
+    queryFn: () => apiRequest<{ clients: any[] }>('/api/owner/clients'),
+  });
+
+  // Mutations
+  const createMutation = useMutation({
+    mutationFn: (body: any) =>
+      apiRequest('/api/owner/clients', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['owner-clients'] });
+      setIsCreateOpen(false);
+      setCreateForm({
+        username: '',
+        password: '',
+        name: '',
+        tariffMode: 'PER_USER',
+        pricePerUser: 10,
+        pricePerHour: 2.5,
+        trialDays: 14,
+      });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/owner/clients/${id}/toggle`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['owner-clients'] }),
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ id, pass }: { id: string; pass: string }) =>
+      apiRequest(`/api/owner/clients/${id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ newPassword: pass }),
+      }),
+    onSuccess: () => {
+      setResetClientId(null);
+      setNewPassword('');
+    },
+  });
+
+  const updateTariffMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: any }) =>
+      apiRequest(`/api/owner/clients/${id}/tariff`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['owner-clients'] });
+      setTariffClientId(null);
+    },
+  });
+
+  const clients = data?.clients || [];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-white">Компании-клиенты (Тенанты)</h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Управление организациями, тарифами, доступом и триалами
+          </p>
+        </div>
+        <button
+          onClick={() => setIsCreateOpen(true)}
+          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-950"
+        >
+          <Plus className="w-4 h-4" />
+          Добавить компанию
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center p-12">
+          <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+        </div>
+      ) : (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <th className="p-4">Компания</th>
+                  <th className="p-4">Логин</th>
+                  <th className="p-4">Сотрудники</th>
+                  <th className="p-4">Тариф</th>
+                  <th className="p-4">Статус</th>
+                  <th className="p-4">Триал до</th>
+                  <th className="p-4 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {clients.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-slate-500">
+                      Клиенты ещё не добавлены
+                    </td>
+                  </tr>
+                ) : (
+                  clients.map((c) => {
+                    const isTrialActive = c.trialEndsAt && new Date(c.trialEndsAt) > new Date();
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-800/40 transition">
+                        <td className="p-4 font-semibold text-white">{c.name}</td>
+                        <td className="p-4 text-slate-300 font-mono text-xs">{c.username}</td>
+                        <td className="p-4 text-slate-300">
+                          <span className="font-semibold text-emerald-400">
+                            {c._count?.employees || 0}
+                          </span>{' '}
+                          сотрудников
+                        </td>
+                        <td className="p-4">
+                          <Badge variant="blue">
+                            {c.tariffMode === 'PER_USER'
+                              ? `₪${c.pricePerUser}/чел`
+                              : `₪${c.pricePerHour}/час`}
+                          </Badge>
+                        </td>
+                        <td className="p-4">
+                          {c.isActive ? (
+                            <Badge variant="emerald" dot>Активен</Badge>
+                          ) : (
+                            <Badge variant="rose">Заблокирован</Badge>
+                          )}
+                        </td>
+                        <td className="p-4 text-xs">
+                          {c.trialEndsAt ? (
+                            <span className={isTrialActive ? 'text-emerald-400' : 'text-rose-400'}>
+                              {new Date(c.trialEndsAt).toLocaleDateString()}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500">Бессрочно</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setTariffClientId(c.id);
+                                setTariffForm({
+                                  tariffMode: c.tariffMode,
+                                  pricePerUser: c.pricePerUser,
+                                  pricePerHour: c.pricePerHour,
+                                  trialEndsAt: c.trialEndsAt
+                                    ? new Date(c.trialEndsAt).toISOString().slice(0, 10)
+                                    : '',
+                                });
+                              }}
+                              title="Настроить тариф"
+                              className="p-1.5 text-slate-400 hover:text-amber-400 rounded-lg hover:bg-slate-800 transition"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setResetClientId(c.id)}
+                              title="Сбросить пароль"
+                              className="p-1.5 text-slate-400 hover:text-blue-400 rounded-lg hover:bg-slate-800 transition"
+                            >
+                              <Key className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => toggleMutation.mutate(c.id)}
+                              title={c.isActive ? 'Заблокировать' : 'Разблокировать'}
+                              className={`p-1.5 rounded-lg hover:bg-slate-800 transition ${
+                                c.isActive
+                                  ? 'text-emerald-400 hover:text-rose-400'
+                                  : 'text-rose-400 hover:text-emerald-400'
+                              }`}
+                            >
+                              {c.isActive ? (
+                                <ToggleRight className="w-5 h-5" />
+                              ) : (
+                                <ToggleLeft className="w-5 h-5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Create Client */}
+      <Modal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        title="Новая компания (Клиент)"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            createMutation.mutate(createForm);
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Название компании</label>
+            <input
+              type="text"
+              required
+              value={createForm.name}
+              onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+              placeholder="ООO Строительные Технологии"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Логин</label>
+              <input
+                type="text"
+                required
+                value={createForm.username}
+                onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+                placeholder="stroyka"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Пароль</label>
+              <input
+                type="password"
+                required
+                value={createForm.password}
+                onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Режим тарифа</label>
+              <select
+                value={createForm.tariffMode}
+                onChange={(e) => setCreateForm({ ...createForm, tariffMode: e.target.value })}
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+              >
+                <option value="PER_USER">За сотрудника (человеко-дни)</option>
+                <option value="PER_HOUR">За отработанный час</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                {createForm.tariffMode === 'PER_USER' ? 'Цена за чел/день (₪)' : 'Цена за час (₪)'}
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                value={createForm.tariffMode === 'PER_USER' ? createForm.pricePerUser : createForm.pricePerHour}
+                onChange={(e) =>
+                  createForm.tariffMode === 'PER_USER'
+                    ? setCreateForm({ ...createForm, pricePerUser: parseFloat(e.target.value) || 0 })
+                    : setCreateForm({ ...createForm, pricePerHour: parseFloat(e.target.value) || 0 })
+                }
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Дней триала</label>
+            <input
+              type="number"
+              value={createForm.trialDays}
+              onChange={(e) => setCreateForm({ ...createForm, trialDays: parseInt(e.target.value) || 0 })}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-3">
+            <button
+              type="button"
+              onClick={() => setIsCreateOpen(false)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={createMutation.isPending}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2"
+            >
+              {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Создать
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Reset Password */}
+      <Modal
+        isOpen={!!resetClientId}
+        onClose={() => setResetClientId(null)}
+        title="Сброс пароля клиента"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (resetClientId) {
+              resetPasswordMutation.mutate({ id: resetClientId, pass: newPassword });
+            }
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Новый пароль</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+              placeholder="Минимум 6 символов"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-3">
+            <button
+              type="button"
+              onClick={() => setResetClientId(null)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={resetPasswordMutation.isPending}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2"
+            >
+              {resetPasswordMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Обновить пароль
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Tariff & Trial */}
+      <Modal
+        isOpen={!!tariffClientId}
+        onClose={() => setTariffClientId(null)}
+        title="Настройки тарифа и триала"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (tariffClientId) {
+              updateTariffMutation.mutate({ id: tariffClientId, body: tariffForm });
+            }
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Режим тарифа</label>
+            <select
+              value={tariffForm.tariffMode}
+              onChange={(e) => setTariffForm({ ...tariffForm, tariffMode: e.target.value })}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+            >
+              <option value="PER_USER">PER_USER (За сотрудников)</option>
+              <option value="PER_HOUR">PER_HOUR (За часы)</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Цена/чел (₪)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={tariffForm.pricePerUser}
+                onChange={(e) => setTariffForm({ ...tariffForm, pricePerUser: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Цена/час (₪)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={tariffForm.pricePerHour}
+                onChange={(e) => setTariffForm({ ...tariffForm, pricePerHour: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Дата окончания триала</label>
+            <input
+              type="date"
+              value={tariffForm.trialEndsAt}
+              onChange={(e) => setTariffForm({ ...tariffForm, trialEndsAt: e.target.value })}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+            />
+            <span className="text-[11px] text-slate-500 mt-1 block">
+              Оставьте пустым для бессрочного доступа
+            </span>
+          </div>
+          <div className="flex justify-end gap-3 pt-3">
+            <button
+              type="button"
+              onClick={() => setTariffClientId(null)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={updateTariffMutation.isPending}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2"
+            >
+              {updateTariffMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Сохранить
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
