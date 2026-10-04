@@ -35,6 +35,12 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 
+// Log incoming request path
+app.use((req, _res, next) => {
+  console.log(`[API] ${req.method} ${req.url}`);
+  next();
+});
+
 // Health Check
 app.get(['/api/health', '/health'], (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -47,5 +53,11 @@ app.use(['/api/owner', '/owner'], ownerRouter);
 app.use(['/api/client', '/client'], clientRouter);
 app.use(['/api/worker', '/worker'], workerRouter);
 app.use(['/api/cron', '/cron'], cronRouter);
+
+// Global Error Handler
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[API ERROR]', err);
+  res.status(500).json({ error: err?.message || 'Internal server error' });
+});
 
 export default app;

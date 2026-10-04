@@ -60036,25 +60036,44 @@ if (typeof wrapper_default !== "undefined") {
   import_serverless.neonConfig.webSocketConstructor = wrapper_default;
 }
 var globalForPrisma = globalThis;
+var cachedPrisma = null;
 function getPrismaClient() {
   if (globalForPrisma.prisma) {
     return globalForPrisma.prisma;
   }
+  if (cachedPrisma) {
+    return cachedPrisma;
+  }
   const connectionString = process.env["DATABASE_URL"];
   let client;
-  if (connectionString && connectionString.includes("neon.tech")) {
-    const pool = new import_serverless.Pool({ connectionString });
-    const adapter = new import_adapter_neon.PrismaNeon(pool);
-    client = new import_client.PrismaClient({ adapter });
-  } else {
+  try {
+    if (connectionString && connectionString.includes("neon.tech")) {
+      const pool = new import_serverless.Pool({ connectionString });
+      const adapter = new import_adapter_neon.PrismaNeon(pool);
+      client = new import_client.PrismaClient({ adapter });
+    } else {
+      client = new import_client.PrismaClient();
+    }
+  } catch (err) {
+    console.error("Failed to create PrismaClient with adapter, falling back to direct PrismaClient:", err);
     client = new import_client.PrismaClient();
   }
   if (process.env["NODE_ENV"] !== "production") {
     globalForPrisma.prisma = client;
   }
+  cachedPrisma = client;
   return client;
 }
-var prisma = getPrismaClient();
+var prisma = new Proxy({}, {
+  get(_target, prop) {
+    const client = getPrismaClient();
+    const val = client[prop];
+    if (typeof val === "function") {
+      return val.bind(client);
+    }
+    return val;
+  }
+});
 
 // packages/api/src/middleware/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken());
@@ -62339,6 +62358,10 @@ app.use(
 );
 app.use((0, import_cookie_parser.default)());
 app.use(import_express7.default.json());
+app.use((req, _res, next) => {
+  console.log(`[API] ${req.method} ${req.url}`);
+  next();
+});
 app.get(["/api/health", "/health"], (_req, res) => {
   res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
@@ -62348,6 +62371,10 @@ app.use(["/api/owner", "/owner"], ownerRouter);
 app.use(["/api/client", "/client"], clientRouter);
 app.use(["/api/worker", "/worker"], workerRouter);
 app.use(["/api/cron", "/cron"], cronRouter);
+app.use((err, _req, res, _next) => {
+  console.error("[API ERROR]", err);
+  res.status(500).json({ error: err?.message || "Internal server error" });
+});
 var app_default = app;
 
 // packages/api/src/vercel.ts
