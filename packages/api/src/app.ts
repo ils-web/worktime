@@ -36,16 +36,16 @@ app.use(cookieParser());
 app.use(express.json());
 
 // Health Check
-app.get('/api/health', (_req, res) => {
+app.get(['/api/health', '/health'], (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Mount modular feature routers
-app.use('/api/auth', authRouter);
-app.use('/api/public', publicRouter);
-app.use('/api/owner', ownerRouter);
-app.use('/api/client', clientRouter);
-app.use('/api/worker', workerRouter);
-app.use('/api/cron', cronRouter);
+// Mount modular feature routers (supports both /api/* and /* when rewritten on Vercel)
+app.use(['/api/auth', '/auth'], authRouter);
+app.use(['/api/public', '/public'], publicRouter);
+app.use(['/api/owner', '/owner'], ownerRouter);
+app.use(['/api/client', '/client'], clientRouter);
+app.use(['/api/worker', '/worker'], workerRouter);
+app.use(['/api/cron', '/cron'], cronRouter);
 
 export default app;
