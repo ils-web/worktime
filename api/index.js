@@ -62365,7 +62365,7 @@ app.use((req, _res, next) => {
 app.get(["/api/health", "/health"], (_req, res) => {
   res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
-app.get(["/api/manifest", "/manifest.json"], (req, res) => {
+app.get(["/api/manifest", "/manifest", "/manifest.json"], (req, res) => {
   const empId = req.query["empId"] || "";
   const startUrl = empId ? `/w/${encodeURIComponent(empId)}` : "/";
   res.setHeader("Content-Type", "application/manifest+json");

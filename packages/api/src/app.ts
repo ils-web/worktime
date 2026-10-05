@@ -47,7 +47,7 @@ app.get(['/api/health', '/health'], (_req, res) => {
 });
 
 // Dynamic PWA Manifest (customizes start_url for workers)
-app.get(['/api/manifest', '/manifest.json'], (req, res) => {
+app.get(['/api/manifest', '/manifest', '/manifest.json'], (req, res) => {
   const empId = (req.query['empId'] as string) || '';
   const startUrl = empId ? `/w/${encodeURIComponent(empId)}` : '/';
   res.setHeader('Content-Type', 'application/manifest+json');
