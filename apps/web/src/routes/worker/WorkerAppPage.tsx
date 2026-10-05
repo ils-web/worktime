@@ -16,7 +16,10 @@ import {
   Compass,
   Globe,
   Calendar,
+  Smartphone,
+  Share2,
 } from 'lucide-react';
+import { Modal } from '../../components/ui/Modal';
 import { api } from '../../lib/api';
 import { changeLanguage } from '../../lib/i18n';
 import { getCurrentCoordinates, evaluateGeofence, GeoLocationResult, GeofenceStatus } from '../../lib/geo';
@@ -111,16 +114,30 @@ export function WorkerAppPage() {
   const [monthlyDays, setMonthlyDays] = useState<DailyReportRow[]>([]);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
 
-  // PWA Install Prompt
+  // PWA Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIosDevice, setIsIosDevice] = useState(false);
+  const [showInstallGuideModal, setShowInstallGuideModal] = useState(false);
+  const [isInstallBannerDismissed, setIsInstallBannerDismissed] = useState(false);
 
-  // 1. Listen for PWA install event
+  // 1. Detect PWA standalone mode and listen for install prompt
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true ||
+      document.referrer.includes('android-app://');
+    setIsStandalone(standalone);
+
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIosDevice(ios);
+
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
@@ -475,11 +492,15 @@ export function WorkerAppPage() {
   };
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        setIsStandalone(true);
+      }
+    } else {
+      setShowInstallGuideModal(true);
     }
   };
 
@@ -563,6 +584,18 @@ export function WorkerAppPage() {
                 {t('worker.syncQueue', { count: pendingQueueCount })}
               </button>
             )}
+
+            {/* PWA Install Button (shown when opened in standard browser) */}
+            {!isStandalone && (
+              <button
+                onClick={handleInstallClick}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition text-[11px]"
+                title={t('worker.installPwa')}
+              >
+                <Smartphone className="w-3 h-3" />
+                <span>{t('worker.installPwa')}</span>
+              </button>
+            )}
           </div>
 
           {/* GPS Quick Status */}
@@ -578,6 +611,41 @@ export function WorkerAppPage() {
           </button>
         </div>
       </header>
+
+      {/* Prominent PWA Install Notice Banner for Mobile Browser */}
+      {!isStandalone && !isInstallBannerDismissed && (
+        <div className="bg-gradient-to-r from-emerald-950/90 via-teal-950/90 to-slate-900 border-b border-emerald-500/30 p-3 text-xs text-emerald-100 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-2.5 flex-1 min-w-0 mr-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 text-emerald-400">
+              <Smartphone className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-white text-xs truncate">
+                {t('worker.installPwaTitle')}
+              </div>
+              <div className="text-[11px] text-emerald-300/80 truncate">
+                {t('worker.installPwaSubtitle')}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleInstallClick}
+              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold rounded-lg transition text-xs shadow-sm flex items-center gap-1"
+            >
+              <Download className="w-3 h-3" />
+              <span>{t('worker.installPwa')}</span>
+            </button>
+            <button
+              onClick={() => setIsInstallBannerDismissed(true)}
+              className="text-slate-400 hover:text-white font-bold px-1.5 text-base leading-none"
+              title="Закрыть"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Offline Alert Banner */}
       {offlineNotice && (
@@ -878,8 +946,8 @@ export function WorkerAppPage() {
         )}
       </main>
 
-      {/* PWA Add to Home Screen Prompt (if available) */}
-      {deferredPrompt && (
+      {/* PWA Add to Home Screen Quick Prompt (if deferredPrompt is ready and not standalone) */}
+      {!isStandalone && deferredPrompt && (
         <div className="px-4 py-2 bg-indigo-950/60 border-t border-indigo-700/40 flex items-center justify-between text-xs text-indigo-200">
           <div className="flex items-center gap-2">
             <DownloadCloud className="w-4 h-4 text-indigo-400" />
@@ -889,10 +957,39 @@ export function WorkerAppPage() {
             onClick={handleInstallClick}
             className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 font-bold rounded-lg text-white transition text-[11px]"
           >
-            Установить
+            {t('worker.installPwa')}
           </button>
         </div>
       )}
+
+      {/* Modal with step-by-step instructions for iOS / Android */}
+      <Modal
+        isOpen={showInstallGuideModal}
+        onClose={() => setShowInstallGuideModal(false)}
+        title={t('worker.installPwaTitle')}
+      >
+        <div className="space-y-4 py-2">
+          <div className="flex items-start gap-3 p-3.5 bg-slate-800/80 rounded-xl border border-slate-700">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
+              {isIosDevice ? <Share2 className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
+            </div>
+            <div className="text-sm font-medium text-slate-200 leading-relaxed">
+              {isIosDevice ? t('worker.installIosStep') : t('worker.installAndroidStep')}
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-400 text-center">
+            {t('worker.installPwaSubtitle')}
+          </p>
+
+          <button
+            onClick={() => setShowInstallGuideModal(false)}
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 font-bold rounded-xl text-white transition text-sm shadow"
+          >
+            OK
+          </button>
+        </div>
+      </Modal>
 
       {/* Bottom Sticky Tab Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-slate-900/90 backdrop-blur border-t border-slate-800 p-2 flex justify-around z-30">
