@@ -158,7 +158,58 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({ success: true, log });
+    // Calculate today's worked hours summary on CLOCK_OUT
+    let todaySummary: { totalNetHours: number; hours: number; minutes: number } | null = null;
+    if (data.action === 'CLOCK_OUT') {
+      try {
+        const jerusalemParts = getJerusalemParts(logDateTime);
+        const startOfDay = new Date(logDateTime);
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const todayLogs = await prisma.timeLog.findMany({
+          where: {
+            empId: employee.empId,
+            dateTime: {
+              gte: new Date(startOfDay.getTime() - 24 * 3600 * 1000),
+            },
+          },
+          orderBy: { dateTime: 'asc' },
+        });
+
+        const todaySessions: WorkSession[] = [];
+        let cIn: Date | null = null;
+        for (const l of todayLogs) {
+          if (l.action === 'CLOCK_IN') {
+            cIn = l.dateTime;
+          } else if (l.action === 'CLOCK_OUT' || l.action === 'AUTO_EXIT') {
+            if (cIn) {
+              todaySessions.push({ clockIn: cIn, clockOut: l.dateTime });
+              cIn = null;
+            }
+          }
+        }
+
+        const sameDaySessions = todaySessions.filter(
+          (s) => getJerusalemParts(s.clockIn).dateStr === jerusalemParts.dateStr
+        );
+
+        const shiftsConfig = (employee.shifts || employee.client.defaultShifts) as unknown as ClientShiftsConfig;
+        const nightStart = shiftsConfig?.night?.start || '22:00';
+        const nightEnd = shiftsConfig?.night?.end || '06:00';
+        const daily = calculateDailyHours(sameDaySessions, employee.client.autoDeductLunch, nightStart, nightEnd);
+
+        const totalMinutes = Math.round(daily.netHours * 60);
+        todaySummary = {
+          totalNetHours: daily.netHours,
+          hours: Math.floor(totalMinutes / 60),
+          minutes: totalMinutes % 60,
+        };
+      } catch (sumErr) {
+        console.error('Error calculating today summary on clock-out:', sumErr);
+      }
+    }
+
+    res.json({ success: true, log, todaySummary });
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: 'Неверные параметры запроса' });

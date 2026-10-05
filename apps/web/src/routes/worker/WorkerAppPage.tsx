@@ -122,6 +122,44 @@ export function WorkerAppPage() {
   const [showInstallGuideModal, setShowInstallGuideModal] = useState(false);
   const [isInstallBannerDismissed, setIsInstallBannerDismissed] = useState(false);
 
+  // Clock Out Accidental Protection & Shift Completion Modal
+  const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
+  const [showShiftCompleteModal, setShowShiftCompleteModal] = useState(false);
+  const [completedShiftSummary, setCompletedShiftSummary] = useState<{
+    hours: number;
+    minutes: number;
+    text: string;
+  } | null>(null);
+
+  const formatWorkedMessage = (hours: number, minutes: number, lang: string) => {
+    if (lang === 'ru') {
+      const getHourWord = (num: number) => {
+        const mod10 = num % 10;
+        const mod100 = num % 100;
+        if (mod100 >= 11 && mod100 <= 19) return 'часов';
+        if (mod10 === 1) return 'час';
+        if (mod10 >= 2 && mod10 <= 4) return 'часа';
+        return 'часов';
+      };
+      const getMinWord = (num: number) => {
+        const mod10 = num % 10;
+        const mod100 = num % 100;
+        if (mod100 >= 11 && mod100 <= 19) return 'минут';
+        if (mod10 === 1) return 'минута';
+        if (mod10 >= 2 && mod10 <= 4) return 'минуты';
+        return 'минут';
+      };
+      return `Сегодня вы отработали ${hours} ${getHourWord(hours)} ${minutes} ${getMinWord(minutes)}.`;
+    }
+    if (lang === 'he') {
+      return `היום עבדת ${hours} שעות ו-${minutes} דקות.`;
+    }
+    if (lang === 'ar') {
+      return `اليوم عملت ${hours} ساعة و ${minutes} دقيقة.`;
+    }
+    return `Today you worked ${hours} hours and ${minutes} minutes.`;
+  };
+
   // 1. Detect PWA standalone mode and listen for install prompt
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
@@ -365,6 +403,8 @@ export function WorkerAppPage() {
     const actionTime = new Date().toISOString();
     const lat = geoResult?.lat ?? null;
     const lng = geoResult?.lng ?? null;
+    const fallbackH = Math.floor(elapsedSeconds / 3600);
+    const fallbackM = Math.floor((elapsedSeconds % 3600) / 60);
 
     if (!isOnline) {
       // Offline: Enqueue to IndexedDB
@@ -382,6 +422,13 @@ export function WorkerAppPage() {
         lastActionTime: actionTime,
       });
 
+      if (action === 'CLOCK_OUT') {
+        const msg = formatWorkedMessage(fallbackH, fallbackM, i18n.language);
+        setCompletedShiftSummary({ hours: fallbackH, minutes: fallbackM, text: msg });
+        setShowClockOutConfirm(false);
+        setShowShiftCompleteModal(true);
+      }
+
       setOfflineNotice(t('worker.offlineNotice'));
       setIsSubmittingAction(false);
       return;
@@ -389,7 +436,7 @@ export function WorkerAppPage() {
 
     // Online: Send direct API request
     try {
-      const res = await api.post<{ success: boolean; log: any }>('/api/worker/log', {
+      const res = await api.post<{ success: boolean; log: any; todaySummary?: any }>('/api/worker/log', {
         empId,
         action,
         lat,
@@ -403,6 +450,15 @@ export function WorkerAppPage() {
           lastActionTime: res.log.dateTime,
         });
         refreshLocation();
+
+        if (action === 'CLOCK_OUT') {
+          const h = res.todaySummary?.hours ?? fallbackH;
+          const m = res.todaySummary?.minutes ?? fallbackM;
+          const msg = formatWorkedMessage(h, m, i18n.language);
+          setCompletedShiftSummary({ hours: h, minutes: m, text: msg });
+          setShowClockOutConfirm(false);
+          setShowShiftCompleteModal(true);
+        }
       }
     } catch (err: any) {
       // If network failed during online attempt, gracefully fallback to offline queue
@@ -420,6 +476,13 @@ export function WorkerAppPage() {
           lastAction: action,
           lastActionTime: actionTime,
         });
+
+        if (action === 'CLOCK_OUT') {
+          const msg = formatWorkedMessage(fallbackH, fallbackM, i18n.language);
+          setCompletedShiftSummary({ hours: fallbackH, minutes: fallbackM, text: msg });
+          setShowClockOutConfirm(false);
+          setShowShiftCompleteModal(true);
+        }
 
         setOfflineNotice(t('worker.offlineNotice'));
       } else {
@@ -792,9 +855,9 @@ export function WorkerAppPage() {
                   </span>
                 </button>
               ) : (
-                /* CLOCK OUT BUTTON */
+                /* CLOCK OUT BUTTON with PROTECTION */
                 <button
-                  onClick={() => handleClockAction('CLOCK_OUT')}
+                  onClick={() => setShowClockOutConfirm(true)}
                   disabled={isSubmittingAction}
                   className="w-full h-36 bg-gradient-to-br from-rose-600 to-rose-800 hover:from-rose-500 hover:to-rose-700 active:scale-[0.98] text-white font-black text-3xl rounded-3xl shadow-2xl shadow-rose-950/60 flex flex-col items-center justify-center transition border-t border-rose-400/30 group"
                 >
@@ -1018,6 +1081,132 @@ export function WorkerAppPage() {
             className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 font-bold rounded-xl text-white transition text-sm shadow"
           >
             OK
+          </button>
+        </div>
+      </Modal>
+
+      {/* 2. Modal: Protection against accidental Clock Out */}
+      <Modal
+        isOpen={showClockOutConfirm}
+        onClose={() => setShowClockOutConfirm(false)}
+        title={t('worker.confirmClockOutTitle')}
+      >
+        <div className="py-2 text-center space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-rose-500/10 border border-rose-500/30 mx-auto flex items-center justify-center text-rose-400 shadow-lg shadow-rose-500/10">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+
+          <div>
+            <h4 className="text-base font-bold text-white mb-1">
+              {t('worker.confirmClockOutTitle')}
+            </h4>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              {t('worker.confirmClockOutDesc')}
+            </p>
+          </div>
+
+          {/* Current Shift Summary in Confirmation */}
+          <div className="p-3.5 bg-slate-800/80 rounded-2xl border border-slate-700 flex items-center justify-between text-left">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                {t('worker.shiftTimer')}
+              </span>
+              <span className="text-base font-mono font-black text-white">
+                {formattedTimer}
+              </span>
+            </div>
+            {status.lastActionTime && (
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                  Начало
+                </span>
+                <span className="text-xs font-mono font-bold text-emerald-400">
+                  {new Date(status.lastActionTime).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button
+              onClick={() => setShowClockOutConfirm(false)}
+              className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition active:scale-95"
+            >
+              {t('worker.cancel')}
+            </button>
+            <button
+              onClick={() => handleClockAction('CLOCK_OUT')}
+              disabled={isSubmittingAction}
+              className="py-3 px-4 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-1.5"
+            >
+              {isSubmittingAction ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              )}
+              <span>{t('worker.confirmClockOutBtn')}</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 3. Modal: Shift Complete Celebration & Summary ("Спасибо за Ваше время!") */}
+      <Modal
+        isOpen={showShiftCompleteModal}
+        onClose={() => setShowShiftCompleteModal(false)}
+        title={t('worker.shiftCompleteTitle')}
+      >
+        <div className="py-3 text-center space-y-5">
+          {/* Celebratory Glowing Badge */}
+          <div className="relative mx-auto w-20 h-20">
+            <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full" />
+            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 shadow-xl shadow-emerald-500/25">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-xl font-black text-white tracking-tight">
+              {t('worker.shiftCompleteTitle')}
+            </h3>
+            <p className="text-sm font-semibold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 rounded-2xl py-3 px-4 inline-block shadow-inner leading-relaxed">
+              {completedShiftSummary?.text}
+            </p>
+          </div>
+
+          {/* Shift Details Breakdown Card */}
+          <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 text-left space-y-2.5 shadow-inner">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Сотрудник:</span>
+              <span className="font-bold text-white">{profile.name}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Организация:</span>
+              <span className="font-semibold text-emerald-300">{profile.companyName}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Время завершения:</span>
+              <span className="font-mono font-bold text-white">
+                {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-700/60">
+              <span className="text-slate-400">Статус смены:</span>
+              <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Завершена и сохранена
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowShiftCompleteModal(false)}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 font-bold rounded-xl text-white transition text-sm shadow-lg shadow-emerald-600/30"
+          >
+            {t('worker.shiftCompleteOk')}
           </button>
         </div>
       </Modal>

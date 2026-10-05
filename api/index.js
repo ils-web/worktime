@@ -61886,7 +61886,51 @@ workerRouter.post("/log", async (req, res) => {
         }
       });
     }
-    res.json({ success: true, log });
+    let todaySummary = null;
+    if (data.action === "CLOCK_OUT") {
+      try {
+        const jerusalemParts = getJerusalemParts(logDateTime);
+        const startOfDay = new Date(logDateTime);
+        startOfDay.setHours(0, 0, 0, 0);
+        const todayLogs = await prisma.timeLog.findMany({
+          where: {
+            empId: employee.empId,
+            dateTime: {
+              gte: new Date(startOfDay.getTime() - 24 * 3600 * 1e3)
+            }
+          },
+          orderBy: { dateTime: "asc" }
+        });
+        const todaySessions = [];
+        let cIn = null;
+        for (const l of todayLogs) {
+          if (l.action === "CLOCK_IN") {
+            cIn = l.dateTime;
+          } else if (l.action === "CLOCK_OUT" || l.action === "AUTO_EXIT") {
+            if (cIn) {
+              todaySessions.push({ clockIn: cIn, clockOut: l.dateTime });
+              cIn = null;
+            }
+          }
+        }
+        const sameDaySessions = todaySessions.filter(
+          (s) => getJerusalemParts(s.clockIn).dateStr === jerusalemParts.dateStr
+        );
+        const shiftsConfig = employee.shifts || employee.client.defaultShifts;
+        const nightStart = shiftsConfig?.night?.start || "22:00";
+        const nightEnd = shiftsConfig?.night?.end || "06:00";
+        const daily = calculateDailyHours(sameDaySessions, employee.client.autoDeductLunch, nightStart, nightEnd);
+        const totalMinutes = Math.round(daily.netHours * 60);
+        todaySummary = {
+          totalNetHours: daily.netHours,
+          hours: Math.floor(totalMinutes / 60),
+          minutes: totalMinutes % 60
+        };
+      } catch (sumErr) {
+        console.error("Error calculating today summary on clock-out:", sumErr);
+      }
+    }
+    res.json({ success: true, log, todaySummary });
   } catch (err) {
     if (err instanceof external_exports.ZodError) {
       res.status(400).json({ error: "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0435 \u043F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B \u0437\u0430\u043F\u0440\u043E\u0441\u0430" });
