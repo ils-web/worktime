@@ -1,7 +1,86 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
-import { Settings, Image, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Settings, Image, Check, AlertCircle, Loader2, Sun, Sunset, Moon, Clock } from 'lucide-react';
+
+function TimeInput24({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [val, setVal] = useState(value || '00:00');
+
+  useEffect(() => {
+    setVal(value || '00:00');
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let text = e.target.value.replace(/[^0-9:]/g, '');
+    if (text.length === 2 && !text.includes(':') && !val.endsWith(':')) {
+      text = text + ':';
+    } else if (text.length > 5) {
+      text = text.slice(0, 5);
+    }
+    setVal(text);
+
+    // If matches complete HH:MM format
+    const match = text.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);
+    if (match && match[1] && match[2]) {
+      const h = match[1].padStart(2, '0');
+      const m = match[2];
+      onChange(`${h}:${m}`);
+    }
+  };
+
+  const handleBlur = () => {
+    let text = val.trim();
+    if (!text) {
+      setVal(value || '00:00');
+      return;
+    }
+    const digits = text.replace(/[^0-9]/g, '');
+    let h = 0;
+    let m = 0;
+    if (text.includes(':')) {
+      const parts = text.split(':');
+      h = parseInt(parts[0] || '0', 10);
+      m = parseInt(parts[1] || '0', 10);
+    } else if (digits.length <= 2) {
+      h = parseInt(digits, 10);
+      m = 0;
+    } else if (digits.length >= 3) {
+      h = parseInt(digits.slice(0, 2), 10);
+      m = parseInt(digits.slice(2, 4), 10);
+    }
+
+    if (isNaN(h) || h < 0) h = 0;
+    if (h > 23) h = 23;
+    if (isNaN(m) || m < 0) m = 0;
+    if (m > 59) m = 59;
+
+    const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    setVal(formatted);
+    onChange(formatted);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        inputMode="numeric"
+        list="times-24h-list"
+        value={val}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        placeholder="00:00"
+        maxLength={5}
+        className="w-full bg-slate-900 border border-slate-700/80 hover:border-slate-600 focus:border-emerald-500 rounded-xl px-2.5 py-2 text-white font-mono text-center text-xs font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500 transition shadow-inner"
+      />
+    </div>
+  );
+}
 
 export function ClientSettingsTab() {
   const queryClient = useQueryClient();
@@ -81,7 +160,16 @@ export function ClientSettingsTab() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-4xl space-y-6">
+      {/* 24-Hour Time Datalist for Quick Selection */}
+      <datalist id="times-24h-list">
+        {Array.from({ length: 48 }).map((_, i) => {
+          const h = String(Math.floor(i / 2)).padStart(2, '0');
+          const m = i % 2 === 0 ? '00' : '30';
+          return <option key={`${h}:${m}`} value={`${h}:${m}`} />;
+        })}
+      </datalist>
+
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <Settings className="w-5 h-5 text-emerald-400" />
@@ -127,94 +215,152 @@ export function ClientSettingsTab() {
 
           {/* Shifts */}
           <div className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Границы смен по умолчанию (HH:mm)
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
-                <span className="text-xs font-semibold text-emerald-400 block mb-2">Утренняя смена</span>
-                <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                  <input
-                    type="time"
-                    value={shifts.morning.start}
-                    onChange={(e) =>
-                      setShifts({
-                        ...shifts,
-                        morning: { ...shifts.morning, start: e.target.value },
-                      })
-                    }
-                    className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white text-xs"
-                  />
-                  <span>—</span>
-                  <input
-                    type="time"
-                    value={shifts.morning.end}
-                    onChange={(e) =>
-                      setShifts({
-                        ...shifts,
-                        morning: { ...shifts.morning, end: e.target.value },
-                      })
-                    }
-                    className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white text-xs"
-                  />
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Границы смен по умолчанию (формат 24ч, ЧЧ:ММ)</span>
+              </label>
+              <span className="text-[11px] text-slate-500 font-mono">
+                24-Hour Format
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 1. Morning Shift */}
+              <div className="p-4 bg-slate-950/70 border border-slate-800 hover:border-slate-700/80 rounded-2xl flex flex-col justify-between transition shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <Sun className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-white">Утренняя смена</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    ДЕНЬ
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <div>
+                    <label className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">
+                      Начало
+                    </label>
+                    <TimeInput24
+                      value={shifts.morning.start}
+                      onChange={(val) =>
+                        setShifts({
+                          ...shifts,
+                          morning: { ...shifts.morning, start: val },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">
+                      Окончание
+                    </label>
+                    <TimeInput24
+                      value={shifts.morning.end}
+                      onChange={(val) =>
+                        setShifts({
+                          ...shifts,
+                          morning: { ...shifts.morning, end: val },
+                        })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
-                <span className="text-xs font-semibold text-blue-400 block mb-2">Вечерняя смена</span>
-                <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                  <input
-                    type="time"
-                    value={shifts.evening.start}
-                    onChange={(e) =>
-                      setShifts({
-                        ...shifts,
-                        evening: { ...shifts.evening, start: e.target.value },
-                      })
-                    }
-                    className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white text-xs"
-                  />
-                  <span>—</span>
-                  <input
-                    type="time"
-                    value={shifts.evening.end}
-                    onChange={(e) =>
-                      setShifts({
-                        ...shifts,
-                        evening: { ...shifts.evening, end: e.target.value },
-                      })
-                    }
-                    className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white text-xs"
-                  />
+              {/* 2. Evening Shift */}
+              <div className="p-4 bg-slate-950/70 border border-slate-800 hover:border-slate-700/80 rounded-2xl flex flex-col justify-between transition shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                      <Sunset className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-white">Вечерняя смена</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                    ВЕЧЕР
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <div>
+                    <label className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">
+                      Начало
+                    </label>
+                    <TimeInput24
+                      value={shifts.evening.start}
+                      onChange={(val) =>
+                        setShifts({
+                          ...shifts,
+                          evening: { ...shifts.evening, start: val },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">
+                      Окончание
+                    </label>
+                    <TimeInput24
+                      value={shifts.evening.end}
+                      onChange={(val) =>
+                        setShifts({
+                          ...shifts,
+                          evening: { ...shifts.evening, end: val },
+                        })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
-                <span className="text-xs font-semibold text-purple-400 block mb-2">Ночное окно</span>
-                <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                  <input
-                    type="time"
-                    value={shifts.night.start}
-                    onChange={(e) =>
-                      setShifts({
-                        ...shifts,
-                        night: { ...shifts.night, start: e.target.value },
-                      })
-                    }
-                    className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white text-xs"
-                  />
-                  <span>—</span>
-                  <input
-                    type="time"
-                    value={shifts.night.end}
-                    onChange={(e) =>
-                      setShifts({
-                        ...shifts,
-                        night: { ...shifts.night, end: e.target.value },
-                      })
-                    }
-                    className="bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-white text-xs"
-                  />
+              {/* 3. Night Window */}
+              <div className="p-4 bg-slate-950/70 border border-slate-800 hover:border-slate-700/80 rounded-2xl flex flex-col justify-between transition shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                      <Moon className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-white">Ночное окно</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                    НОЧЬ
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <div>
+                    <label className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">
+                      Начало
+                    </label>
+                    <TimeInput24
+                      value={shifts.night.start}
+                      onChange={(val) =>
+                        setShifts({
+                          ...shifts,
+                          night: { ...shifts.night, start: val },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">
+                      Окончание
+                    </label>
+                    <TimeInput24
+                      value={shifts.night.end}
+                      onChange={(val) =>
+                        setShifts({
+                          ...shifts,
+                          night: { ...shifts.night, end: val },
+                        })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -234,7 +380,7 @@ export function ClientSettingsTab() {
                   Автоматический вычет обеденного перерыва (0.5 ч)
                 </span>
                 <span className="text-[11px] text-slate-400 mt-0.5 block leading-relaxed">
-                  Если сотрудник отработал $\ge 6$ часов за день и между сменами не было перерыва от 30 минут, система автоматически вычитает 30 минут из общего табеля.
+                  Если сотрудник отработал 6 и более часов за смену (≥ 6 ч) и между сменами не было перерыва от 30 минут, система автоматически вычитает 30 минут из общего табеля.
                 </span>
               </div>
             </label>
