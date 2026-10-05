@@ -46,6 +46,46 @@ app.get(['/api/health', '/health'], (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Dynamic PWA Manifest (customizes start_url for workers)
+app.get(['/api/manifest', '/manifest.json'], (req, res) => {
+  const empId = (req.query['empId'] as string) || '';
+  const startUrl = empId ? `/w/${encodeURIComponent(empId)}` : '/';
+  res.setHeader('Content-Type', 'application/manifest+json');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.json({
+    name: 'TimeTracker WorkTime PWA',
+    short_name: 'WorkTime',
+    description: 'GPS Time Tracking for Field Workers',
+    start_url: startUrl,
+    scope: '/',
+    id: empId ? `worktime-${empId}` : 'worktime-pwa',
+    theme_color: '#0f172a',
+    background_color: '#0f172a',
+    display: 'standalone',
+    orientation: 'portrait',
+    icons: [
+      {
+        src: '/icons/icon-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+    ],
+  });
+});
+
 // Mount modular feature routers (supports both /api/* and /* when rewritten on Vercel)
 app.use(['/api/auth', '/auth'], authRouter);
 app.use(['/api/public', '/public'], publicRouter);

@@ -18,6 +18,7 @@ import {
   Calendar,
   Smartphone,
   Share2,
+  LogOut,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { api } from '../../lib/api';
@@ -140,6 +141,19 @@ export function WorkerAppPage() {
 
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
+
+  // 1.1 Persist current empId to localStorage and point manifest to dynamic endpoint
+  useEffect(() => {
+    if (empId) {
+      try {
+        localStorage.setItem('worktime_last_worker_empid', empId);
+      } catch {}
+      const manifestEl = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+      if (manifestEl) {
+        manifestEl.href = `/api/manifest?empId=${encodeURIComponent(empId)}`;
+      }
+    }
+  }, [empId]);
 
   // 2. Fetch worker profile
   const fetchProfile = useCallback(async () => {
@@ -539,22 +553,39 @@ export function WorkerAppPage() {
             <h1 className="text-lg font-black tracking-tight text-white">{profile.name}</h1>
           </div>
 
-          {/* Language Switcher Buttons */}
-          <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-xl border border-slate-700/60">
-            <Globe className="w-3.5 h-3.5 text-slate-400 ml-1 mr-0.5" />
-            {(['ru', 'he', 'en', 'ar'] as const).map((lang) => (
-              <button
-                key={lang}
-                onClick={() => changeLanguage(lang)}
-                className={`px-2 py-0.5 text-xs font-bold rounded-lg transition ${
-                  i18n.language === lang
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {lang.toUpperCase()}
-              </button>
-            ))}
+          {/* Language Switcher Buttons & Logout */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-xl border border-slate-700/60">
+              <Globe className="w-3.5 h-3.5 text-slate-400 ml-1 mr-0.5" />
+              {(['ru', 'he', 'en', 'ar'] as const).map((lang) => (
+                <button
+                  key={lang}
+                  onClick={() => changeLanguage(lang)}
+                  className={`px-2 py-0.5 text-xs font-bold rounded-lg transition ${
+                    i18n.language === lang
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {lang.toUpperCase()}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                if (window.confirm('Выйти из профиля этого сотрудника на этом телефоне?')) {
+                  try {
+                    localStorage.removeItem('worktime_last_worker_empid');
+                  } catch {}
+                  window.location.href = '/';
+                }
+              }}
+              className="p-1.5 bg-slate-800 hover:bg-rose-950/50 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60 transition"
+              title="Сменить сотрудника"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
