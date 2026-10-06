@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
+import { PasswordInput } from '../../components/ui/PasswordInput';
 import { Lock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 export function OwnerSettingsTab() {
@@ -73,36 +74,28 @@ export function OwnerSettingsTab() {
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
               Новый пароль
             </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                placeholder="Минимум 6 символов"
-              />
-            </div>
+            <PasswordInput
+              required
+              minLength={6}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Минимум 6 символов"
+              leftIcon={<Lock className="w-4 h-4" />}
+            />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
               Повторите пароль
             </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                placeholder="Повторите новый пароль"
-              />
-            </div>
+            <PasswordInput
+              required
+              minLength={6}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Повторите новый пароль"
+              leftIcon={<Lock className="w-4 h-4" />}
+            />
           </div>
 
           <button

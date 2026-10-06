@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
+import { PasswordInput } from '../../components/ui/PasswordInput';
 import { Plus, ToggleLeft, ToggleRight, Trash2, Loader2 } from 'lucide-react';
 
 export function ClientForemenTab() {
@@ -168,13 +169,11 @@ export function ClientForemenTab() {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">{t('admin.foremanPassword')}</label>
-            <input
-              type="password"
+            <PasswordInput
               required
               minLength={6}
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
               placeholder="••••••••"
             />
           </div>

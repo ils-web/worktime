@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
+import { PasswordInput } from '../../components/ui/PasswordInput';
 import { useAuthStore } from '../../stores/authStore';
 
 export function MarketingPage() {
@@ -674,13 +675,13 @@ export function MarketingPage() {
             <label className="block text-xs font-semibold text-slate-300 mb-1">
               Пароль (от 6 символов) *
             </label>
-            <input
-              type="password"
+            <PasswordInput
               required
+              minLength={6}
               value={regPassword}
               onChange={(e) => setRegPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              className="bg-slate-900 border-slate-700"
             />
           </div>
 

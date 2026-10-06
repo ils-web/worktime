@@ -3,13 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
-import { Plus, Key, ToggleLeft, ToggleRight, DollarSign, Loader2 } from 'lucide-react';
+import { PasswordInput } from '../../components/ui/PasswordInput';
+import { Plus, Key, ToggleLeft, ToggleRight, DollarSign, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 
 export function OwnerClientsTab() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [resetClientId, setResetClientId] = useState<string | null>(null);
   const [tariffClientId, setTariffClientId] = useState<any | null>(null);
+  const [deleteClient, setDeleteClient] = useState<{ id: string; name: string; username: string; empCount: number } | null>(null);
+  const [isCleanupOpen, setIsCleanupOpen] = useState(false);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -85,7 +88,30 @@ export function OwnerClientsTab() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/owner/clients/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['owner-clients'] });
+      setDeleteClient(null);
+    },
+  });
+
+  const cleanupTestMutation = useMutation({
+    mutationFn: () =>
+      apiRequest<{ success: boolean; count: number }>('/api/owner/clients/cleanup-test', {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['owner-clients'] });
+      setIsCleanupOpen(false);
+    },
+  });
+
   const clients = data?.clients || [];
+  const testClients = clients.filter(
+    (c: any) => c.username.startsWith('testclient_') || c.name.includes('Тестовая')
+  );
 
   return (
     <div className="space-y-6">
@@ -96,13 +122,25 @@ export function OwnerClientsTab() {
             Управление организациями, тарифами, доступом и триалами
           </p>
         </div>
-        <button
-          onClick={() => setIsCreateOpen(true)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-950"
-        >
-          <Plus className="w-4 h-4" />
-          Добавить компанию
-        </button>
+        <div className="flex items-center gap-3">
+          {testClients.length > 0 && (
+            <button
+              onClick={() => setIsCleanupOpen(true)}
+              className="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-sm"
+              title="Удалить тестовые компании, созданные тестами"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Очистить тестовые ({testClients.length})</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsCreateOpen(true)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-950"
+          >
+            <Plus className="w-4 h-4" />
+            Добавить компанию
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -208,6 +246,20 @@ export function OwnerClientsTab() {
                                 <ToggleLeft className="w-5 h-5" />
                               )}
                             </button>
+                            <button
+                              onClick={() =>
+                                setDeleteClient({
+                                  id: c.id,
+                                  name: c.name,
+                                  username: c.username,
+                                  empCount: c._count?.employees || 0,
+                                })
+                              }
+                              title="Удалить компанию"
+                              className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -258,12 +310,11 @@ export function OwnerClientsTab() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Пароль</label>
-              <input
-                type="password"
+              <PasswordInput
                 required
+                minLength={6}
                 value={createForm.password}
                 onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
                 placeholder="••••••••"
               />
             </div>
@@ -343,13 +394,11 @@ export function OwnerClientsTab() {
         >
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">Новый пароль</label>
-            <input
-              type="password"
+            <PasswordInput
               required
               minLength={6}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
               placeholder="Минимум 6 символов"
             />
           </div>
@@ -451,6 +500,96 @@ export function OwnerClientsTab() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: Delete Client Confirmation */}
+      <Modal
+        isOpen={!!deleteClient}
+        onClose={() => setDeleteClient(null)}
+        title="Удаление компании"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-sm">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-rose-200">
+                  Удалить организацию «{deleteClient?.name}»?
+                </p>
+                <p className="text-xs text-rose-300/80 mt-1 font-mono">
+                  Логин: {deleteClient?.username}
+                </p>
+                <p className="text-xs text-rose-300/80 mt-2">
+                  Это действие необратимо. Будут безвозвратно удалены все связанные сотрудники ({deleteClient?.empCount || 0}), графики смен, отметки времени, заметки и настройки.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setDeleteClient(null)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm transition"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteClient && deleteMutation.mutate(deleteClient.id)}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-rose-950"
+            >
+              {deleteMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Удалить навсегда
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Cleanup Test Clients */}
+      <Modal
+        isOpen={isCleanupOpen}
+        onClose={() => setIsCleanupOpen(false)}
+        title="Очистка тестовых компаний"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-sm">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-200">
+                  Найдено тестовых компаний: {testClients.length}
+                </p>
+                <p className="text-xs text-amber-300/80 mt-1.5 leading-relaxed">
+                  Будут удалены все организации с логином <code className="bg-slate-900/60 px-1 py-0.5 rounded text-amber-200">testclient_*</code> или именем <code className="bg-slate-900/60 px-1 py-0.5 rounded text-amber-200">«Тестовая Компания»</code>.
+                </p>
+                <p className="text-xs text-amber-300/80 mt-1.5">
+                  Ваши реальные компании останутся в полной сохранности.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsCleanupOpen(false)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm transition"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              disabled={cleanupTestMutation.isPending}
+              onClick={() => cleanupTestMutation.mutate()}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-rose-950"
+            >
+              {cleanupTestMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Очистить все тестовые ({testClients.length})
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

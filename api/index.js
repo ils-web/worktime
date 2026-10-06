@@ -60744,6 +60744,37 @@ ownerRouter.post("/clients/:id/tariff", async (req, res) => {
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0442\u0430\u0440\u0438\u0444\u0430" });
   }
 });
+ownerRouter.delete("/clients/:id", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const client = await prisma.client.findUnique({ where: { id } });
+    if (!client) {
+      res.status(404).json({ error: "\u041A\u043E\u043C\u043F\u0430\u043D\u0438\u044F \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430" });
+      return;
+    }
+    await prisma.client.delete({ where: { id } });
+    res.json({ success: true, message: `\u041A\u043E\u043C\u043F\u0430\u043D\u0438\u044F "${client.name}" \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u0443\u0434\u0430\u043B\u0435\u043D\u0430` });
+  } catch (err) {
+    console.error("Owner delete client error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438" });
+  }
+});
+ownerRouter.post("/clients/cleanup-test", async (_req, res) => {
+  try {
+    const result = await prisma.client.deleteMany({
+      where: {
+        OR: [
+          { username: { startsWith: "testclient_" } },
+          { name: { contains: "\u0422\u0435\u0441\u0442\u043E\u0432\u0430\u044F" } }
+        ]
+      }
+    });
+    res.json({ success: true, count: result.count });
+  } catch (err) {
+    console.error("Owner cleanup test clients error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0447\u0438\u0441\u0442\u043A\u0438 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0445 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0439" });
+  }
+});
 ownerRouter.get("/billing", async (req, res) => {
   try {
     const startDateStr = req.query["startDate"];

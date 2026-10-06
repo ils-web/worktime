@@ -1,8 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
+import { changeLanguage } from '../../lib/i18n';
+import { PasswordInput } from '../../components/ui/PasswordInput';
 import { Lock, User, AlertCircle, Loader2 } from 'lucide-react';
+
+type AppLang = 'ru' | 'he' | 'en' | 'ar';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');
@@ -11,6 +16,58 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const setUser = useAuthStore((s) => s.setUser);
+  const { i18n } = useTranslation();
+  const rawLang = i18n.language === 'iw' ? 'he' : (i18n.language || 'he');
+  const currentLang: AppLang = (rawLang === 'ru' || rawLang === 'he' || rawLang === 'en' || rawLang === 'ar') ? rawLang : 'he';
+
+  const labelsMap: Record<AppLang, {
+    subtitle: string;
+    login: string;
+    loginPlaceholder: string;
+    password: string;
+    submit: string;
+    back: string;
+    defaultError: string;
+  }> = {
+    ru: {
+      subtitle: 'Панель управления Владельца, Компании и Бригадира',
+      login: 'Логин',
+      loginPlaceholder: 'Имя пользователя или логин',
+      password: 'Пароль',
+      submit: 'Войти в аккаунт',
+      back: '← Вернуться на главную',
+      defaultError: 'Неверный логин или пароль',
+    },
+    he: {
+      subtitle: 'לוח בקרה לבעלים, חברות ומנהלי עבודה',
+      login: 'שם משתמש',
+      loginPlaceholder: 'הזן שם משתמש',
+      password: 'סיסמה',
+      submit: 'כניסה למערכת',
+      back: '← חזרה לדף הראשי',
+      defaultError: 'שם משתמש או סיסמה שגויים',
+    },
+    en: {
+      subtitle: 'Owner, Company, and Foreman Portal',
+      login: 'Username',
+      loginPlaceholder: 'Enter username or login',
+      password: 'Password',
+      submit: 'Sign in to account',
+      back: '← Back to Home',
+      defaultError: 'Invalid username or password',
+    },
+    ar: {
+      subtitle: 'لوحة التحكم للمالك والشركات والمشرفين',
+      login: 'اسم المستخدم',
+      loginPlaceholder: 'أدخل اسم المستخدم',
+      password: 'كلمة المرور',
+      submit: 'تسجيل الدخول',
+      back: '← العودة إلى الصفحة الرئيسية',
+      defaultError: 'اسم مستخدم أو كلمة مرور غير صحيحة',
+    },
+  };
+
+  const labels = labelsMap[currentLang];
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -41,7 +98,7 @@ export function LoginPage() {
         navigate('/app');
       }
     } catch (err: any) {
-      setError(err.message || 'Неверный логин или пароль');
+      setError(err.message || labels.defaultError);
     } finally {
       setIsLoading(false);
     }
@@ -50,13 +107,30 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl backdrop-blur relative">
-        <div className="text-center mb-8">
+        <div className="absolute top-4 ltr:right-4 rtl:left-4 flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+          {(['he', 'ru', 'en', 'ar'] as const).map((l) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => changeLanguage(l)}
+              className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition ${
+                currentLang === l
+                  ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {l.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        <div className="text-center mb-8 mt-2">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 mx-auto flex items-center justify-center font-black text-slate-950 text-2xl mb-4 shadow-lg shadow-emerald-500/20">
             WT
           </div>
           <h2 className="text-2xl font-extrabold text-white tracking-tight">TimeTracker SaaS</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Панель управления Владельца, Компании и Бригадира
+            {labels.subtitle}
           </p>
         </div>
 
@@ -70,36 +144,32 @@ export function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Логин
+              {labels.login}
             </label>
             <div className="relative">
-              <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+              <User className="w-4 h-4 text-slate-500 absolute ltr:left-3.5 rtl:right-3.5 top-3.5" />
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition text-sm"
-                placeholder="Имя пользователя или email"
+                className="w-full ltr:pl-10 rtl:pr-10 ltr:pr-4 rtl:pl-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition text-sm"
+                placeholder={labels.loginPlaceholder}
               />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Пароль
+              {labels.password}
             </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition text-sm"
-                placeholder="••••••••"
-              />
-            </div>
+            <PasswordInput
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="••••••••"
+              leftIcon={<Lock className="w-4 h-4" />}
+            />
           </div>
 
           <button
@@ -107,16 +177,18 @@ export function LoginPage() {
             disabled={isLoading}
             className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-slate-950 font-bold rounded-xl transition shadow-lg shadow-emerald-500/20 mt-2 flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
           >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Войти в аккаунт'}
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : labels.submit}
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-slate-800/80 text-center flex flex-col gap-2">
           <a href="/" className="text-xs text-slate-400 hover:text-emerald-400 transition">
-            ← Вернуться на главную
+            {labels.back}
           </a>
         </div>
       </div>
     </div>
   );
 }
+
+export default LoginPage;

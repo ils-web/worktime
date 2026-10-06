@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import app from './app';
+import { prisma } from '@timetracker/db';
+import { signSessionToken } from './middleware/auth';
 
 describe('TimeTracker API Endpoints', () => {
   const testUsername = `testclient_${Date.now()}`;
@@ -229,5 +231,38 @@ describe('TimeTracker API Endpoints', () => {
     expect(syncRes.body.count).toBe(2);
     expect(syncRes.body.logs[0].action).toBe('CLOCK_IN');
     expect(syncRes.body.logs[1].action).toBe('CLOCK_OUT');
+  });
+
+  it('14. Owner can delete client and cleanup test clients', async () => {
+    const ownerToken = signSessionToken({ id: 'owner', role: 'owner', name: 'Master Owner' });
+    const ownerCookie = `session=${ownerToken}`;
+
+    // Test bulk test clients cleanup endpoint
+    const cleanupRes = await request(app)
+      .post('/api/owner/clients/cleanup-test')
+      .set('Cookie', ownerCookie);
+
+    expect(cleanupRes.status).toBe(200);
+    expect(cleanupRes.body.success).toBe(true);
+    expect(typeof cleanupRes.body.count).toBe('number');
+  });
+
+  afterAll(async () => {
+    // Delete any test clients created during test runs
+    await prisma.client.deleteMany({
+      where: {
+        OR: [
+          { username: { startsWith: 'testclient_' } },
+          { name: { contains: 'Тестовая' } },
+        ],
+      },
+    });
+
+    // Clean up test contact request
+    await prisma.contactRequest.deleteMany({
+      where: { phone: '+972501234567' },
+    });
+
+    await prisma.$disconnect();
   });
 });

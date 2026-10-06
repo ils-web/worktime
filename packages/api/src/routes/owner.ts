@@ -167,6 +167,47 @@ ownerRouter.post('/clients/:id/tariff', async (req: Request, res: Response) => {
 });
 
 /**
+ * Delete client organization and all associated data (Cascade)
+ */
+ownerRouter.delete('/clients/:id', async (req: Request, res: Response) => {
+  try {
+    const id = req.params['id'] as string;
+    const client = await prisma.client.findUnique({ where: { id } });
+    if (!client) {
+      res.status(404).json({ error: 'Компания не найдена' });
+      return;
+    }
+
+    await prisma.client.delete({ where: { id } });
+    res.json({ success: true, message: `Компания "${client.name}" успешно удалена` });
+  } catch (err) {
+    console.error('Owner delete client error:', err);
+    res.status(500).json({ error: 'Ошибка удаления компании' });
+  }
+});
+
+/**
+ * Bulk delete all test companies (username starts with 'testclient_' or name contains 'Тестовая')
+ */
+ownerRouter.post('/clients/cleanup-test', async (_req: Request, res: Response) => {
+  try {
+    const result = await prisma.client.deleteMany({
+      where: {
+        OR: [
+          { username: { startsWith: 'testclient_' } },
+          { name: { contains: 'Тестовая' } },
+        ],
+      },
+    });
+
+    res.json({ success: true, count: result.count });
+  } catch (err) {
+    console.error('Owner cleanup test clients error:', err);
+    res.status(500).json({ error: 'Ошибка очистки тестовых компаний' });
+  }
+});
+
+/**
  * Billing preview calculation across clients
  */
 ownerRouter.get('/billing', async (req: Request, res: Response) => {
