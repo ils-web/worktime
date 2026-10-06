@@ -3,18 +3,56 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Settings, Image, Check, AlertCircle, Loader2, Sun, Sunset, Moon, Clock } from 'lucide-react';
 
+import { ChevronDown } from 'lucide-react';
+
 function TimeInput24({
   value,
   onChange,
+  align = 'left',
 }: {
   value: string;
   onChange: (val: string) => void;
+  align?: 'left' | 'right';
 }) {
   const [val, setVal] = useState(value || '00:00');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setVal(value || '00:00');
   }, [value]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const [currentH, currentM] = (val && val.includes(':') ? val : '00:00').split(':');
+
+  const handleSelectHour = (newHour: string) => {
+    const formatted = `${newHour.padStart(2, '0')}:${(currentM || '00').padStart(2, '0')}`;
+    setVal(formatted);
+    onChange(formatted);
+  };
+
+  const handleSelectMinute = (newMin: string) => {
+    const formatted = `${(currentH || '00').padStart(2, '0')}:${newMin.padStart(2, '0')}`;
+    setVal(formatted);
+    onChange(formatted);
+  };
+
+  const handleQuickPreset = (preset: string) => {
+    setVal(preset);
+    onChange(preset);
+    setIsOpen(false);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let text = e.target.value.replace(/[^0-9:]/g, '');
@@ -65,19 +103,133 @@ function TimeInput24({
     onChange(formatted);
   };
 
+  const hoursList = Array.from({ length: 24 }).map((_, i) => String(i).padStart(2, '0'));
+  const minutesList = ['00', '15', '30', '45'];
+  const presets = ['07:00', '08:00', '15:30', '16:00', '20:00', '22:00', '00:00', '06:00'];
+
   return (
-    <div className="relative">
-      <input
-        type="text"
-        inputMode="numeric"
-        list="times-24h-list"
-        value={val}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        placeholder="00:00"
-        maxLength={5}
-        className="w-full bg-slate-900 border border-slate-700/80 hover:border-slate-600 focus:border-emerald-500 rounded-xl px-2.5 py-2 text-white font-mono text-center text-xs font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500 transition shadow-inner"
-      />
+    <div className="relative" ref={containerRef}>
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={val}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          placeholder="00:00"
+          maxLength={5}
+          className="w-full bg-slate-900 border border-slate-700/80 hover:border-slate-600 focus:border-emerald-500 rounded-xl pl-2.5 pr-7 py-2 text-white font-mono text-center text-xs font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500 transition shadow-inner"
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-1.5 p-1 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800/80 transition"
+          title="Выбрать время"
+        >
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180 text-emerald-400' : ''}`} />
+        </button>
+      </div>
+
+      {isOpen && (
+        <div
+          className={`absolute top-full mt-2 ${
+            align === 'right' ? 'right-0' : 'left-0'
+          } w-64 bg-slate-900/98 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150`}
+        >
+          {/* Quick presets */}
+          <div className="mb-2.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5 tracking-wider">
+              Быстрый выбор
+            </span>
+            <div className="grid grid-cols-4 gap-1">
+              {presets.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => handleQuickPreset(p)}
+                  className={`py-1 px-1 rounded-lg font-mono text-[11px] font-bold transition text-center ${
+                    val === p
+                      ? 'bg-emerald-500 text-slate-950 shadow-md'
+                      : 'bg-slate-800/90 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-800 my-2" />
+
+          {/* Hours and Minutes 2-column picker */}
+          <div className="grid grid-cols-2 gap-2 text-center">
+            {/* Hours column */}
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1 tracking-wider">
+                Часы (00-23)
+              </span>
+              <div className="h-36 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-slate-700">
+                {hoursList.map((h) => {
+                  const isSelected = currentH === h;
+                  return (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => handleSelectHour(h)}
+                      className={`w-full py-1 rounded-lg font-mono text-xs font-bold transition ${
+                        isSelected
+                          ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                          : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {h}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Minutes column */}
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1 tracking-wider">
+                Минуты
+              </span>
+              <div className="space-y-1.5 pt-0.5">
+                {minutesList.map((m) => {
+                  const isSelected = currentM === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => handleSelectMinute(m)}
+                      className={`w-full py-2 rounded-lg font-mono text-xs font-bold transition ${
+                        isSelected
+                          ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                          : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      }`}
+                    >
+                      :{m}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-800 mt-2.5 pt-2 flex items-center justify-between">
+            <span className="text-[11px] font-mono text-emerald-400 font-bold">
+              {val}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition"
+            >
+              Готово
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -161,15 +313,6 @@ export function ClientSettingsTab() {
 
   return (
     <div className="max-w-4xl space-y-6">
-      {/* 24-Hour Time Datalist for Quick Selection */}
-      <datalist id="times-24h-list">
-        {Array.from({ length: 48 }).map((_, i) => {
-          const h = String(Math.floor(i / 2)).padStart(2, '0');
-          const m = i % 2 === 0 ? '00' : '30';
-          return <option key={`${h}:${m}`} value={`${h}:${m}`} />;
-        })}
-      </datalist>
-
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <Settings className="w-5 h-5 text-emerald-400" />
@@ -261,6 +404,7 @@ export function ClientSettingsTab() {
                     </label>
                     <TimeInput24
                       value={shifts.morning.end}
+                      align="right"
                       onChange={(val) =>
                         setShifts({
                           ...shifts,
@@ -307,6 +451,7 @@ export function ClientSettingsTab() {
                     </label>
                     <TimeInput24
                       value={shifts.evening.end}
+                      align="right"
                       onChange={(val) =>
                         setShifts({
                           ...shifts,
@@ -353,6 +498,7 @@ export function ClientSettingsTab() {
                     </label>
                     <TimeInput24
                       value={shifts.night.end}
+                      align="right"
                       onChange={(val) =>
                         setShifts({
                           ...shifts,

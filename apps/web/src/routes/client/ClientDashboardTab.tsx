@@ -120,7 +120,14 @@ export function ClientDashboardTab() {
                       <div className="text-xs text-slate-400 mt-1 flex items-center gap-3">
                         <span>ID: <code className="text-slate-300 font-mono">{emp.empId}</code></span>
                         {startTime && (
-                          <span>Начало: {startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>
+                            Начало:{' '}
+                            {startTime.toLocaleTimeString('ru-RU', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: false,
+                            })}
+                          </span>
                         )}
                         <span>Длительность: <strong className="text-emerald-400">{hoursOnShift} ч</strong></span>
                       </div>
@@ -166,7 +173,11 @@ export function ClientDashboardTab() {
                         {log.employee?.name || log.empId}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {new Date(log.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(log.dateTime).toLocaleTimeString('ru-RU', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false,
+                        })}
                         {log.isManual && ' (вручную)'}
                       </div>
                     </div>
