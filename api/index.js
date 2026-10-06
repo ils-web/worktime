@@ -61484,11 +61484,44 @@ clientRouter.get("/logs/recent", async (req, res) => {
     const clientId = getTargetClientId(req);
     const logs = await prisma.timeLog.findMany({
       where: { clientId },
-      include: { employee: { select: { name: true } } },
+      include: { employee: { select: { id: true, empId: true, name: true } } },
       orderBy: { dateTime: "desc" },
       take: 50
     });
-    res.json({ success: true, logs });
+    let todayStats = null;
+    try {
+      const now = /* @__PURE__ */ new Date();
+      const todayStr = getJerusalemParts(now).dateStr;
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
+      const yesterday = new Date(startOfDay.getTime() - 24 * 3600 * 1e3);
+      const { rows } = await computeClientReportRows(clientId, yesterday, now);
+      const todayRows = rows.filter((r) => r.date === todayStr);
+      let totalCompletedHours = 0;
+      for (const r of todayRows) {
+        totalCompletedHours += r.netHours;
+      }
+      const completedShiftsCount = logs.filter(
+        (l) => (l.action === "CLOCK_OUT" || l.action === "AUTO_EXIT") && getJerusalemParts(l.dateTime).dateStr === todayStr
+      ).length;
+      const clockInsCount = logs.filter(
+        (l) => l.action === "CLOCK_IN" && getJerusalemParts(l.dateTime).dateStr === todayStr
+      ).length;
+      const manualLogsToday = logs.filter(
+        (l) => l.isManual && getJerusalemParts(l.dateTime).dateStr === todayStr
+      );
+      const topWorkersToday = todayRows.map((r) => ({ empId: r.empId, name: r.name, hours: r.netHours })).sort((a, b) => b.hours - a.hours).slice(0, 5);
+      todayStats = {
+        totalCompletedHours: Number(totalCompletedHours.toFixed(1)),
+        completedShiftsCount,
+        clockInsCount,
+        manualLogsToday,
+        topWorkersToday
+      };
+    } catch (statErr) {
+      console.error("Error computing todayStats in recent logs:", statErr);
+    }
+    res.json({ success: true, logs, todayStats });
   } catch (err) {
     console.error("Recent logs error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u043B\u043E\u0433\u043E\u0432" });
