@@ -41,6 +41,7 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
       where: whereClause,
       include: {
         foreman: { select: { id: true, name: true } },
+        sites: { include: { site: true } },
         logs: {
           take: 1,
           orderBy: { dateTime: 'desc' },
@@ -75,12 +76,13 @@ const createEmployeeSchema = z.object({
   geofence: z.any().optional(),
   shifts: z.any().optional(),
   foremanId: z.string().optional().nullable(),
+  siteIds: z.array(z.string()).optional(),
 });
 
 /**
- * 2. Employees: Create (client only)
+ * 2. Employees: Create (client & foreman)
  */
-clientRouter.post('/employees', requireRole('client'), async (req: Request, res: Response) => {
+clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Request, res: Response) => {
   try {
     const clientId = getTargetClientId(req);
     const data = createEmployeeSchema.parse(req.body);
@@ -104,7 +106,20 @@ clientRouter.post('/employees', requireRole('client'), async (req: Request, res:
         shifts: data.shifts || null,
         foremanId: data.foremanId || null,
       },
+      include: {
+        sites: { include: { site: true } },
+        foreman: { select: { id: true, name: true } },
+      },
     });
+
+    if (data.siteIds && data.siteIds.length > 0) {
+      await prisma.employeeSite.createMany({
+        data: data.siteIds.map((siteId) => ({
+          employeeId: employee.id,
+          siteId,
+        })),
+      });
+    }
 
     res.json({ success: true, employee });
   } catch (err) {
@@ -118,25 +133,36 @@ clientRouter.post('/employees', requireRole('client'), async (req: Request, res:
 });
 
 /**
- * 3. Employees: Update (client only)
+ * 3. Employees: Update (client & foreman)
  */
-clientRouter.put('/employees/:empId', requireRole('client'), async (req: Request, res: Response) => {
+clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (req: Request, res: Response) => {
   try {
     const clientId = getTargetClientId(req);
-    const empId = req.params['empId'] as string;
-    const { name, isMobile, strictGps, geofence, shifts, foremanId } = req.body;
+    const currentEmpId = req.params['empId'] as string;
+    const { name, newEmpId, isMobile, strictGps, geofence, shifts, foremanId, siteIds } = req.body;
 
     const employee = await prisma.employee.findFirst({
-      where: { empId, clientId },
+      where: { empId: currentEmpId, clientId },
     });
     if (!employee) {
       res.status(404).json({ error: 'Сотрудник не найден' });
       return;
     }
 
+    let finalEmpId = employee.empId;
+    if (newEmpId && newEmpId !== currentEmpId) {
+      const existing = await prisma.employee.findUnique({ where: { empId: newEmpId } });
+      if (existing) {
+        res.status(400).json({ error: 'Сотрудник с таким ID ссылки уже существует' });
+        return;
+      }
+      finalEmpId = newEmpId;
+    }
+
     const updated = await prisma.employee.update({
       where: { id: employee.id },
       data: {
+        empId: finalEmpId,
         ...(name ? { name } : {}),
         ...(isMobile !== undefined ? { isMobile } : {}),
         ...(strictGps !== undefined ? { strictGps } : {}),
@@ -144,7 +170,23 @@ clientRouter.put('/employees/:empId', requireRole('client'), async (req: Request
         ...(shifts !== undefined ? { shifts } : {}),
         ...(foremanId !== undefined ? { foremanId: foremanId || null } : {}),
       },
+      include: {
+        sites: { include: { site: true } },
+        foreman: { select: { id: true, name: true } },
+      },
     });
+
+    if (siteIds !== undefined && Array.isArray(siteIds)) {
+      await prisma.employeeSite.deleteMany({ where: { employeeId: employee.id } });
+      if (siteIds.length > 0) {
+        await prisma.employeeSite.createMany({
+          data: siteIds.map((sId: string) => ({
+            employeeId: employee.id,
+            siteId: sId,
+          })),
+        });
+      }
+    }
 
     res.json({ success: true, employee: updated });
   } catch (err) {
@@ -827,5 +869,188 @@ clientRouter.post('/notes', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Create note error:', err);
     res.status(500).json({ error: 'Ошибка сохранения заметки' });
+  }
+});
+
+/**
+ * -------------------------------------------------------------
+ * 13. WORK SITES (ОБЪЕКТЫ / РАБОЧИЕ МЕСТА)
+ * -------------------------------------------------------------
+ */
+
+// List sites with employee counts and assigned employees
+clientRouter.get('/sites', requireRole('client', 'foreman'), async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const sites = await prisma.workSite.findMany({
+      where: { clientId },
+      include: {
+        employees: {
+          include: {
+            employee: {
+              select: { id: true, empId: true, name: true },
+            },
+          },
+        },
+        _count: {
+          select: { employees: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ success: true, sites });
+  } catch (err) {
+    console.error('List sites error:', err);
+    res.status(500).json({ error: 'Ошибка получения списка объектов' });
+  }
+});
+
+const siteSchema = z.object({
+  name: z.string().min(2),
+  address: z.string().optional().nullable(),
+  lat: z.number(),
+  lng: z.number(),
+  radius: z.number().int().min(10).default(100),
+  employeeIds: z.array(z.number()).optional(),
+});
+
+// Create site
+clientRouter.post('/sites', requireRole('client', 'foreman'), async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const data = siteSchema.parse(req.body);
+
+    const site = await prisma.workSite.create({
+      data: {
+        clientId,
+        name: data.name,
+        address: data.address || null,
+        lat: data.lat,
+        lng: data.lng,
+        radius: data.radius,
+      },
+      include: {
+        employees: {
+          include: { employee: true },
+        },
+      },
+    });
+
+    if (data.employeeIds && data.employeeIds.length > 0) {
+      await prisma.employeeSite.createMany({
+        data: data.employeeIds.map((empDbId) => ({
+          employeeId: empDbId,
+          siteId: site.id,
+        })),
+      });
+    }
+
+    res.json({ success: true, site });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Заполните данные объекта корректно' });
+      return;
+    }
+    console.error('Create site error:', err);
+    res.status(500).json({ error: 'Ошибка создания объекта' });
+  }
+});
+
+// Update site
+clientRouter.put('/sites/:id', requireRole('client', 'foreman'), async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const id = req.params['id'] as string;
+    const { name, address, lat, lng, radius, employeeIds } = req.body;
+
+    const existing = await prisma.workSite.findFirst({ where: { id, clientId } });
+    if (!existing) {
+      res.status(404).json({ error: 'Объект не найден' });
+      return;
+    }
+
+    const updated = await prisma.workSite.update({
+      where: { id },
+      data: {
+        ...(name ? { name } : {}),
+        ...(address !== undefined ? { address } : {}),
+        ...(typeof lat === 'number' ? { lat } : {}),
+        ...(typeof lng === 'number' ? { lng } : {}),
+        ...(typeof radius === 'number' ? { radius } : {}),
+      },
+    });
+
+    if (employeeIds !== undefined && Array.isArray(employeeIds)) {
+      await prisma.employeeSite.deleteMany({ where: { siteId: id } });
+      if (employeeIds.length > 0) {
+        await prisma.employeeSite.createMany({
+          data: employeeIds.map((empDbId: number) => ({
+            employeeId: empDbId,
+            siteId: id,
+          })),
+        });
+      }
+    }
+
+    res.json({ success: true, site: updated });
+  } catch (err) {
+    console.error('Update site error:', err);
+    res.status(500).json({ error: 'Ошибка обновления объекта' });
+  }
+});
+
+// Delete site
+clientRouter.delete('/sites/:id', requireRole('client', 'foreman'), async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const id = req.params['id'] as string;
+
+    const existing = await prisma.workSite.findFirst({ where: { id, clientId } });
+    if (!existing) {
+      res.status(404).json({ error: 'Объект не найден' });
+      return;
+    }
+
+    await prisma.workSite.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete site error:', err);
+    res.status(500).json({ error: 'Ошибка удаления объекта' });
+  }
+});
+
+// Assign employees to site
+clientRouter.post('/sites/:id/employees', requireRole('client', 'foreman'), async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const id = req.params['id'] as string;
+    const { employeeIds } = req.body;
+
+    const existing = await prisma.workSite.findFirst({ where: { id, clientId } });
+    if (!existing) {
+      res.status(404).json({ error: 'Объект не найден' });
+      return;
+    }
+
+    if (!Array.isArray(employeeIds)) {
+      res.status(400).json({ error: 'employeeIds должен быть массивом' });
+      return;
+    }
+
+    await prisma.employeeSite.deleteMany({ where: { siteId: id } });
+    if (employeeIds.length > 0) {
+      await prisma.employeeSite.createMany({
+        data: employeeIds.map((empDbId: number) => ({
+          employeeId: empDbId,
+          siteId: id,
+        })),
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Assign employees to site error:', err);
+    res.status(500).json({ error: 'Ошибка назначения сотрудников на объект' });
   }
 });

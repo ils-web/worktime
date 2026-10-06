@@ -32,6 +32,9 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
             defaultShifts: true,
           },
         },
+        sites: {
+          include: { site: true },
+        },
         logs: {
           take: 1,
           orderBy: { dateTime: 'desc' },
@@ -50,6 +53,8 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
     // Shift overrides or client default shifts
     const effectiveShifts = employee.shifts || employee.client.defaultShifts;
 
+    const sitesList = employee.sites.map((es) => es.site);
+
     res.json({
       success: true,
       employee: {
@@ -60,6 +65,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,
         geofence: employee.geofence,
+        sites: sitesList,
         shifts: effectiveShifts,
       },
       status: {
@@ -93,7 +99,10 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
 
     const employee = await prisma.employee.findUnique({
       where: { empId: data.empId },
-      include: { client: true },
+      include: {
+        client: true,
+        sites: { include: { site: true } },
+      },
     });
 
     if (!employee || !employee.client.isActive) {
@@ -102,30 +111,59 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
     }
 
     // Geofence check if not mobile worker
-    if (!employee.isMobile && employee.geofence) {
-      const gf = employee.geofence as unknown as GeofenceConfig;
-      if (gf.lat && gf.lng && gf.radius) {
-        if (data.lat !== undefined && data.lat !== null && data.lng !== undefined && data.lng !== null) {
-          const { isInside, distanceMeters } = checkGeofence(
-            data.lat,
-            data.lng,
-            gf.lat,
-            gf.lng,
-            gf.radius
-          );
+    if (!employee.isMobile) {
+      const allowedGeofences: GeofenceConfig[] = [];
 
-          // On CLOCK_IN: must be inside geofence
-          if (data.action === 'CLOCK_IN' && !isInside) {
-            res.status(400).json({
-              error: 'Вы вне зоны объекта!',
-              errorCode: 'OUT_OF_GEOFENCE',
-              distanceMeters,
-              radius: gf.radius,
+      // 1. Assigned sites
+      if (employee.sites && employee.sites.length > 0) {
+        for (const es of employee.sites) {
+          if (es.site.lat && es.site.lng && es.site.radius) {
+            allowedGeofences.push({
+              lat: es.site.lat,
+              lng: es.site.lng,
+              radius: es.site.radius,
+              address: es.site.name + (es.site.address ? ` (${es.site.address})` : ''),
             });
-            return;
           }
-          // On CLOCK_OUT: allowed even outside geofence (Section 1.4)
         }
+      }
+
+      // 2. Custom employee geofence fallback
+      if (allowedGeofences.length === 0 && employee.geofence) {
+        const gf = employee.geofence as unknown as GeofenceConfig;
+        if (gf.lat && gf.lng && gf.radius) {
+          allowedGeofences.push(gf);
+        }
+      }
+
+      if (allowedGeofences.length > 0 && data.lat !== undefined && data.lat !== null && data.lng !== undefined && data.lng !== null) {
+        let insideAny = false;
+        let minDistance = Infinity;
+        let bestRadius = 100;
+
+        for (const gf of allowedGeofences) {
+          const { isInside, distanceMeters } = checkGeofence(data.lat, data.lng, gf.lat, gf.lng, gf.radius);
+          if (distanceMeters < minDistance) {
+            minDistance = distanceMeters;
+            bestRadius = gf.radius;
+          }
+          if (isInside) {
+            insideAny = true;
+            break;
+          }
+        }
+
+        // On CLOCK_IN: must be inside at least one allowed geofence/site
+        if (data.action === 'CLOCK_IN' && !insideAny) {
+          res.status(400).json({
+            error: 'Вы вне зоны объекта!',
+            errorCode: 'OUT_OF_GEOFENCE',
+            distanceMeters: minDistance,
+            radius: bestRadius,
+          });
+          return;
+        }
+        // On CLOCK_OUT: allowed even outside geofence (Section 1.4)
       }
     }
 

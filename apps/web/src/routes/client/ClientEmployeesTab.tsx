@@ -17,6 +17,8 @@ import {
   Loader2,
   LogOut,
   MapPin,
+  Edit2,
+  Building2,
 } from 'lucide-react';
 
 interface ClientEmployeesTabProps {
@@ -28,6 +30,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingEmp, setEditingEmp] = useState<any | null>(null);
   const [qrEmployee, setQrEmployee] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -38,6 +41,21 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     isMobile: false,
     strictGps: false,
     foremanId: '',
+    siteIds: [] as string[],
+    geofenceLat: 32.0853,
+    geofenceLng: 34.7818,
+    geofenceRadius: 100,
+    geofenceAddress: '',
+  });
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    name: '',
+    newEmpId: '',
+    isMobile: false,
+    strictGps: false,
+    foremanId: '',
+    siteIds: [] as string[],
     geofenceLat: 32.0853,
     geofenceLng: 34.7818,
     geofenceRadius: 100,
@@ -50,11 +68,18 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     queryFn: () => apiRequest<{ employees: any[] }>('/api/client/employees'),
   });
 
+  const { data: sitesData } = useQuery({
+    queryKey: ['client-sites'],
+    queryFn: () => apiRequest<{ sites: any[] }>('/api/client/sites'),
+  });
+
   const { data: foremenData } = useQuery({
     queryKey: ['client-foremen'],
     queryFn: () => apiRequest<{ foremen: any[] }>('/api/client/foremen'),
     enabled: userRole === 'client',
   });
+
+  const sites = sitesData?.sites || [];
 
   // Mutations
   const createMutation = useMutation({
@@ -62,6 +87,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
       apiRequest('/api/client/employees', { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-employees'] });
+      queryClient.invalidateQueries({ queryKey: ['client-sites'] });
       setIsCreateOpen(false);
       setForm({
         empId: '',
@@ -69,11 +95,25 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
         isMobile: false,
         strictGps: false,
         foremanId: '',
+        siteIds: [],
         geofenceLat: 32.0853,
         geofenceLng: 34.7818,
         geofenceRadius: 100,
         geofenceAddress: '',
       });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ empId, body }: { empId: string; body: any }) =>
+      apiRequest(`/api/client/employees/${empId}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client-employees'] });
+      queryClient.invalidateQueries({ queryKey: ['client-sites'] });
+      setEditingEmp(null);
     },
   });
 
@@ -121,11 +161,11 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
           </p>
         </div>
 
-        {userRole === 'client' && (
+        {(userRole === 'client' || userRole === 'foreman') && (
           <button
             onClick={() => {
               const randomEmpId = `E${Math.floor(1000 + Math.random() * 9000)}`;
-              setForm((prev) => ({ ...prev, empId: randomEmpId }));
+              setForm((prev) => ({ ...prev, empId: randomEmpId, siteIds: [] }));
               setIsCreateOpen(true);
             }}
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-950"
@@ -203,6 +243,20 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                       <td className="p-4 text-xs text-slate-400">
                         {emp.isMobile ? (
                           <span className="text-slate-500">{t('admin.everywhereNoGeo')}</span>
+                        ) : emp.sites && emp.sites.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {emp.sites.map((es: any) => (
+                              <span
+                                key={es.id || es.siteId}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 text-[11px]"
+                              >
+                                <Building2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span className="truncate max-w-[120px]">
+                                  {es.site?.name || t('admin.workSite')}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
                         ) : emp.geofence ? (
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -217,6 +271,29 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              setEditingEmp(emp);
+                              const assignedSiteIds =
+                                emp.sites?.map((es: any) => es.siteId || es.site?.id) || [];
+                              setEditForm({
+                                name: emp.name,
+                                newEmpId: emp.empId,
+                                isMobile: !!emp.isMobile,
+                                strictGps: !!emp.strictGps,
+                                foremanId: emp.foremanId || '',
+                                siteIds: assignedSiteIds,
+                                geofenceLat: emp.geofence?.lat || 32.0853,
+                                geofenceLng: emp.geofence?.lng || 34.7818,
+                                geofenceRadius: emp.geofence?.radius || 100,
+                                geofenceAddress: emp.geofence?.address || '',
+                              });
+                            }}
+                            title={t('admin.editEmployee')}
+                            className="p-1.5 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-slate-800 transition"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => setQrEmployee(emp)}
                             title={t('admin.connectSmartphone')}
@@ -280,6 +357,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
               isMobile: form.isMobile,
               strictGps: form.strictGps,
               foremanId: form.foremanId || null,
+              siteIds: form.siteIds,
               geofence: form.isMobile
                 ? null
                 : {
@@ -343,7 +421,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
             </label>
           </div>
 
-          {foremen.length > 0 && (
+          {userRole === 'client' && foremen.length > 0 && (
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
                 {t('admin.empForemanSelect')}
@@ -363,12 +441,66 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
             </div>
           )}
 
+          {/* Sites Selection */}
+          {!form.isMobile && sites.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                {t('admin.selectSites')}
+              </label>
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800">
+                {sites.map((s) => {
+                  const isChecked = form.siteIds.includes(s.id);
+                  return (
+                    <label
+                      key={s.id}
+                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition text-xs ${
+                        isChecked
+                          ? 'bg-emerald-950/40 border border-emerald-700/50 text-white'
+                          : 'bg-slate-900/60 border border-slate-800/60 text-slate-300 hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setForm((prev) => ({
+                                ...prev,
+                                siteIds: [...prev.siteIds, s.id],
+                              }));
+                            } else {
+                              setForm((prev) => ({
+                                ...prev,
+                                siteIds: prev.siteIds.filter((id) => id !== s.id),
+                              }));
+                            }
+                          }}
+                          className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500"
+                        />
+                        <span className="font-semibold">{s.name}</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400 truncate max-w-[150px]">
+                        {s.address || `${s.radius} ${t('admin.metersUnit')}`}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {form.siteIds.length > 0
+                  ? t('admin.assignSitesHelp')
+                  : t('admin.noSitesAssigned')}
+              </p>
+            </div>
+          )}
+
           {/* Interactive Geofence Map */}
           {!form.isMobile && (
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center">
                 <label className="block text-xs font-semibold text-slate-300">
-                  {t('admin.geofenceMap')}
+                  {form.siteIds.length > 0 ? t('admin.personalGeofence') : t('admin.geofenceMap')}
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">{t('admin.radiusLabel')}</span>
@@ -431,6 +563,236 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: Edit Employee */}
+      <Modal
+        isOpen={!!editingEmp}
+        onClose={() => setEditingEmp(null)}
+        title={t('admin.editEmployee')}
+        maxWidth="max-w-xl"
+      >
+        {editingEmp && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              updateMutation.mutate({
+                empId: editingEmp.empId,
+                body: {
+                  name: editForm.name,
+                  newEmpId: editForm.newEmpId,
+                  isMobile: editForm.isMobile,
+                  strictGps: editForm.strictGps,
+                  foremanId: editForm.foremanId || null,
+                  siteIds: editForm.siteIds,
+                  geofence: editForm.isMobile
+                    ? null
+                    : {
+                        lat: editForm.geofenceLat,
+                        lng: editForm.geofenceLng,
+                        radius: editForm.geofenceRadius,
+                        address: editForm.geofenceAddress || null,
+                      },
+                },
+              });
+            }}
+            className="space-y-4"
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  {t('admin.empFullName')}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  {t('admin.empLinkIdField')}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.newEmpId}
+                  onChange={(e) => setEditForm({ ...editForm, newEmpId: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex items-center gap-2 p-3 bg-slate-950/60 border border-slate-800 rounded-xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.isMobile}
+                  onChange={(e) => setEditForm({ ...editForm, isMobile: e.target.checked })}
+                  className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500"
+                />
+                <span className="text-xs text-white">{t('admin.empMobileNoGeo')}</span>
+              </label>
+
+              <label className="flex items-center gap-2 p-3 bg-slate-950/60 border border-slate-800 rounded-xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.strictGps}
+                  onChange={(e) => setEditForm({ ...editForm, strictGps: e.target.checked })}
+                  className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500"
+                />
+                <span className="text-xs text-white">{t('admin.empStrictMode')}</span>
+              </label>
+            </div>
+
+            {userRole === 'client' && foremen.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  {t('admin.empForemanSelect')}
+                </label>
+                <select
+                  value={editForm.foremanId}
+                  onChange={(e) => setEditForm({ ...editForm, foremanId: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+                >
+                  <option value="">{t('admin.empNoForeman')}</option>
+                  {foremen.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Sites Selection */}
+            {!editForm.isMobile && sites.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  {t('admin.selectSites')}
+                </label>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800">
+                  {sites.map((s) => {
+                    const isChecked = editForm.siteIds.includes(s.id);
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition text-xs ${
+                          isChecked
+                            ? 'bg-emerald-950/40 border border-emerald-700/50 text-white'
+                            : 'bg-slate-900/60 border border-slate-800/60 text-slate-300 hover:bg-slate-800/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditForm((prev) => ({
+                                  ...prev,
+                                  siteIds: [...prev.siteIds, s.id],
+                                }));
+                              } else {
+                                setEditForm((prev) => ({
+                                  ...prev,
+                                  siteIds: prev.siteIds.filter((id) => id !== s.id),
+                                }));
+                              }
+                            }}
+                            className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500"
+                          />
+                          <span className="font-semibold">{s.name}</span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 truncate max-w-[150px]">
+                          {s.address || `${s.radius} ${t('admin.metersUnit')}`}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {editForm.siteIds.length > 0
+                    ? t('admin.assignSitesHelp')
+                    : t('admin.noSitesAssigned')}
+                </p>
+              </div>
+            )}
+
+            {/* Interactive Geofence Map */}
+            {!editForm.isMobile && (
+              <div className="space-y-3 pt-2">
+                <div className="flex justify-between items-center">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    {editForm.siteIds.length > 0 ? t('admin.personalGeofence') : t('admin.geofenceMap')}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">{t('admin.radiusLabel')}</span>
+                    <input
+                      type="number"
+                      min="20"
+                      max="5000"
+                      step="10"
+                      value={editForm.geofenceRadius}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          geofenceRadius: parseInt(e.target.value) || 100,
+                        })
+                      }
+                      className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-xs font-mono"
+                    />
+                    <span className="text-xs text-slate-400">{t('admin.metersUnit')}</span>
+                  </div>
+                </div>
+
+                <MapPicker
+                  lat={editForm.geofenceLat}
+                  lng={editForm.geofenceLng}
+                  radius={editForm.geofenceRadius}
+                  onChange={(lat, lng, radius) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      geofenceLat: lat,
+                      geofenceLng: lng,
+                      geofenceRadius: radius,
+                    }))
+                  }
+                />
+
+                <div>
+                  <input
+                    type="text"
+                    value={editForm.geofenceAddress}
+                    onChange={(e) => setEditForm({ ...editForm, geofenceAddress: e.target.value })}
+                    placeholder={t('admin.empAddressPlaceholder')}
+                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => setEditingEmp(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm"
+              >
+                {t('admin.cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2"
+              >
+                {updateMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                {t('admin.saveEmployee')}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       {/* Modal: QR Code Onboarding */}

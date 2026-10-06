@@ -39,6 +39,7 @@ model Client {
   logs            TimeLog[]
   invoices        Invoice[]
   dailyNotes      DailyNote[]
+  sites           WorkSite[]
 
   @@index([username])
 }
@@ -66,6 +67,7 @@ model Employee {
   logs      TimeLog[]
   schedules Schedule[]
   dailyNotes DailyNote[]
+  sites     EmployeeSite[]
 
   @@index([clientId])
   @@index([empId])
@@ -183,4 +185,33 @@ model ContactRequest {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+model WorkSite {
+  id        String         @id @default(uuid())
+  clientId  String
+  name      String
+  address   String?
+  lat       Float
+  lng       Float
+  radius    Int            @default(100) // in meters
+  createdAt DateTime       @default(now())
+
+  client    Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employees EmployeeSite[]
+
+  @@index([clientId])
+}
+
+model EmployeeSite {
+  id         Int       @id @default(autoincrement())
+  employeeId Int
+  siteId     String
+
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  site       WorkSite  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, siteId])
+  @@index([employeeId])
+  @@index([siteId])
 }

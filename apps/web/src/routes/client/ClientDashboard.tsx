@@ -9,9 +9,11 @@ import { ClientScheduleTab } from './ClientScheduleTab';
 import { ClientHoursTab } from './ClientHoursTab';
 import { ClientNotesTab } from './ClientNotesTab';
 import { ClientSettingsTab } from './ClientSettingsTab';
+import { ClientSitesTab } from './ClientSitesTab';
 import {
   LayoutDashboard,
   Users,
+  Building2,
   UserCheck,
   Calendar,
   Clock,
@@ -24,7 +26,7 @@ import {
 export function ClientDashboard() {
   const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'employees' | 'foremen' | 'schedule' | 'hours' | 'notes' | 'settings'
+    'dashboard' | 'employees' | 'sites' | 'foremen' | 'schedule' | 'hours' | 'notes' | 'settings'
   >('dashboard');
 
   const { user, checkAuth, logout } = useAuthStore();
@@ -38,6 +40,7 @@ export function ClientDashboard() {
   const navItems = [
     { id: 'dashboard', label: t('admin.dashboard'), icon: LayoutDashboard },
     { id: 'employees', label: t('admin.employees'), icon: Users },
+    { id: 'sites', label: t('admin.sites'), icon: Building2 },
     ...(!isForeman ? [{ id: 'foremen', label: t('admin.foremen'), icon: UserCheck }] : []),
     { id: 'schedule', label: t('admin.schedule'), icon: Calendar },
     { id: 'hours', label: t('admin.hours'), icon: Clock },
@@ -130,6 +133,7 @@ export function ClientDashboard() {
         <div className="flex-1">
           {activeTab === 'dashboard' && <ClientDashboardTab />}
           {activeTab === 'employees' && <ClientEmployeesTab userRole={user?.role} />}
+          {activeTab === 'sites' && <ClientSitesTab />}
           {activeTab === 'foremen' && !isForeman && <ClientForemenTab />}
           {activeTab === 'schedule' && <ClientScheduleTab />}
           {activeTab === 'hours' && <ClientHoursTab />}

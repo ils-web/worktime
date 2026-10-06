@@ -61200,6 +61200,7 @@ clientRouter.get("/employees", async (req, res) => {
       where: whereClause,
       include: {
         foreman: { select: { id: true, name: true } },
+        sites: { include: { site: true } },
         logs: {
           take: 1,
           orderBy: { dateTime: "desc" }
@@ -61230,9 +61231,10 @@ var createEmployeeSchema = external_exports.object({
   strictGps: external_exports.boolean().default(false),
   geofence: external_exports.any().optional(),
   shifts: external_exports.any().optional(),
-  foremanId: external_exports.string().optional().nullable()
+  foremanId: external_exports.string().optional().nullable(),
+  siteIds: external_exports.array(external_exports.string()).optional()
 });
-clientRouter.post("/employees", requireRole("client"), async (req, res) => {
+clientRouter.post("/employees", requireRole("client", "foreman"), async (req, res) => {
   try {
     const clientId = getTargetClientId(req);
     const data = createEmployeeSchema.parse(req.body);
@@ -61253,8 +61255,20 @@ clientRouter.post("/employees", requireRole("client"), async (req, res) => {
         geofence: data.geofence || null,
         shifts: data.shifts || null,
         foremanId: data.foremanId || null
+      },
+      include: {
+        sites: { include: { site: true } },
+        foreman: { select: { id: true, name: true } }
       }
     });
+    if (data.siteIds && data.siteIds.length > 0) {
+      await prisma.employeeSite.createMany({
+        data: data.siteIds.map((siteId) => ({
+          employeeId: employee.id,
+          siteId
+        }))
+      });
+    }
     res.json({ success: true, employee });
   } catch (err) {
     if (err instanceof external_exports.ZodError) {
@@ -61265,29 +61279,54 @@ clientRouter.post("/employees", requireRole("client"), async (req, res) => {
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430" });
   }
 });
-clientRouter.put("/employees/:empId", requireRole("client"), async (req, res) => {
+clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (req, res) => {
   try {
     const clientId = getTargetClientId(req);
-    const empId = req.params["empId"];
-    const { name, isMobile, strictGps, geofence, shifts, foremanId } = req.body;
+    const currentEmpId = req.params["empId"];
+    const { name, newEmpId, isMobile, strictGps, geofence, shifts, foremanId, siteIds } = req.body;
     const employee = await prisma.employee.findFirst({
-      where: { empId, clientId }
+      where: { empId: currentEmpId, clientId }
     });
     if (!employee) {
       res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
       return;
     }
+    let finalEmpId = employee.empId;
+    if (newEmpId && newEmpId !== currentEmpId) {
+      const existing = await prisma.employee.findUnique({ where: { empId: newEmpId } });
+      if (existing) {
+        res.status(400).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u0441 \u0442\u0430\u043A\u0438\u043C ID \u0441\u0441\u044B\u043B\u043A\u0438 \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442" });
+        return;
+      }
+      finalEmpId = newEmpId;
+    }
     const updated = await prisma.employee.update({
       where: { id: employee.id },
       data: {
+        empId: finalEmpId,
         ...name ? { name } : {},
         ...isMobile !== void 0 ? { isMobile } : {},
         ...strictGps !== void 0 ? { strictGps } : {},
         ...geofence !== void 0 ? { geofence } : {},
         ...shifts !== void 0 ? { shifts } : {},
         ...foremanId !== void 0 ? { foremanId: foremanId || null } : {}
+      },
+      include: {
+        sites: { include: { site: true } },
+        foreman: { select: { id: true, name: true } }
       }
     });
+    if (siteIds !== void 0 && Array.isArray(siteIds)) {
+      await prisma.employeeSite.deleteMany({ where: { employeeId: employee.id } });
+      if (siteIds.length > 0) {
+        await prisma.employeeSite.createMany({
+          data: siteIds.map((sId) => ({
+            employeeId: employee.id,
+            siteId: sId
+          }))
+        });
+      }
+    }
     res.json({ success: true, employee: updated });
   } catch (err) {
     console.error("Update employee error:", err);
@@ -61828,6 +61867,158 @@ clientRouter.post("/notes", async (req, res) => {
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0437\u0430\u043C\u0435\u0442\u043A\u0438" });
   }
 });
+clientRouter.get("/sites", requireRole("client", "foreman"), async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const sites = await prisma.workSite.findMany({
+      where: { clientId },
+      include: {
+        employees: {
+          include: {
+            employee: {
+              select: { id: true, empId: true, name: true }
+            }
+          }
+        },
+        _count: {
+          select: { employees: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({ success: true, sites });
+  } catch (err) {
+    console.error("List sites error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0441\u043F\u0438\u0441\u043A\u0430 \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u0432" });
+  }
+});
+var siteSchema = external_exports.object({
+  name: external_exports.string().min(2),
+  address: external_exports.string().optional().nullable(),
+  lat: external_exports.number(),
+  lng: external_exports.number(),
+  radius: external_exports.number().int().min(10).default(100),
+  employeeIds: external_exports.array(external_exports.number()).optional()
+});
+clientRouter.post("/sites", requireRole("client", "foreman"), async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const data = siteSchema.parse(req.body);
+    const site = await prisma.workSite.create({
+      data: {
+        clientId,
+        name: data.name,
+        address: data.address || null,
+        lat: data.lat,
+        lng: data.lng,
+        radius: data.radius
+      },
+      include: {
+        employees: {
+          include: { employee: true }
+        }
+      }
+    });
+    if (data.employeeIds && data.employeeIds.length > 0) {
+      await prisma.employeeSite.createMany({
+        data: data.employeeIds.map((empDbId) => ({
+          employeeId: empDbId,
+          siteId: site.id
+        }))
+      });
+    }
+    res.json({ success: true, site });
+  } catch (err) {
+    if (err instanceof external_exports.ZodError) {
+      res.status(400).json({ error: "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u043E\u0431\u044A\u0435\u043A\u0442\u0430 \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u043E" });
+      return;
+    }
+    console.error("Create site error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u043E\u0431\u044A\u0435\u043A\u0442\u0430" });
+  }
+});
+clientRouter.put("/sites/:id", requireRole("client", "foreman"), async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const id = req.params["id"];
+    const { name, address, lat, lng, radius, employeeIds } = req.body;
+    const existing = await prisma.workSite.findFirst({ where: { id, clientId } });
+    if (!existing) {
+      res.status(404).json({ error: "\u041E\u0431\u044A\u0435\u043A\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    const updated = await prisma.workSite.update({
+      where: { id },
+      data: {
+        ...name ? { name } : {},
+        ...address !== void 0 ? { address } : {},
+        ...typeof lat === "number" ? { lat } : {},
+        ...typeof lng === "number" ? { lng } : {},
+        ...typeof radius === "number" ? { radius } : {}
+      }
+    });
+    if (employeeIds !== void 0 && Array.isArray(employeeIds)) {
+      await prisma.employeeSite.deleteMany({ where: { siteId: id } });
+      if (employeeIds.length > 0) {
+        await prisma.employeeSite.createMany({
+          data: employeeIds.map((empDbId) => ({
+            employeeId: empDbId,
+            siteId: id
+          }))
+        });
+      }
+    }
+    res.json({ success: true, site: updated });
+  } catch (err) {
+    console.error("Update site error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043E\u0431\u044A\u0435\u043A\u0442\u0430" });
+  }
+});
+clientRouter.delete("/sites/:id", requireRole("client", "foreman"), async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const id = req.params["id"];
+    const existing = await prisma.workSite.findFirst({ where: { id, clientId } });
+    if (!existing) {
+      res.status(404).json({ error: "\u041E\u0431\u044A\u0435\u043A\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    await prisma.workSite.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete site error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u043E\u0431\u044A\u0435\u043A\u0442\u0430" });
+  }
+});
+clientRouter.post("/sites/:id/employees", requireRole("client", "foreman"), async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const id = req.params["id"];
+    const { employeeIds } = req.body;
+    const existing = await prisma.workSite.findFirst({ where: { id, clientId } });
+    if (!existing) {
+      res.status(404).json({ error: "\u041E\u0431\u044A\u0435\u043A\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    if (!Array.isArray(employeeIds)) {
+      res.status(400).json({ error: "employeeIds \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C" });
+      return;
+    }
+    await prisma.employeeSite.deleteMany({ where: { siteId: id } });
+    if (employeeIds.length > 0) {
+      await prisma.employeeSite.createMany({
+        data: employeeIds.map((empDbId) => ({
+          employeeId: empDbId,
+          siteId: id
+        }))
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Assign employees to site error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u043E\u0432 \u043D\u0430 \u043E\u0431\u044A\u0435\u043A\u0442" });
+  }
+});
 
 // packages/api/src/routes/worker.ts
 var import_express5 = __toESM(require_express2());
@@ -61846,6 +62037,9 @@ workerRouter.get("/profile/:empId", async (req, res) => {
             defaultShifts: true
           }
         },
+        sites: {
+          include: { site: true }
+        },
         logs: {
           take: 1,
           orderBy: { dateTime: "desc" }
@@ -61859,6 +62053,7 @@ workerRouter.get("/profile/:empId", async (req, res) => {
     const lastLog = employee.logs[0];
     const isOnShift = lastLog ? lastLog.action === "CLOCK_IN" || lastLog.action === "AUTO_RESUME" : false;
     const effectiveShifts = employee.shifts || employee.client.defaultShifts;
+    const sitesList = employee.sites.map((es) => es.site);
     res.json({
       success: true,
       employee: {
@@ -61869,6 +62064,7 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,
         geofence: employee.geofence,
+        sites: sitesList,
         shifts: effectiveShifts
       },
       status: {
@@ -61896,32 +62092,58 @@ workerRouter.post("/log", async (req, res) => {
     const data = workerLogSchema.parse(req.body);
     const employee = await prisma.employee.findUnique({
       where: { empId: data.empId },
-      include: { client: true }
+      include: {
+        client: true,
+        sites: { include: { site: true } }
+      }
     });
     if (!employee || !employee.client.isActive) {
       res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
       return;
     }
-    if (!employee.isMobile && employee.geofence) {
-      const gf = employee.geofence;
-      if (gf.lat && gf.lng && gf.radius) {
-        if (data.lat !== void 0 && data.lat !== null && data.lng !== void 0 && data.lng !== null) {
-          const { isInside, distanceMeters } = checkGeofence(
-            data.lat,
-            data.lng,
-            gf.lat,
-            gf.lng,
-            gf.radius
-          );
-          if (data.action === "CLOCK_IN" && !isInside) {
-            res.status(400).json({
-              error: "\u0412\u044B \u0432\u043D\u0435 \u0437\u043E\u043D\u044B \u043E\u0431\u044A\u0435\u043A\u0442\u0430!",
-              errorCode: "OUT_OF_GEOFENCE",
-              distanceMeters,
-              radius: gf.radius
+    if (!employee.isMobile) {
+      const allowedGeofences = [];
+      if (employee.sites && employee.sites.length > 0) {
+        for (const es of employee.sites) {
+          if (es.site.lat && es.site.lng && es.site.radius) {
+            allowedGeofences.push({
+              lat: es.site.lat,
+              lng: es.site.lng,
+              radius: es.site.radius,
+              address: es.site.name + (es.site.address ? ` (${es.site.address})` : "")
             });
-            return;
           }
+        }
+      }
+      if (allowedGeofences.length === 0 && employee.geofence) {
+        const gf = employee.geofence;
+        if (gf.lat && gf.lng && gf.radius) {
+          allowedGeofences.push(gf);
+        }
+      }
+      if (allowedGeofences.length > 0 && data.lat !== void 0 && data.lat !== null && data.lng !== void 0 && data.lng !== null) {
+        let insideAny = false;
+        let minDistance = Infinity;
+        let bestRadius = 100;
+        for (const gf of allowedGeofences) {
+          const { isInside, distanceMeters } = checkGeofence(data.lat, data.lng, gf.lat, gf.lng, gf.radius);
+          if (distanceMeters < minDistance) {
+            minDistance = distanceMeters;
+            bestRadius = gf.radius;
+          }
+          if (isInside) {
+            insideAny = true;
+            break;
+          }
+        }
+        if (data.action === "CLOCK_IN" && !insideAny) {
+          res.status(400).json({
+            error: "\u0412\u044B \u0432\u043D\u0435 \u0437\u043E\u043D\u044B \u043E\u0431\u044A\u0435\u043A\u0442\u0430!",
+            errorCode: "OUT_OF_GEOFENCE",
+            distanceMeters: minDistance,
+            radius: bestRadius
+          });
+          return;
         }
       }
     }
