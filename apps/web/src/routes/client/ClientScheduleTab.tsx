@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Calendar, Save, Check, Loader2 } from 'lucide-react';
 
-const DAYS_OF_WEEK = [
-  { day: 0, label: 'Вс (Sun)' },
-  { day: 1, label: 'Пн (Mon)' },
-  { day: 2, label: 'Вт (Tue)' },
-  { day: 3, label: 'Ср (Wed)' },
-  { day: 4, label: 'Чт (Thu)' },
-  { day: 5, label: 'Пт (Fri)' },
-  { day: 6, label: 'Сб (Sat)' },
-];
-
 export function ClientScheduleTab() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [scheduleMatrix, setScheduleMatrix] = useState<Record<string, string>>({});
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const daysOfWeek = [
+    { day: 0, label: t('admin.daySun') },
+    { day: 1, label: t('admin.dayMon') },
+    { day: 2, label: t('admin.dayTue') },
+    { day: 3, label: t('admin.dayWed') },
+    { day: 4, label: t('admin.dayThu') },
+    { day: 5, label: t('admin.dayFri') },
+    { day: 6, label: t('admin.daySat') },
+  ];
 
   // Queries
   const { data: empData, isLoading: isEmpLoading } = useQuery({
@@ -81,10 +83,10 @@ export function ClientScheduleTab() {
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Calendar className="w-5 h-5 text-emerald-400" />
-            Расписание смен (Матрица)
+            {t('admin.scheduleTitle')}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Укажите запланированные типы смен для каждого сотрудника по дням недели
+            {t('admin.scheduleSubtitle')}
           </p>
         </div>
 
@@ -100,7 +102,7 @@ export function ClientScheduleTab() {
           ) : (
             <Save className="w-4 h-4" />
           )}
-          {savedSuccess ? 'Сохранено!' : 'Сохранить расписание'}
+          {savedSuccess ? t('admin.scheduleSaved') : t('admin.saveSchedule')}
         </button>
       </div>
 
@@ -110,7 +112,7 @@ export function ClientScheduleTab() {
         </div>
       ) : employees.length === 0 ? (
         <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500">
-          Сначала добавьте сотрудников во вкладке «Сотрудники»
+          {t('admin.addEmployeesFirst')}
         </div>
       ) : (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
@@ -118,8 +120,8 @@ export function ClientScheduleTab() {
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  <th className="p-4 sticky left-0 bg-slate-950 z-10">Сотрудник</th>
-                  {DAYS_OF_WEEK.map((d) => (
+                  <th className="p-4 sticky left-0 bg-slate-950 z-10">{t('admin.thEmployee')}</th>
+                  {daysOfWeek.map((d) => (
                     <th key={d.day} className="p-4 text-center whitespace-nowrap">
                       {d.label}
                     </th>
@@ -133,7 +135,7 @@ export function ClientScheduleTab() {
                       {emp.name}
                       <span className="block text-[11px] font-mono text-slate-400">{emp.empId}</span>
                     </td>
-                    {DAYS_OF_WEEK.map((d) => {
+                    {daysOfWeek.map((d) => {
                       const val = scheduleMatrix[`${emp.id}_${d.day}`] || 'morning';
                       return (
                         <td key={d.day} className="p-3 text-center">
@@ -150,10 +152,10 @@ export function ClientScheduleTab() {
                                 : 'bg-slate-950 text-slate-500 border-slate-800'
                             }`}
                           >
-                            <option value="morning">Утро</option>
-                            <option value="evening">Вечер</option>
-                            <option value="night">Ночь</option>
-                            <option value="off">Выходной</option>
+                            <option value="morning">{t('admin.shiftMorning')}</option>
+                            <option value="evening">{t('admin.shiftEvening')}</option>
+                            <option value="night">{t('admin.shiftNight')}</option>
+                            <option value="off">{t('admin.shiftOff')}</option>
                           </select>
                         </td>
                       );

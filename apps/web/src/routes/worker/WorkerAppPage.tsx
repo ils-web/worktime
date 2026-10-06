@@ -586,7 +586,7 @@ export function WorkerAppPage() {
     return (
       <div className="min-h-screen max-w-md mx-auto flex flex-col items-center justify-center p-4 bg-slate-950 text-white">
         <RefreshCw className="w-10 h-10 text-emerald-500 animate-spin mb-4" />
-        <p className="text-slate-400 font-medium">Загрузка профиля сотрудника...</p>
+        <p className="text-slate-400 font-medium">{t('worker.loadingProfile')}</p>
       </div>
     );
   }
@@ -595,9 +595,9 @@ export function WorkerAppPage() {
     return (
       <div className="min-h-screen max-w-md mx-auto flex flex-col items-center justify-center p-6 bg-slate-950 text-white text-center">
         <AlertCircle className="w-14 h-14 text-rose-500 mb-4" />
-        <h1 className="text-xl font-bold mb-2">Сотрудник не найден</h1>
+        <h1 className="text-xl font-bold mb-2">{t('worker.empNotFoundTitle')}</h1>
         <p className="text-slate-400 text-sm mb-6">
-          Проверьте правильность персональной ссылки или обратитесь к менеджеру компании.
+          {t('worker.empNotFoundDesc')}
         </p>
         <div className="text-xs text-slate-600 font-mono">ID: {empId}</div>
       </div>
@@ -637,7 +637,7 @@ export function WorkerAppPage() {
 
             <button
               onClick={() => {
-                if (window.confirm('Выйти из профиля этого сотрудника на этом телефоне?')) {
+                if (window.confirm(t('worker.confirmSwitchWorker'))) {
                   try {
                     localStorage.removeItem('worktime_last_worker_empid');
                   } catch {}
@@ -645,7 +645,7 @@ export function WorkerAppPage() {
                 }
               }}
               className="p-1.5 bg-slate-800 hover:bg-rose-950/50 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60 transition"
-              title="Сменить сотрудника"
+              title={t('worker.switchWorker')}
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
@@ -696,7 +696,7 @@ export function WorkerAppPage() {
           <button
             onClick={refreshLocation}
             className="inline-flex items-center gap-1 text-slate-400 hover:text-emerald-400 transition"
-            title="Обновить GPS"
+            title={t('worker.refreshGps')}
           >
             <Compass className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin text-emerald-400' : ''}`} />
             <span className="text-[11px] font-mono">
@@ -733,7 +733,7 @@ export function WorkerAppPage() {
             <button
               onClick={() => setIsInstallBannerDismissed(true)}
               className="text-slate-400 hover:text-white font-bold px-1.5 text-base leading-none"
-              title="Закрыть"
+              title={t('worker.close')}
             >
               ×
             </button>
@@ -793,9 +793,9 @@ export function WorkerAppPage() {
                       {geoError ? (
                         <span className="text-rose-400">{geoError}</span>
                       ) : geoResult ? (
-                        `Координаты: ${geoResult.lat.toFixed(4)}, ${geoResult.lng.toFixed(4)}`
+                        t('worker.coords', { lat: geoResult.lat.toFixed(4), lng: geoResult.lng.toFixed(4) })
                       ) : (
-                        'Определение положения...'
+                        t('worker.locating')
                       )}
                     </div>
                   </div>
@@ -874,7 +874,7 @@ export function WorkerAppPage() {
             {/* Bottom info caption */}
             <div className="text-center text-[11px] text-slate-500 mt-4 flex items-center justify-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Офлайн-режим активен • Автоматическая синхронизация</span>
+              <span>{t('worker.offlineModeActive')}</span>
             </div>
           </div>
         )}
@@ -904,7 +904,7 @@ export function WorkerAppPage() {
                     {t('worker.totalNet')}
                   </span>
                   <div className="text-2xl font-black text-emerald-400 mt-0.5">
-                    {monthlySummary.totalNet} ч
+                    {monthlySummary.totalNet} {t('admin.hourUnit')}
                   </div>
                 </div>
 
@@ -913,7 +913,7 @@ export function WorkerAppPage() {
                     {t('worker.nightHours')}
                   </span>
                   <div className="text-2xl font-black text-indigo-400 mt-0.5">
-                    {monthlySummary.totalNight} ч
+                    {monthlySummary.totalNight} {t('admin.hourUnit')}
                   </div>
                 </div>
 
@@ -922,7 +922,7 @@ export function WorkerAppPage() {
                     {t('worker.satHours')}
                   </span>
                   <div className="text-2xl font-black text-amber-400 mt-0.5">
-                    {monthlySummary.totalSaturday} ч
+                    {monthlySummary.totalSaturday} {t('admin.hourUnit')}
                   </div>
                 </div>
 
@@ -931,7 +931,7 @@ export function WorkerAppPage() {
                     {t('worker.overtime')}
                   </span>
                   <div className="text-2xl font-black text-purple-400 mt-0.5">
-                    {monthlySummary.totalOvertime} ч
+                    {monthlySummary.totalOvertime} {t('admin.hourUnit')}
                   </div>
                 </div>
               </div>
@@ -954,7 +954,7 @@ export function WorkerAppPage() {
               </div>
 
               {isLoadingReport ? (
-                <div className="p-8 text-center text-xs text-slate-400">Загрузка данных...</div>
+                <div className="p-8 text-center text-xs text-slate-400">{t('worker.loadingData')}</div>
               ) : monthlyDays.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-500">
                   {t('worker.noShiftsYet')}
@@ -965,10 +965,10 @@ export function WorkerAppPage() {
                     <div key={d.date} className="px-3.5 py-2.5 flex justify-between items-center text-xs">
                       <span className="font-mono text-slate-300">{d.date}</span>
                       <div className="text-right">
-                        <span className="font-bold text-emerald-400">{d.netHours} ч</span>
+                        <span className="font-bold text-emerald-400">{d.netHours} {t('admin.hourUnit')}</span>
                         {d.lunchDeducted > 0 && (
                           <span className="text-[10px] text-slate-500 block">
-                            (обед -{d.lunchDeducted}ч)
+                            ({t('worker.lunch')} -{d.lunchDeducted}{t('admin.hourUnit')})
                           </span>
                         )}
                       </div>
@@ -989,7 +989,7 @@ export function WorkerAppPage() {
                 {t('worker.notesTitle')}
               </h2>
               <p className="text-xs text-slate-400">
-                Зафиксируйте выполненные работы, непредвиденные расходы или комментарии по объекту.
+                {t('worker.notesSubtitle')}
               </p>
             </div>
 
@@ -1002,7 +1002,7 @@ export function WorkerAppPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Описание / Комментарий
+                {t('worker.notesLabel')}
               </label>
               <textarea
                 value={noteText}
@@ -1034,7 +1034,7 @@ export function WorkerAppPage() {
               disabled={isSubmittingNote || (!noteText && !expenseAmount)}
               className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-50 text-white font-bold text-sm rounded-2xl shadow-lg transition"
             >
-              {isSubmittingNote ? 'Сохранение...' : t('worker.saveNote')}
+              {isSubmittingNote ? t('worker.saving') : t('worker.saveNote')}
             </button>
           </form>
         )}
@@ -1118,7 +1118,7 @@ export function WorkerAppPage() {
             {status.lastActionTime && (
               <div className="text-right">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                  Начало
+                  {t('worker.shiftStart')}
                 </span>
                 <span className="text-xs font-mono font-bold text-emerald-400">
                   {new Date(status.lastActionTime).toLocaleTimeString([], {
@@ -1153,7 +1153,7 @@ export function WorkerAppPage() {
         </div>
       </Modal>
 
-      {/* 3. Modal: Shift Complete Celebration & Summary ("Спасибо за Ваше время!") */}
+      {/* 3. Modal: Shift Complete Celebration & Summary */}
       <Modal
         isOpen={showShiftCompleteModal}
         onClose={() => setShowShiftCompleteModal(false)}
@@ -1180,24 +1180,24 @@ export function WorkerAppPage() {
           {/* Shift Details Breakdown Card */}
           <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 text-left space-y-2.5 shadow-inner">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-400">Сотрудник:</span>
+              <span className="text-slate-400">{t('worker.summaryEmployee')}</span>
               <span className="font-bold text-white">{profile.name}</span>
             </div>
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-400">Организация:</span>
+              <span className="text-slate-400">{t('worker.summaryCompany')}</span>
               <span className="font-semibold text-emerald-300">{profile.companyName}</span>
             </div>
             <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-400">Время завершения:</span>
+              <span className="text-slate-400">{t('worker.summaryEndTime')}</span>
               <span className="font-mono font-bold text-white">
                 {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
             <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-700/60">
-              <span className="text-slate-400">Статус смены:</span>
+              <span className="text-slate-400">{t('worker.summaryStatus')}</span>
               <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Завершена и сохранена
+                {t('worker.summaryCompleted')}
               </span>
             </div>
           </div>

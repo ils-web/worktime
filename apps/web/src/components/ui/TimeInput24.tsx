@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown } from 'lucide-react';
 
 export interface TimeInput24Props {
@@ -16,6 +17,8 @@ export function TimeInput24({
   className = '',
   placeholder = '00:00',
 }: TimeInput24Props) {
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.dir() === 'rtl';
   const [val, setVal] = useState(value || '00:00');
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -126,7 +129,7 @@ export function TimeInput24({
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           className="absolute right-1.5 p-1 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800/80 transition"
-          title="Выбрать время"
+          title={t('admin.selectTime')}
         >
           <ChevronDown
             className={`w-3.5 h-3.5 transition-transform duration-200 ${
@@ -138,14 +141,15 @@ export function TimeInput24({
 
       {isOpen && (
         <div
+          dir={isRtl ? 'rtl' : 'ltr'}
           className={`absolute top-full mt-2 ${
-            align === 'right' ? 'right-0' : 'left-0'
-          } w-64 bg-slate-900/98 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150`}
+            align === 'right' ? (isRtl ? 'left-0' : 'right-0') : (isRtl ? 'right-0' : 'left-0')
+          } w-60 max-w-[calc(100vw-2rem)] bg-slate-900/98 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150`}
         >
           {/* Quick presets */}
           <div className="mb-2.5">
             <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5 tracking-wider">
-              Быстрый выбор
+              {t('admin.quickSelect')}
             </span>
             <div className="grid grid-cols-4 gap-1">
               {presets.map((p) => (
@@ -172,7 +176,7 @@ export function TimeInput24({
             {/* Hours column */}
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1 tracking-wider">
-                Часы (00-23)
+                {t('admin.pickerHours')} (00-23)
               </span>
               <div className="h-36 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-slate-700">
                 {hoursList.map((h) => {
@@ -198,7 +202,7 @@ export function TimeInput24({
             {/* Minutes column */}
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1 tracking-wider">
-                Минуты
+                {t('admin.pickerMinutes')}
               </span>
               <div className="space-y-1.5 pt-0.5">
                 {minutesList.map((m) => {
@@ -231,7 +235,7 @@ export function TimeInput24({
               onClick={() => setIsOpen(false)}
               className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition"
             >
-              Готово
+              {t('admin.done')}
             </button>
           </div>
         </div>

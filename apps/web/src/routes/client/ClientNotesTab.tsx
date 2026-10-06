@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
 import { Plus, StickyNote, DollarSign, Calendar, Loader2 } from 'lucide-react';
 
 export function ClientNotesTab() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -44,10 +46,10 @@ export function ClientNotesTab() {
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <StickyNote className="w-5 h-5 text-amber-400" />
-            Заметки и расходы по сменам
+            {t('admin.notesTabTitle')}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Учёт комментариев, инцидентов и компенсаций расходов сотрудников
+            {t('admin.notesTabSubtitle')}
           </p>
         </div>
 
@@ -70,7 +72,7 @@ export function ClientNotesTab() {
             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-950"
           >
             <Plus className="w-4 h-4" />
-            Добавить запись
+            {t('admin.addNote')}
           </button>
         </div>
       </div>
@@ -84,17 +86,17 @@ export function ClientNotesTab() {
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                <th className="p-4">Сотрудник</th>
-                <th className="p-4">Заметка / Причина</th>
-                <th className="p-4">Расход (₪)</th>
-                <th className="p-4">Время создания</th>
+                <th className="p-4">{t('admin.thEmployee')}</th>
+                <th className="p-4">{t('admin.thNoteReason')}</th>
+                <th className="p-4">{t('admin.thExpense')}</th>
+                <th className="p-4">{t('admin.thCreatedAt')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {notes.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="p-8 text-center text-slate-500">
-                    Заметок за {selectedDate} нет
+                    {t('admin.noNotesDate', { date: selectedDate })}
                   </td>
                 </tr>
               ) : (
@@ -127,7 +129,7 @@ export function ClientNotesTab() {
       )}
 
       {/* Modal: Create Note */}
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Новая заметка / расход">
+      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title={t('admin.newNoteModal')}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -136,7 +138,7 @@ export function ClientNotesTab() {
           className="space-y-4"
         >
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Сотрудник</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">{t('admin.noteEmployee')}</label>
             <select
               required
               value={form.empId}
@@ -152,19 +154,19 @@ export function ClientNotesTab() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Текст заметки</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">{t('admin.noteText')}</label>
             <textarea
               rows={3}
               required
               value={form.noteText}
               onChange={(e) => setForm({ ...form, noteText: e.target.value })}
-              placeholder="Покупка расходных материалов, задержка транспорта..."
+              placeholder={t('worker.notePlaceholder')}
               className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Сумма расхода (₪, опционально)</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">{t('admin.noteExpenseLabel')}</label>
             <input
               type="number"
               step="0.5"
@@ -180,7 +182,7 @@ export function ClientNotesTab() {
               onClick={() => setIsCreateOpen(false)}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm"
             >
-              Отмена
+              {t('admin.cancel')}
             </button>
             <button
               type="submit"
@@ -188,7 +190,7 @@ export function ClientNotesTab() {
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2"
             >
               {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Сохранить
+              {t('admin.save')}
             </button>
           </div>
         </form>

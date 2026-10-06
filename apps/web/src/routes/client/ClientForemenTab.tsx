@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
@@ -6,6 +7,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Plus, ToggleLeft, ToggleRight, Trash2, Loader2 } from 'lucide-react';
 
 export function ClientForemenTab() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [form, setForm] = useState({ name: '', username: '', password: '' });
@@ -43,9 +45,9 @@ export function ClientForemenTab() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-bold text-white">Бригадиры компании</h2>
+          <h2 className="text-xl font-bold text-white">{t('admin.foremenTitle')}</h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Управление учётными записями бригадиров и доступом к подопечным сотрудникам
+            {t('admin.foremenSubtitle')}
           </p>
         </div>
         <button
@@ -53,7 +55,7 @@ export function ClientForemenTab() {
           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-950"
         >
           <Plus className="w-4 h-4" />
-          Добавить бригадира
+          {t('admin.addForeman')}
         </button>
       </div>
 
@@ -66,19 +68,19 @@ export function ClientForemenTab() {
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                <th className="p-4">ФИО</th>
-                <th className="p-4">Логин</th>
-                <th className="p-4">Назначено сотрудников</th>
-                <th className="p-4">Статус</th>
-                <th className="p-4">Дата создания</th>
-                <th className="p-4 text-right">Действия</th>
+                <th className="p-4">{t('admin.thFullName')}</th>
+                <th className="p-4">{t('admin.thLogin')}</th>
+                <th className="p-4">{t('admin.thAssignedEmployees')}</th>
+                <th className="p-4">{t('admin.thStatus')}</th>
+                <th className="p-4">{t('admin.thCreatedDate')}</th>
+                <th className="p-4 text-right">{t('admin.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {foremen.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-slate-500">
-                    Бригадиры пока не добавлены
+                    {t('admin.noForemen')}
                   </td>
                 </tr>
               ) : (
@@ -87,13 +89,13 @@ export function ClientForemenTab() {
                     <td className="p-4 font-semibold text-white">{f.name}</td>
                     <td className="p-4 text-xs font-mono text-slate-300">{f.username}</td>
                     <td className="p-4 text-emerald-400 font-semibold">
-                      {f._count?.employees || 0} чел.
+                      {f._count?.employees || 0} {t('admin.peopleUnit')}
                     </td>
                     <td className="p-4">
                       {f.isActive ? (
-                        <Badge variant="emerald" dot>Активен</Badge>
+                        <Badge variant="emerald" dot>{t('admin.active')}</Badge>
                       ) : (
-                        <Badge variant="rose">Отключен</Badge>
+                        <Badge variant="rose">{t('admin.disabled')}</Badge>
                       )}
                     </td>
                     <td className="p-4 text-xs text-slate-400">
@@ -103,7 +105,7 @@ export function ClientForemenTab() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => toggleMutation.mutate(f.id)}
-                          title={f.isActive ? 'Отключить' : 'Включить'}
+                          title={f.isActive ? t('admin.disable') : t('admin.enable')}
                           className={`p-1.5 rounded-lg hover:bg-slate-800 transition ${
                             f.isActive
                               ? 'text-emerald-400 hover:text-rose-400'
@@ -114,7 +116,7 @@ export function ClientForemenTab() {
                         </button>
                         <button
                           onClick={() => deleteMutation.mutate(f.id)}
-                          title="Удалить бригадира"
+                          title={t('admin.deleteForeman')}
                           className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -133,7 +135,7 @@ export function ClientForemenTab() {
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Новый бригадир"
+        title={t('admin.newForemanModal')}
       >
         <form
           onSubmit={(e) => {
@@ -143,29 +145,29 @@ export function ClientForemenTab() {
           className="space-y-4"
         >
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">ФИО</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">{t('admin.thFullName')}</label>
             <input
               type="text"
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
-              placeholder="Михаил Бригадир"
+              placeholder={t('admin.empNamePlaceholder')}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Логин</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">{t('admin.thLogin')}</label>
             <input
               type="text"
               required
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
               className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
-              placeholder="foreman_mikhail"
+              placeholder="foreman_login"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Пароль</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">{t('admin.foremanPassword')}</label>
             <input
               type="password"
               required
@@ -182,7 +184,7 @@ export function ClientForemenTab() {
               onClick={() => setIsCreateOpen(false)}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm"
             >
-              Отмена
+              {t('admin.cancel')}
             </button>
             <button
               type="submit"
@@ -190,7 +192,7 @@ export function ClientForemenTab() {
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2"
             >
               {createMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Создать
+              {t('admin.create')}
             </button>
           </div>
         </form>
