@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
+import { TimeInput24 } from '../../components/ui/TimeInput24';
 import {
   Download,
   FileSpreadsheet,
@@ -13,6 +15,7 @@ import {
 } from 'lucide-react';
 
 export function ClientHoursTab() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -26,11 +29,11 @@ export function ClientHoursTab() {
 
   // Forms
   const [quickForm, setQuickForm] = useState({ empId: '', action: 'CLOCK_IN' });
-  const [manualForm, setManualForm] = useState({
-    empId: '',
-    clockIn: `${new Date().toISOString().slice(0, 10)}T08:00`,
-    clockOut: `${new Date().toISOString().slice(0, 10)}T17:00`,
-  });
+  const [manualEmpId, setManualEmpId] = useState('');
+  const [manualShiftDate, setManualShiftDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualStartTime, setManualStartTime] = useState('08:00');
+  const [manualEndTime, setManualEndTime] = useState('17:00');
+  const [isNextDay, setIsNextDay] = useState(false);
 
   // Queries
   const { data, isLoading } = useQuery({
@@ -123,17 +126,17 @@ export function ClientHoursTab() {
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Clock className="w-5 h-5 text-emerald-400" />
-            Табель рабочего времени и отчёты
+            {t('admin.timesheetTitle')}
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Точный поминутный расчёт ночных часов, субботних смен, сверхурочных и автовычета обеда
+            {t('admin.timesheetSubtitle')}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Date Picker */}
           <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-xl text-xs">
-            <span className="text-slate-400 px-1">Период:</span>
+            <span className="text-slate-400 px-1">{t('admin.period')}</span>
             <input
               type="date"
               value={startDate}
@@ -151,6 +154,7 @@ export function ClientHoursTab() {
 
           {/* Quick Actions */}
           <button
+            type="button"
             onClick={() => {
               setQuickForm({ empId: employees[0]?.empId || '', action: 'CLOCK_IN' });
               setIsQuickOpen(true);
@@ -158,39 +162,42 @@ export function ClientHoursTab() {
             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700"
           >
             <Clock className="w-3.5 h-3.5 text-emerald-400" />
-            Быстрая отметка
+            {t('admin.quickActionBtn')}
           </button>
 
           <button
+            type="button"
             onClick={() => {
-              setManualForm({
-                empId: employees[0]?.empId || '',
-                clockIn: `${startDate}T08:00`,
-                clockOut: `${startDate}T17:00`,
-              });
+              setManualEmpId(employees[0]?.empId || '');
+              setManualShiftDate(startDate || new Date().toISOString().slice(0, 10));
+              setManualStartTime('08:00');
+              setManualEndTime('17:00');
+              setIsNextDay(false);
               setIsManualOpen(true);
             }}
             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700"
           >
-            <PlusCircle className="w-3.5 h-3.5 text-blue-400" />
-            Ручная смена
+            <PlusCircle className="w-3.5 h-3.5 text-emerald-400" />
+            {t('admin.addManualShift')}
           </button>
 
           {/* Export Buttons */}
           <button
+            type="button"
             onClick={handleDownloadCsv}
             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-            Excel / CSV
+            {t('admin.downloadCsv')}
           </button>
 
           <button
+            type="button"
             onClick={handleDownloadPdf}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-emerald-950"
           >
             <Download className="w-3.5 h-3.5" />
-            Скачать PDF
+            {t('admin.downloadPdf')}
           </button>
         </div>
       </div>
@@ -364,26 +371,38 @@ export function ClientHoursTab() {
         </form>
       </Modal>
 
-      {/* Modal: Manual Shift Entry */}
+      {/* Modal: Manual Shift Entry with 24-hour TimePicker */}
       <Modal
         isOpen={isManualOpen}
         onClose={() => setIsManualOpen(false)}
-        title="Ручное добавление / коррекция смены"
+        title={t('admin.manualShiftTitle')}
       >
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            manualMutation.mutate(manualForm);
+            let outDate = manualShiftDate;
+            if (isNextDay || manualEndTime < manualStartTime) {
+              const d = new Date(manualShiftDate);
+              d.setDate(d.getDate() + 1);
+              outDate = d.toISOString().slice(0, 10);
+            }
+            manualMutation.mutate({
+              empId: manualEmpId,
+              clockIn: `${manualShiftDate}T${manualStartTime}:00`,
+              clockOut: `${outDate}T${manualEndTime}:00`,
+            });
           }}
           className="space-y-4"
         >
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Сотрудник</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              {t('admin.employee')}
+            </label>
             <select
               required
-              value={manualForm.empId}
-              onChange={(e) => setManualForm({ ...manualForm, empId: e.target.value })}
-              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+              value={manualEmpId}
+              onChange={(e) => setManualEmpId(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
             >
               {employees.map((emp) => (
                 <option key={emp.empId} value={emp.empId}>
@@ -393,44 +412,69 @@ export function ClientHoursTab() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              {t('admin.shiftDate')}
+            </label>
+            <input
+              type="date"
+              required
+              value={manualShiftDate}
+              onChange={(e) => setManualShiftDate(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Время Входа (In)</label>
-              <input
-                type="datetime-local"
-                required
-                value={manualForm.clockIn}
-                onChange={(e) => setManualForm({ ...manualForm, clockIn: e.target.value })}
-                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-mono"
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                {t('admin.clockInTime')}
+              </label>
+              <TimeInput24
+                value={manualStartTime}
+                onChange={setManualStartTime}
+                align="left"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Время Выхода (Out)</label>
-              <input
-                type="datetime-local"
-                required
-                value={manualForm.clockOut}
-                onChange={(e) => setManualForm({ ...manualForm, clockOut: e.target.value })}
-                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-mono"
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                {t('admin.clockOutTime')}
+              </label>
+              <TimeInput24
+                value={manualEndTime}
+                onChange={setManualEndTime}
+                align="right"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-3">
+          <div className="pt-1">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-400 hover:text-slate-200">
+              <input
+                type="checkbox"
+                checked={isNextDay || manualEndTime < manualStartTime}
+                onChange={(e) => setIsNextDay(e.target.checked)}
+                className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500"
+              />
+              <span>{t('admin.nextDayNotice')}</span>
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
             <button
               type="button"
               onClick={() => setIsManualOpen(false)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
             >
-              Отмена
+              {t('admin.cancel')}
             </button>
             <button
               type="submit"
               disabled={manualMutation.isPending}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold flex items-center gap-2"
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition"
             >
-              {manualMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Сохранить смену
+              {manualMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{t('admin.saveShift')}</span>
             </button>
           </div>
         </form>

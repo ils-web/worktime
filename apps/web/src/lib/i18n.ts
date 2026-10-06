@@ -58,6 +58,37 @@ export const resources = {
         shiftCompleteTitle: 'Спасибо за Ваше время!',
         shiftCompleteOk: 'Отлично',
       },
+      admin: {
+        dashboard: 'Дашборд',
+        employees: 'Сотрудники',
+        foremen: 'Бригадиры',
+        schedule: 'Расписание',
+        hours: 'Часы и Отчёты',
+        notes: 'Заметки',
+        settings: 'Настройки',
+        manager: 'Менеджер',
+        foreman: 'Бригадир',
+        logout: 'Выйти',
+        manualShiftTitle: 'Ручное добавление / коррекция смены',
+        employee: 'Сотрудник',
+        shiftDate: 'Дата смены',
+        clockInTime: 'Время Входа (24ч)',
+        clockOutTime: 'Время Выхода (24ч)',
+        nextDayNotice: 'Выход на следующий день (ночная смена через полночь)',
+        cancel: 'Отмена',
+        saveShift: 'Сохранить смену',
+        quickLogTitle: 'Быстрая отметка сейчас',
+        quickClockIn: 'Вход сейчас',
+        quickClockOut: 'Выход сейчас',
+        quickSubmit: 'Зафиксировать',
+        addManualShift: 'Ручная смена',
+        quickActionBtn: 'Быстрая отметка',
+        downloadPdf: 'Табель (PDF)',
+        downloadCsv: 'Табель (Excel)',
+        period: 'Период:',
+        timesheetTitle: 'Табель рабочего времени и отчёты',
+        timesheetSubtitle: 'Точный поминутный расчёт ночных часов, субботних смен, сверхурочных и автовычета обеда',
+      },
     },
   },
   en: {
@@ -115,6 +146,37 @@ export const resources = {
         cancel: 'Cancel',
         shiftCompleteTitle: 'Thank you for your time!',
         shiftCompleteOk: 'Great',
+      },
+      admin: {
+        dashboard: 'Dashboard',
+        employees: 'Employees',
+        foremen: 'Foremen',
+        schedule: 'Schedule',
+        hours: 'Hours & Reports',
+        notes: 'Notes',
+        settings: 'Settings',
+        manager: 'Manager',
+        foreman: 'Foreman',
+        logout: 'Logout',
+        manualShiftTitle: 'Manual Shift Entry / Correction',
+        employee: 'Employee',
+        shiftDate: 'Shift Date',
+        clockInTime: 'Clock In Time (24h)',
+        clockOutTime: 'Clock Out Time (24h)',
+        nextDayNotice: 'Clock out next day (overnight shift crossing midnight)',
+        cancel: 'Cancel',
+        saveShift: 'Save Shift',
+        quickLogTitle: 'Quick Clock Action Now',
+        quickClockIn: 'Clock In Now',
+        quickClockOut: 'Clock Out Now',
+        quickSubmit: 'Record Entry',
+        addManualShift: 'Manual Shift',
+        quickActionBtn: 'Quick Clock',
+        downloadPdf: 'Timesheet (PDF)',
+        downloadCsv: 'Timesheet (Excel)',
+        period: 'Period:',
+        timesheetTitle: 'Timesheet & Payroll Reports',
+        timesheetSubtitle: 'Exact minute calculation of night hours, Saturday, overtime and auto lunch deduction',
       },
     },
   },
@@ -174,6 +236,37 @@ export const resources = {
         shiftCompleteTitle: 'תודה על זמנך!',
         shiftCompleteOk: 'מצוין',
       },
+      admin: {
+        dashboard: 'לוח בקרה',
+        employees: 'עובדים',
+        foremen: 'מנהלי עבודה',
+        schedule: 'סידור עבודה',
+        hours: 'שעות ודוחות',
+        notes: 'הערות',
+        settings: 'הגדרות',
+        manager: 'מנהל',
+        foreman: 'מנהל עבודה',
+        logout: 'התנתק',
+        manualShiftTitle: 'הוספה / תיקון משמרת ידנית',
+        employee: 'עובד',
+        shiftDate: 'תאריך משמרת',
+        clockInTime: 'שעת כניסה (24 שעות)',
+        clockOutTime: 'שעת יציאה (24 שעות)',
+        nextDayNotice: 'יציאה ביום למחרת (משמרת לילה מעבר לחצות)',
+        cancel: 'ביטול',
+        saveShift: 'שמור משמרת',
+        quickLogTitle: 'דיווח נוכחות מהיר כעת',
+        quickClockIn: 'כניסה כעת',
+        quickClockOut: 'יציאה כעת',
+        quickSubmit: 'בצע דיווח',
+        addManualShift: 'משמרת ידנית',
+        quickActionBtn: 'דיווח מהיר',
+        downloadPdf: 'דוח שעות (PDF)',
+        downloadCsv: 'דוח שעות (Excel)',
+        period: 'תקופה:',
+        timesheetTitle: 'דוח שעות עבודה וחישוב שכר',
+        timesheetSubtitle: 'חישוב מדויק לפי דקות: שעות לילה, שבת, שעות נוספות וניכוי ארוחה אוטומטי',
+      },
     },
   },
   ar: {
@@ -232,11 +325,59 @@ export const resources = {
         shiftCompleteTitle: 'شكراً لوقتك!',
         shiftCompleteOk: 'ممتاز',
       },
+      admin: {
+        dashboard: 'لوحة التحكم',
+        employees: 'الموظفون',
+        foremen: 'المشرفون',
+        schedule: 'الجدول',
+        hours: 'الساعات والتقارير',
+        notes: 'ملاحظات',
+        settings: 'الإعدادات',
+        manager: 'مدير',
+        foreman: 'مشرف',
+        logout: 'تسجيل خروج',
+        manualShiftTitle: 'إضافة / تعديل وردية يدوياً',
+        employee: 'موظف',
+        shiftDate: 'تاريخ الوردية',
+        clockInTime: 'وقت الدخول (24 ساعة)',
+        clockOutTime: 'وقت الخروج (24 ساعة)',
+        nextDayNotice: 'الخروج في اليوم التالي (وردية ليلية عبر منتصف الليل)',
+        cancel: 'إلغاء',
+        saveShift: 'حفظ الوردية',
+        quickLogTitle: 'تسجيل سريع الآن',
+        quickClockIn: 'دخول الآن',
+        quickClockOut: 'خروج الآن',
+        quickSubmit: 'تسجيل',
+        addManualShift: 'وردية يدوية',
+        quickActionBtn: 'تسجيل سريع',
+        downloadPdf: 'كشف الساعات (PDF)',
+        downloadCsv: 'كشف الساعات (Excel)',
+        period: 'الفترة:',
+        timesheetTitle: 'كشف ساعات العمل والتقارير',
+        timesheetSubtitle: 'حساب دقيق بالدقيقة للساعات الليلية وساعات السبت والعمل الإضافي وخصم الغداء',
+      },
     },
   },
 };
 
-const savedLang = (typeof window !== 'undefined' && localStorage.getItem('timetracker_lang')) || 'ru';
+export function detectBrowserLanguage(): string {
+  if (typeof window === 'undefined') return 'he';
+  const saved = localStorage.getItem('timetracker_lang');
+  if (saved && ['ru', 'he', 'en', 'ar'].includes(saved)) {
+    return saved;
+  }
+  const browserLangs = navigator.languages || [navigator.language || ''];
+  for (const bl of browserLangs) {
+    const code = bl.split('-')[0]?.toLowerCase();
+    if (code === 'he' || code === 'iw') return 'he';
+    if (code === 'ru') return 'ru';
+    if (code === 'ar') return 'ar';
+    if (code === 'en') return 'en';
+  }
+  return 'he';
+}
+
+const initialLang = detectBrowserLanguage();
 
 export function applyLanguageDirection(lng: string) {
   if (typeof document !== 'undefined') {
@@ -248,14 +389,14 @@ export function applyLanguageDirection(lng: string) {
 
 i18n.use(initReactI18next).init({
   resources,
-  lng: savedLang,
+  lng: initialLang,
   fallbackLng: 'en',
   interpolation: {
     escapeValue: false,
   },
 });
 
-applyLanguageDirection(savedLang);
+applyLanguageDirection(initialLang);
 
 export function changeLanguage(lng: string) {
   i18n.changeLanguage(lng);
