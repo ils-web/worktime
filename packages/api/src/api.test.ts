@@ -183,6 +183,79 @@ describe('TimeTracker API Endpoints', () => {
     expect(pdfRes.body.length).toBeGreaterThan(100);
   });
 
+  it('12. Manual shift CRUD: create with accurate timezone, mark isManual, edit, and delete', async () => {
+    // 1. Create shift 08:00 - 17:00 on 2026-10-02
+    const createRes = await request(app)
+      .post('/api/client/logs/manual')
+      .set('Cookie', clientCookie)
+      .send({
+        empId: testEmpId,
+        clockIn: '2026-10-02T08:00:00',
+        clockOut: '2026-10-02T17:00:00',
+        notes: 'Смена по шаблону 08-17',
+      });
+
+    expect(createRes.status).toBe(200);
+    expect(createRes.body.success).toBe(true);
+    expect(createRes.body.logIn.isManual).toBe(true);
+    expect(createRes.body.logOut.isManual).toBe(true);
+
+    const logIds = [createRes.body.logIn.id, createRes.body.logOut.id];
+
+    // 2. Fetch hours and verify exact 08:00 - 17:00 and isManual flag
+    const hoursRes = await request(app)
+      .get('/api/client/hours?startDate=2026-10-02&endDate=2026-10-02')
+      .set('Cookie', clientCookie);
+
+    expect(hoursRes.status).toBe(200);
+    expect(hoursRes.body.hours.length).toBe(1);
+    const shift = hoursRes.body.hours[0];
+    expect(shift.firstIn).toBe('08:00');
+    expect(shift.lastOut).toBe('17:00');
+    expect(shift.grossHours).toBe(9);
+    expect(shift.isManual).toBe(true);
+    expect(shift.logIds).toEqual(expect.arrayContaining(logIds));
+
+    // 3. Edit shift to 07:00 - 16:00
+    const editRes = await request(app)
+      .put('/api/client/logs/manual')
+      .set('Cookie', clientCookie)
+      .send({
+        empId: testEmpId,
+        clockIn: '2026-10-02T07:00:00',
+        clockOut: '2026-10-02T16:00:00',
+        notes: 'Отредактировано на 07-16',
+        logIds,
+      });
+
+    expect(editRes.status).toBe(200);
+    expect(editRes.body.success).toBe(true);
+
+    const updatedHoursRes = await request(app)
+      .get('/api/client/hours?startDate=2026-10-02&endDate=2026-10-02')
+      .set('Cookie', clientCookie);
+
+    const updatedShift = updatedHoursRes.body.hours[0];
+    expect(updatedShift.firstIn).toBe('07:00');
+    expect(updatedShift.lastOut).toBe('16:00');
+    expect(updatedShift.notes).toBe('Отредактировано на 07-16');
+
+    // 4. Delete shift
+    const deleteRes = await request(app)
+      .delete('/api/client/logs/manual')
+      .set('Cookie', clientCookie)
+      .send({ logIds });
+
+    expect(deleteRes.status).toBe(200);
+    expect(deleteRes.body.success).toBe(true);
+
+    const finalHoursRes = await request(app)
+      .get('/api/client/hours?startDate=2026-10-02&endDate=2026-10-02')
+      .set('Cookie', clientCookie);
+
+    expect(finalHoursRes.body.hours.length).toBe(0);
+  }, 15000);
+
   it('12. Billing cron requires CRON_SECRET and generates monthly report', async () => {
     // Without secret -> 401
     const unauthRes = await request(app).get('/api/cron/billing');

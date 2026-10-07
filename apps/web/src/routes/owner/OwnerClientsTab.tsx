@@ -5,6 +5,8 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { PasswordInput } from '../../components/ui/PasswordInput';
 import { Plus, Key, ToggleLeft, ToggleRight, DollarSign, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { DatePicker } from '../../components/ui/DatePicker';
+import { formatIsoToDisplayDate } from '@timetracker/shared';
 
 export function OwnerClientsTab() {
   const queryClient = useQueryClient();
@@ -199,7 +201,7 @@ export function OwnerClientsTab() {
                         <td className="p-4 text-xs">
                           {c.trialEndsAt ? (
                             <span className={isTrialActive ? 'text-emerald-400' : 'text-rose-400'}>
-                              {new Date(c.trialEndsAt).toLocaleDateString()}
+                              {formatIsoToDisplayDate(c.trialEndsAt.slice(0, 10))}
                             </span>
                           ) : (
                             <span className="text-slate-500">Бессрочно</span>
@@ -472,11 +474,10 @@ export function OwnerClientsTab() {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">Дата окончания триала</label>
-            <input
-              type="date"
+            <DatePicker
               value={tariffForm.trialEndsAt}
-              onChange={(e) => setTariffForm({ ...tariffForm, trialEndsAt: e.target.value })}
-              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
+              onChange={(val) => setTariffForm({ ...tariffForm, trialEndsAt: val })}
+              placeholder="ДД/ММ/ГГГГ"
             />
             <span className="text-[11px] text-slate-500 mt-1 block">
               Оставьте пустым для бессрочного доступа

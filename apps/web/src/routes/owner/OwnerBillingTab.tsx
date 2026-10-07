@@ -4,6 +4,8 @@ import { apiRequest } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Calculator, FileText, CheckCircle, Clock, Trash2, Plus, Loader2 } from 'lucide-react';
+import { DatePicker } from '../../components/ui/DatePicker';
+import { formatIsoToDisplayDate } from '@timetracker/shared';
 
 export function OwnerBillingTab() {
   const queryClient = useQueryClient();
@@ -70,20 +72,16 @@ export function OwnerBillingTab() {
               Автоматический расчёт сумм по тарифам клиентов
             </p>
           </div>
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-xl text-xs">
-            <span className="text-slate-400 px-1">Период:</span>
-            <input
-              type="date"
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 text-xs px-1">Период:</span>
+            <DatePicker
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white"
+              onChange={setStartDate}
             />
-            <span className="text-slate-500">—</span>
-            <input
-              type="date"
+            <span className="text-slate-500 text-xs">—</span>
+            <DatePicker
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white"
+              onChange={setEndDate}
             />
           </div>
         </div>
@@ -219,7 +217,7 @@ export function OwnerBillingTab() {
                           )}
                         </td>
                         <td className="p-4 text-xs text-slate-400">
-                          {new Date(inv.createdAt).toLocaleDateString()}
+                          {formatIsoToDisplayDate(inv.createdAt.slice(0, 10))}
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">

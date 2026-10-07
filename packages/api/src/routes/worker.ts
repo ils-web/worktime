@@ -12,6 +12,10 @@ import {
 import { generatePdfReport } from '../services/pdfReportService';
 import { ReportRow } from '../services/csvReportService';
 
+interface TrackedSession extends WorkSession {
+  isManual?: boolean;
+}
+
 export const workerRouter = Router();
 
 /**
@@ -452,32 +456,39 @@ workerRouter.get('/report/:empId', async (req: Request, res: Response) => {
     const m = parseInt(mStr || '10', 10);
     const startDate = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
     const endDate = new Date(Date.UTC(year, m, 0, 23, 59, 59));
+    const fetchEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
 
     const logs = await prisma.timeLog.findMany({
       where: {
         empId,
-        dateTime: { gte: startDate, lte: endDate },
+        dateTime: { gte: startDate, lte: fetchEndDate },
       },
       orderBy: { dateTime: 'asc' },
     });
 
     // Group into sessions
-    const sessions: WorkSession[] = [];
-    let currentIn: Date | null = null;
+    const sessions: TrackedSession[] = [];
+    let currentInLog: (typeof logs)[0] | null = null;
     for (const log of logs) {
       if (log.action === 'CLOCK_IN') {
-        currentIn = log.dateTime;
+        currentInLog = log;
       } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
-        if (currentIn) {
-          sessions.push({ clockIn: currentIn, clockOut: log.dateTime });
-          currentIn = null;
+        if (currentInLog) {
+          sessions.push({
+            clockIn: currentInLog.dateTime,
+            clockOut: log.dateTime,
+            isManual: Boolean(currentInLog.isManual || log.isManual),
+          });
+          currentInLog = null;
         }
       }
     }
 
+    const filteredSessions = sessions.filter((s) => s.clockIn >= startDate && s.clockIn <= endDate);
+
     // Group sessions by date
-    const sessionsByDate: Record<string, WorkSession[]> = {};
-    for (const s of sessions) {
+    const sessionsByDate: Record<string, TrackedSession[]> = {};
+    for (const s of filteredSessions) {
       const d = getJerusalemParts(s.clockIn).dateStr;
       if (!sessionsByDate[d]) sessionsByDate[d] = [];
       sessionsByDate[d].push(s);
@@ -509,6 +520,7 @@ workerRouter.get('/report/:empId', async (req: Request, res: Response) => {
         nightHours: daily.nightHours,
         saturdayHours: daily.saturdayHours,
         overtimeHours: daily.overtimeHours,
+        isManual: daySessions.some((s) => s.isManual),
       });
     }
 
@@ -553,30 +565,37 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
     const m = parseInt(mStr || '10', 10);
     const startDate = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
     const endDate = new Date(Date.UTC(year, m, 0, 23, 59, 59));
+    const fetchEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
 
     const logs = await prisma.timeLog.findMany({
       where: {
         empId,
-        dateTime: { gte: startDate, lte: endDate },
+        dateTime: { gte: startDate, lte: fetchEndDate },
       },
       orderBy: { dateTime: 'asc' },
     });
 
-    const sessions: WorkSession[] = [];
-    let currentIn: Date | null = null;
+    const sessions: TrackedSession[] = [];
+    let currentInLog: (typeof logs)[0] | null = null;
     for (const log of logs) {
       if (log.action === 'CLOCK_IN') {
-        currentIn = log.dateTime;
+        currentInLog = log;
       } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
-        if (currentIn) {
-          sessions.push({ clockIn: currentIn, clockOut: log.dateTime });
-          currentIn = null;
+        if (currentInLog) {
+          sessions.push({
+            clockIn: currentInLog.dateTime,
+            clockOut: log.dateTime,
+            isManual: Boolean(currentInLog.isManual || log.isManual),
+          });
+          currentInLog = null;
         }
       }
     }
 
-    const sessionsByDate: Record<string, WorkSession[]> = {};
-    for (const s of sessions) {
+    const filteredSessions = sessions.filter((s) => s.clockIn >= startDate && s.clockIn <= endDate);
+
+    const sessionsByDate: Record<string, TrackedSession[]> = {};
+    for (const s of filteredSessions) {
       const d = getJerusalemParts(s.clockIn).dateStr;
       if (!sessionsByDate[d]) sessionsByDate[d] = [];
       sessionsByDate[d].push(s);
@@ -604,6 +623,7 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
         nightHours: daily.nightHours,
         saturdayHours: daily.saturdayHours,
         overtimeHours: daily.overtimeHours,
+        isManual: daySessions.some((s) => s.isManual),
         notes: '',
       });
     }

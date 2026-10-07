@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
-import { Plus, StickyNote, DollarSign, Calendar, Loader2 } from 'lucide-react';
+import { Plus, StickyNote, DollarSign, Loader2 } from 'lucide-react';
+import { DatePicker } from '../../components/ui/DatePicker';
+import { formatIsoToDisplayDate } from '@timetracker/shared';
 
 export function ClientNotesTab() {
   const { t } = useTranslation();
@@ -54,15 +56,10 @@ export function ClientNotesTab() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-xl text-xs">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white"
-            />
-          </div>
+          <DatePicker
+            value={selectedDate}
+            onChange={setSelectedDate}
+          />
 
           <button
             onClick={() => {
@@ -96,7 +93,7 @@ export function ClientNotesTab() {
               {notes.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="p-8 text-center text-slate-500">
-                    {t('admin.noNotesDate', { date: selectedDate })}
+                    {t('admin.noNotesDate', { date: formatIsoToDisplayDate(selectedDate) })}
                   </td>
                 </tr>
               ) : (

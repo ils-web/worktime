@@ -97084,6 +97084,55 @@ function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm =
     regularHours
   };
 }
+function jerusalemDateTimeToDate(dateStr, timeStr) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hour, minute] = timeStr.split(":").map(Number);
+  const utcGuess = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour ?? 0, minute ?? 0));
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: JERUSALEM_TIMEZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hourCycle: "h23"
+  });
+  const parts = dtf.formatToParts(utcGuess);
+  const p = {};
+  for (const part of parts) {
+    p[part.type] = Number(part.value);
+  }
+  const guessJerusalemAsUtc = Date.UTC(p["year"], p["month"] - 1, p["day"], p["hour"], p["minute"]);
+  const offsetMs = guessJerusalemAsUtc - utcGuess.getTime();
+  return new Date(utcGuess.getTime() - offsetMs);
+}
+function parseClientDateTime(input) {
+  if (input instanceof Date) return input;
+  if (!input) return /* @__PURE__ */ new Date();
+  if (input.includes("Z") || /[+-]\d{2}:\d{2}$/.test(input)) {
+    return new Date(input);
+  }
+  const [datePart, timePart] = input.split("T");
+  if (datePart && timePart) {
+    return jerusalemDateTimeToDate(datePart, timePart.slice(0, 5));
+  }
+  return new Date(input);
+}
+function addDays(dateStr, days) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + days));
+  return date.toISOString().slice(0, 10);
+}
+function formatIsoToDisplayDate(dateStr) {
+  if (!dateStr) return "";
+  const clean = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+  const parts = clean.split("-");
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2].padStart(2, "0")}/${parts[1].padStart(2, "0")}/${parts[0]}`;
+  }
+  return dateStr;
+}
 
 // packages/shared/src/rules/billing.ts
 function calculateWorkerDays(employee, period) {
@@ -97499,10 +97548,11 @@ function generateCsvReport(rows, clientName) {
     "\u0417\u0430\u043C\u0435\u0442\u043A\u0438"
   ].join(",");
   const csvRows = rows.map((r) => {
+    const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? " *" : "");
     return [
       `"${r.empId}"`,
       `"${r.name.replace(/"/g, '""')}"`,
-      `"${r.date}"`,
+      `"${displayDate}"`,
       `"${r.firstIn}"`,
       `"${r.lastOut}"`,
       r.grossHours.toFixed(2),
@@ -97911,7 +97961,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
       let cellColor = (0, import_pdf_lib.rgb)(0.15, 0.18, 0.25);
       switch (rCol.def.key) {
         case "date":
-          rawVal = r.date;
+          rawVal = (formatIsoToDisplayDate(r.date) || r.date) + (r.isManual ? " *" : "");
           break;
         case "name":
           rawVal = r.name;
@@ -98447,7 +98497,7 @@ clientRouter.post("/logs/quick", async (req, res) => {
 clientRouter.post("/logs/manual", async (req, res) => {
   try {
     const clientId = getTargetClientId(req);
-    const { empId, clockIn, clockOut } = req.body;
+    const { empId, clockIn, clockOut, notes } = req.body;
     const employee = await prisma.employee.findFirst({
       where: { empId, clientId }
     });
@@ -98455,8 +98505,12 @@ clientRouter.post("/logs/manual", async (req, res) => {
       res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
       return;
     }
-    const inTime = new Date(clockIn);
-    const outTime = new Date(clockOut);
+    const inTime = parseClientDateTime(clockIn);
+    const outTime = parseClientDateTime(clockOut);
+    if (outTime <= inTime) {
+      res.status(400).json({ error: "\u0412\u0440\u0435\u043C\u044F \u043E\u043A\u043E\u043D\u0447\u0430\u043D\u0438\u044F \u0441\u043C\u0435\u043D\u044B \u0434\u043E\u043B\u0436\u043D\u043E \u0431\u044B\u0442\u044C \u043F\u043E\u0437\u0436\u0435 \u0432\u0440\u0435\u043C\u0435\u043D\u0438 \u043D\u0430\u0447\u0430\u043B\u0430" });
+      return;
+    }
     const logIn = await prisma.timeLog.create({
       data: {
         empId,
@@ -98477,13 +98531,157 @@ clientRouter.post("/logs/manual", async (req, res) => {
         isManual: true
       }
     });
+    if (notes && typeof notes === "string" && notes.trim()) {
+      const dStr = getJerusalemParts(inTime).dateStr;
+      const existingNote = await prisma.dailyNote.findFirst({
+        where: { clientId, empId, date: dStr }
+      });
+      if (existingNote) {
+        await prisma.dailyNote.update({
+          where: { id: existingNote.id },
+          data: { noteText: notes.trim() }
+        });
+      } else {
+        await prisma.dailyNote.create({
+          data: {
+            clientId,
+            empId,
+            employeeId: employee.id,
+            date: dStr,
+            noteText: notes.trim(),
+            expense: 0
+          }
+        });
+      }
+    }
     res.json({ success: true, logIn, logOut });
   } catch (err) {
     console.error("Manual log error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0440\u0443\u0447\u043D\u043E\u0433\u043E \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u043C\u0435\u043D\u044B" });
   }
 });
-async function computeClientReportRows(clientId, startDate, endDate, foremanId) {
+clientRouter.put("/logs/manual", async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const { empId, clockIn, clockOut, notes, logIds } = req.body;
+    const employee = await prisma.employee.findFirst({
+      where: { empId, clientId }
+    });
+    if (!employee) {
+      res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    const inTime = parseClientDateTime(clockIn);
+    const outTime = parseClientDateTime(clockOut);
+    if (outTime <= inTime) {
+      res.status(400).json({ error: "\u0412\u0440\u0435\u043C\u044F \u043E\u043A\u043E\u043D\u0447\u0430\u043D\u0438\u044F \u0441\u043C\u0435\u043D\u044B \u0434\u043E\u043B\u0436\u043D\u043E \u0431\u044B\u0442\u044C \u043F\u043E\u0437\u0436\u0435 \u0432\u0440\u0435\u043C\u0435\u043D\u0438 \u043D\u0430\u0447\u0430\u043B\u0430" });
+      return;
+    }
+    if (Array.isArray(logIds) && logIds.length >= 2) {
+      const logs = await prisma.timeLog.findMany({
+        where: { id: { in: logIds }, clientId, empId },
+        orderBy: { dateTime: "asc" }
+      });
+      const inLog = logs.find((l) => l.action === "CLOCK_IN") || logs[0];
+      const outLog = logs.find((l) => l.action === "CLOCK_OUT" || l.action === "AUTO_EXIT") || logs[logs.length - 1];
+      if (inLog) {
+        await prisma.timeLog.update({
+          where: { id: inLog.id },
+          data: { dateTime: inTime, isManual: true }
+        });
+      }
+      if (outLog && outLog.id !== inLog?.id) {
+        await prisma.timeLog.update({
+          where: { id: outLog.id },
+          data: { dateTime: outTime, isManual: true }
+        });
+      }
+    } else {
+      await prisma.timeLog.create({
+        data: {
+          empId,
+          employeeId: employee.id,
+          clientId,
+          action: "CLOCK_IN",
+          dateTime: inTime,
+          isManual: true
+        }
+      });
+      await prisma.timeLog.create({
+        data: {
+          empId,
+          employeeId: employee.id,
+          clientId,
+          action: "CLOCK_OUT",
+          dateTime: outTime,
+          isManual: true
+        }
+      });
+    }
+    if (typeof notes === "string") {
+      const dStr = getJerusalemParts(inTime).dateStr;
+      const existingNote = await prisma.dailyNote.findFirst({
+        where: { clientId, empId, date: dStr }
+      });
+      if (notes.trim()) {
+        if (existingNote) {
+          await prisma.dailyNote.update({
+            where: { id: existingNote.id },
+            data: { noteText: notes.trim() }
+          });
+        } else {
+          await prisma.dailyNote.create({
+            data: {
+              clientId,
+              empId,
+              employeeId: employee.id,
+              date: dStr,
+              noteText: notes.trim(),
+              expense: 0
+            }
+          });
+        }
+      } else if (existingNote) {
+        await prisma.dailyNote.delete({
+          where: { id: existingNote.id }
+        });
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Edit manual shift error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u043C\u0435\u043D\u044B" });
+  }
+});
+clientRouter.delete("/logs/manual", async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const { logIds, empId, date } = req.body || {};
+    let deletedCount = 0;
+    if (Array.isArray(logIds) && logIds.length > 0) {
+      const result = await prisma.timeLog.deleteMany({
+        where: { id: { in: logIds }, clientId }
+      });
+      deletedCount = result.count;
+    } else if (empId && date) {
+      const dayStart = jerusalemDateTimeToDate(date, "00:00");
+      const dayEnd = jerusalemDateTimeToDate(addDays(date, 1), "12:00");
+      const result = await prisma.timeLog.deleteMany({
+        where: {
+          clientId,
+          empId,
+          dateTime: { gte: dayStart, lte: dayEnd }
+        }
+      });
+      deletedCount = result.count;
+    }
+    res.json({ success: true, count: deletedCount });
+  } catch (err) {
+    console.error("Delete shift error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0441\u043C\u0435\u043D\u044B" });
+  }
+});
+async function computeClientReportRows(clientId, startDateInput, endDateInput, foremanId) {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     select: { name: true, logoUrl: true, autoDeductLunch: true, defaultShifts: true }
@@ -98498,18 +98696,24 @@ async function computeClientReportRows(clientId, startDate, endDate, foremanId) 
   const autoDeductLunch = client?.autoDeductLunch ?? false;
   const whereEmp = { clientId };
   if (foremanId) whereEmp.foremanId = foremanId;
+  const startParts = getJerusalemParts(startDateInput);
+  const endParts = getJerusalemParts(endDateInput);
+  const startDateStr = startParts.dateStr;
+  const endDateStr = endParts.dateStr;
+  const qStart = jerusalemDateTimeToDate(startDateStr, "00:00");
+  const qEnd = jerusalemDateTimeToDate(addDays(endDateStr, 1), "23:59");
   const employees = await prisma.employee.findMany({
     where: whereEmp,
     include: {
       logs: {
-        where: { dateTime: { gte: startDate, lte: endDate } },
+        where: { dateTime: { gte: qStart, lte: qEnd } },
         orderBy: { dateTime: "asc" }
       },
       dailyNotes: {
         where: {
           date: {
-            gte: getJerusalemParts(startDate).dateStr,
-            lte: getJerusalemParts(endDate).dateStr
+            gte: startDateStr,
+            lte: endDateStr
           }
         }
       }
@@ -98518,14 +98722,21 @@ async function computeClientReportRows(clientId, startDate, endDate, foremanId) 
   const reportRows = [];
   for (const emp of employees) {
     const sessions = [];
-    let currentIn = null;
+    let currentInLog = null;
     for (const log of emp.logs) {
       if (log.action === "CLOCK_IN") {
-        currentIn = log.dateTime;
+        currentInLog = { id: log.id, dateTime: log.dateTime, isManual: !!log.isManual };
       } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
-        if (currentIn) {
-          sessions.push({ clockIn: currentIn, clockOut: log.dateTime });
-          currentIn = null;
+        if (currentInLog) {
+          sessions.push({
+            clockIn: currentInLog.dateTime,
+            clockOut: log.dateTime,
+            inLogId: currentInLog.id,
+            outLogId: log.id,
+            isManual: currentInLog.isManual || !!log.isManual,
+            allLogIds: [currentInLog.id, log.id]
+          });
+          currentInLog = null;
         }
       }
     }
@@ -98533,6 +98744,7 @@ async function computeClientReportRows(clientId, startDate, endDate, foremanId) 
     for (const s of sessions) {
       const parts = getJerusalemParts(s.clockIn);
       const d = parts.dateStr;
+      if (d < startDateStr || d > endDateStr) continue;
       if (!sessionsByDate[d]) sessionsByDate[d] = [];
       sessionsByDate[d].push(s);
     }
@@ -98549,6 +98761,8 @@ async function computeClientReportRows(clientId, startDate, endDate, foremanId) 
       );
       const firstInParts = getJerusalemParts(daySessions[0].clockIn);
       const lastOutParts = getJerusalemParts(daySessions[daySessions.length - 1].clockOut);
+      const hasManual = daySessions.some((s) => s.isManual);
+      const allLogIds = daySessions.flatMap((s) => s.allLogIds);
       reportRows.push({
         empId: emp.empId,
         name: emp.name,
@@ -98561,7 +98775,9 @@ async function computeClientReportRows(clientId, startDate, endDate, foremanId) 
         nightHours: dailyCalc.nightHours,
         saturdayHours: dailyCalc.saturdayHours,
         overtimeHours: dailyCalc.overtimeHours,
-        notes: notesByDate[dateStr] || ""
+        notes: notesByDate[dateStr] || "",
+        isManual: hasManual,
+        logIds: allLogIds
       });
     }
   }
@@ -98577,8 +98793,8 @@ clientRouter.get("/hours", async (req, res) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query["startDate"];
     const endDateStr = req.query["endDate"];
-    const startDate = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 30 * 864e5);
-    const endDate = endDateStr ? new Date(endDateStr) : /* @__PURE__ */ new Date();
+    const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 864e5);
+    const endDate = endDateStr ? parseClientDateTime(endDateStr) : /* @__PURE__ */ new Date();
     const isForeman = req.user?.role === "foreman";
     const foremanId = isForeman ? req.user?.id : void 0;
     const { rows, clientName } = await computeClientReportRows(
@@ -98604,8 +98820,8 @@ clientRouter.get("/reports/csv", async (req, res) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query["startDate"];
     const endDateStr = req.query["endDate"];
-    const startDate = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 30 * 864e5);
-    const endDate = endDateStr ? new Date(endDateStr) : /* @__PURE__ */ new Date();
+    const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 864e5);
+    const endDate = endDateStr ? parseClientDateTime(endDateStr) : /* @__PURE__ */ new Date();
     const isForeman = req.user?.role === "foreman";
     const foremanId = isForeman ? req.user?.id : void 0;
     const { rows, clientName } = await computeClientReportRows(
@@ -98629,8 +98845,8 @@ clientRouter.get("/reports/pdf", async (req, res) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query["startDate"];
     const endDateStr = req.query["endDate"];
-    const startDate = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 30 * 864e5);
-    const endDate = endDateStr ? new Date(endDateStr) : /* @__PURE__ */ new Date();
+    const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 864e5);
+    const endDate = endDateStr ? parseClientDateTime(endDateStr) : /* @__PURE__ */ new Date();
     const isForeman = req.user?.role === "foreman";
     const foremanId = isForeman ? req.user?.id : void 0;
     const { rows, clientName, logoUrl } = await computeClientReportRows(
@@ -98640,9 +98856,11 @@ clientRouter.get("/reports/pdf", async (req, res) => {
       foremanId
     );
     const lang = req.query["lang"] || "he";
-    const periodTitle = `${startDate.toISOString().slice(0, 10)} - ${endDate.toISOString().slice(0, 10)}`;
+    const sDate = startDateStr || startDate.toISOString().slice(0, 10);
+    const eDate = endDateStr || endDate.toISOString().slice(0, 10);
+    const periodTitle = `${formatIsoToDisplayDate(sDate)} - ${formatIsoToDisplayDate(eDate)}`;
     const pdfBytes = await generatePdfReport(rows, clientName, periodTitle, logoUrl, lang);
-    const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, "_")}_${startDate.toISOString().slice(0, 10)}.pdf`;
+    const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, "_")}_${sDate}.pdf`;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(Buffer.from(pdfBytes));
@@ -99203,27 +99421,33 @@ workerRouter.get("/report/:empId", async (req, res) => {
     const m = parseInt(mStr || "10", 10);
     const startDate = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
     const endDate = new Date(Date.UTC(year, m, 0, 23, 59, 59));
+    const fetchEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1e3);
     const logs = await prisma.timeLog.findMany({
       where: {
         empId,
-        dateTime: { gte: startDate, lte: endDate }
+        dateTime: { gte: startDate, lte: fetchEndDate }
       },
       orderBy: { dateTime: "asc" }
     });
     const sessions = [];
-    let currentIn = null;
+    let currentInLog = null;
     for (const log of logs) {
       if (log.action === "CLOCK_IN") {
-        currentIn = log.dateTime;
+        currentInLog = log;
       } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
-        if (currentIn) {
-          sessions.push({ clockIn: currentIn, clockOut: log.dateTime });
-          currentIn = null;
+        if (currentInLog) {
+          sessions.push({
+            clockIn: currentInLog.dateTime,
+            clockOut: log.dateTime,
+            isManual: Boolean(currentInLog.isManual || log.isManual)
+          });
+          currentInLog = null;
         }
       }
     }
+    const filteredSessions = sessions.filter((s) => s.clockIn >= startDate && s.clockIn <= endDate);
     const sessionsByDate = {};
-    for (const s of sessions) {
+    for (const s of filteredSessions) {
       const d = getJerusalemParts(s.clockIn).dateStr;
       if (!sessionsByDate[d]) sessionsByDate[d] = [];
       sessionsByDate[d].push(s);
@@ -99250,7 +99474,8 @@ workerRouter.get("/report/:empId", async (req, res) => {
         netHours: daily.netHours,
         nightHours: daily.nightHours,
         saturdayHours: daily.saturdayHours,
-        overtimeHours: daily.overtimeHours
+        overtimeHours: daily.overtimeHours,
+        isManual: daySessions.some((s) => s.isManual)
       });
     }
     res.json({
@@ -99287,27 +99512,33 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
     const m = parseInt(mStr || "10", 10);
     const startDate = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
     const endDate = new Date(Date.UTC(year, m, 0, 23, 59, 59));
+    const fetchEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1e3);
     const logs = await prisma.timeLog.findMany({
       where: {
         empId,
-        dateTime: { gte: startDate, lte: endDate }
+        dateTime: { gte: startDate, lte: fetchEndDate }
       },
       orderBy: { dateTime: "asc" }
     });
     const sessions = [];
-    let currentIn = null;
+    let currentInLog = null;
     for (const log of logs) {
       if (log.action === "CLOCK_IN") {
-        currentIn = log.dateTime;
+        currentInLog = log;
       } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
-        if (currentIn) {
-          sessions.push({ clockIn: currentIn, clockOut: log.dateTime });
-          currentIn = null;
+        if (currentInLog) {
+          sessions.push({
+            clockIn: currentInLog.dateTime,
+            clockOut: log.dateTime,
+            isManual: Boolean(currentInLog.isManual || log.isManual)
+          });
+          currentInLog = null;
         }
       }
     }
+    const filteredSessions = sessions.filter((s) => s.clockIn >= startDate && s.clockIn <= endDate);
     const sessionsByDate = {};
-    for (const s of sessions) {
+    for (const s of filteredSessions) {
       const d = getJerusalemParts(s.clockIn).dateStr;
       if (!sessionsByDate[d]) sessionsByDate[d] = [];
       sessionsByDate[d].push(s);
@@ -99332,6 +99563,7 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
         nightHours: daily.nightHours,
         saturdayHours: daily.saturdayHours,
         overtimeHours: daily.overtimeHours,
+        isManual: daySessions.some((s) => s.isManual),
         notes: ""
       });
     }

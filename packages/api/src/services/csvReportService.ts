@@ -11,7 +11,11 @@ export interface ReportRow {
   saturdayHours: number;
   overtimeHours: number;
   notes: string;
+  isManual?: boolean;
+  logIds?: number[];
 }
+
+import { formatIsoToDisplayDate } from '@timetracker/shared';
 
 /**
  * Generates CSV string for report rows with UTF-8 BOM for Excel compatibility
@@ -34,10 +38,11 @@ export function generateCsvReport(rows: ReportRow[], clientName: string): string
   ].join(',');
 
   const csvRows = rows.map((r) => {
+    const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? ' *' : '');
     return [
       `"${r.empId}"`,
       `"${r.name.replace(/"/g, '""')}"`,
-      `"${r.date}"`,
+      `"${displayDate}"`,
       `"${r.firstIn}"`,
       `"${r.lastOut}"`,
       r.grossHours.toFixed(2),

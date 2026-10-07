@@ -4,6 +4,10 @@ import {
   calculateSessionHours,
   calculateDailyHours,
   isMinuteInNightWindow,
+  jerusalemDateTimeToDate,
+  formatIsoToDisplayDate,
+  parseDisplayToIsoDate,
+  addDays,
 } from './time';
 import { calculateClientBilling } from './billing';
 
@@ -138,5 +142,31 @@ describe('Billing Rules', () => {
 
     expect(billing.totalHours).toBe(154.5);
     expect(billing.totalAmount).toBe(154.5 * 2.5);
+  });
+
+  it('converts Jerusalem date and time accurately without timezone drift', () => {
+    // 2026-10-01 08:00 IDT (summer time is UTC+3)
+    const d1 = jerusalemDateTimeToDate('2026-10-01', '08:00');
+    expect(d1.toISOString()).toBe('2026-10-01T05:00:00.000Z');
+
+    // 2026-10-01 22:00 IDT (night shift start)
+    const d2 = jerusalemDateTimeToDate('2026-10-01', '22:00');
+    expect(d2.toISOString()).toBe('2026-10-01T19:00:00.000Z');
+
+    // Next day morning 06:00
+    const d3 = jerusalemDateTimeToDate('2026-10-02', '06:00');
+    expect(d3.toISOString()).toBe('2026-10-02T03:00:00.000Z');
+
+    // Winter time test: 2026-01-15 08:00 IST (UTC+2)
+    const dWinter = jerusalemDateTimeToDate('2026-01-15', '08:00');
+    expect(dWinter.toISOString()).toBe('2026-01-15T06:00:00.000Z');
+  });
+
+  it('formats dates in DD/MM/YYYY and parses them back', () => {
+    expect(formatIsoToDisplayDate('2026-10-01')).toBe('01/10/2026');
+    expect(formatIsoToDisplayDate('2026-05-19')).toBe('19/05/2026');
+    expect(parseDisplayToIsoDate('01/10/2026')).toBe('2026-10-01');
+    expect(parseDisplayToIsoDate('19.05.2026')).toBe('2026-05-19');
+    expect(addDays('2026-10-01', 1)).toBe('2026-10-02');
   });
 });

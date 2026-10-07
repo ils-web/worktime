@@ -31,6 +31,7 @@ import {
   onQueueChange,
   OfflineLogItem,
 } from '../../lib/offlineQueue';
+import { formatIsoToDisplayDate } from '@timetracker/shared';
 
 interface WorkerProfile {
   id: string;
@@ -68,6 +69,7 @@ interface DailyReportRow {
   nightHours: number;
   saturdayHours: number;
   overtimeHours: number;
+  isManual?: boolean;
 }
 
 export function WorkerAppPage() {
@@ -963,7 +965,12 @@ export function WorkerAppPage() {
                 <div className="divide-y divide-slate-800/60 max-h-60 overflow-y-auto">
                   {monthlyDays.map((d) => (
                     <div key={d.date} className="px-3.5 py-2.5 flex justify-between items-center text-xs">
-                      <span className="font-mono text-slate-300">{d.date}</span>
+                      <span className="font-mono text-slate-300 flex items-center gap-1">
+                        {formatIsoToDisplayDate(d.date)}
+                        {d.isManual && (
+                          <span className="text-amber-400 font-bold" title={t('admin.manualShiftTooltip')}>*</span>
+                        )}
+                      </span>
                       <div className="text-right">
                         <span className="font-bold text-emerald-400">{d.netHours} {t('admin.hourUnit')}</span>
                         {d.lunchDeducted > 0 && (

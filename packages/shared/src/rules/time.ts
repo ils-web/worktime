@@ -269,3 +269,91 @@ export function calculateDailyHours(
     regularHours,
   };
 }
+
+/**
+ * Converts a calendar date ("YYYY-MM-DD") and time ("HH:mm") in Asia/Jerusalem
+ * into an absolute UTC Date object, correctly resolving daylight saving time (IDT / IST).
+ */
+export function jerusalemDateTimeToDate(dateStr: string, timeStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hour, minute] = timeStr.split(':').map(Number);
+  const utcGuess = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour ?? 0, minute ?? 0));
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: JERUSALEM_TIMEZONE,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hourCycle: 'h23',
+  });
+  const parts = dtf.formatToParts(utcGuess);
+  const p: Record<string, number> = {};
+  for (const part of parts) {
+    p[part.type] = Number(part.value);
+  }
+  const guessJerusalemAsUtc = Date.UTC(p['year']!, p['month']! - 1, p['day']!, p['hour']!, p['minute']!);
+  const offsetMs = guessJerusalemAsUtc - utcGuess.getTime();
+  return new Date(utcGuess.getTime() - offsetMs);
+}
+
+/**
+ * Parses client-provided ISO string or local datetime into a Date in Asia/Jerusalem.
+ */
+export function parseClientDateTime(input: string | Date): Date {
+  if (input instanceof Date) return input;
+  if (!input) return new Date();
+  if (input.includes('Z') || /[+-]\d{2}:\d{2}$/.test(input)) {
+    return new Date(input);
+  }
+  const [datePart, timePart] = input.split('T');
+  if (datePart && timePart) {
+    return jerusalemDateTimeToDate(datePart, timePart.slice(0, 5));
+  }
+  return new Date(input);
+}
+
+/**
+ * Adds integer days to a YYYY-MM-DD date string.
+ */
+export function addDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + days));
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Formats YYYY-MM-DD (or ISO string) into DD/MM/YYYY.
+ */
+export function formatIsoToDisplayDate(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const clean = dateStr.includes('T') ? dateStr.split('T')[0]! : dateStr;
+  const parts = clean.split('-');
+  if (parts.length === 3 && parts[0]!.length === 4) {
+    return `${parts[2]!.padStart(2, '0')}/${parts[1]!.padStart(2, '0')}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
+/**
+ * Parses DD/MM/YYYY or DD.MM.YYYY into YYYY-MM-DD.
+ */
+export function parseDisplayToIsoDate(displayStr?: string | null): string {
+  if (!displayStr) return '';
+  const trimmed = displayStr.trim();
+  const sep = trimmed.includes('/') ? '/' : trimmed.includes('.') ? '.' : trimmed.includes('-') ? '-' : null;
+  if (!sep) return trimmed;
+  const parts = trimmed.split(sep);
+  if (parts.length === 3) {
+    if (parts[0]!.length === 4) {
+      return `${parts[0]}-${parts[1]!.padStart(2, '0')}-${parts[2]!.padStart(2, '0')}`;
+    }
+    const d = parts[0]!.padStart(2, '0');
+    const m = parts[1]!.padStart(2, '0');
+    const y = parts[2]!.length === 2 ? `20${parts[2]}` : parts[2]!;
+    return `${y}-${m}-${d}`;
+  }
+  return displayStr;
+}
+

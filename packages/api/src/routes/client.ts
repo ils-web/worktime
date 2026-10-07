@@ -7,6 +7,10 @@ import {
   getJerusalemParts,
   WorkSession,
   ClientShiftsConfig,
+  jerusalemDateTimeToDate,
+  parseClientDateTime,
+  addDays,
+  formatIsoToDisplayDate,
 } from '@timetracker/shared';
 import { authRequired, requireRole } from '../middleware/auth';
 import { generateCsvReport, ReportRow } from '../services/csvReportService';
@@ -562,7 +566,7 @@ clientRouter.post('/logs/quick', async (req: Request, res: Response) => {
 clientRouter.post('/logs/manual', async (req: Request, res: Response) => {
   try {
     const clientId = getTargetClientId(req);
-    const { empId, clockIn, clockOut } = req.body;
+    const { empId, clockIn, clockOut, notes } = req.body;
 
     const employee = await prisma.employee.findFirst({
       where: { empId, clientId },
@@ -572,8 +576,13 @@ clientRouter.post('/logs/manual', async (req: Request, res: Response) => {
       return;
     }
 
-    const inTime = new Date(clockIn);
-    const outTime = new Date(clockOut);
+    const inTime = parseClientDateTime(clockIn);
+    const outTime = parseClientDateTime(clockOut);
+
+    if (outTime <= inTime) {
+      res.status(400).json({ error: 'Время окончания смены должно быть позже времени начала' });
+      return;
+    }
 
     const logIn = await prisma.timeLog.create({
       data: {
@@ -597,10 +606,168 @@ clientRouter.post('/logs/manual', async (req: Request, res: Response) => {
       },
     });
 
+    if (notes && typeof notes === 'string' && notes.trim()) {
+      const dStr = getJerusalemParts(inTime).dateStr;
+      const existingNote = await prisma.dailyNote.findFirst({
+        where: { clientId, empId, date: dStr },
+      });
+      if (existingNote) {
+        await prisma.dailyNote.update({
+          where: { id: existingNote.id },
+          data: { noteText: notes.trim() },
+        });
+      } else {
+        await prisma.dailyNote.create({
+          data: {
+            clientId,
+            empId,
+            employeeId: employee.id,
+            date: dStr,
+            noteText: notes.trim(),
+            expense: 0,
+          },
+        });
+      }
+    }
+
     res.json({ success: true, logIn, logOut });
   } catch (err) {
     console.error('Manual log error:', err);
     res.status(500).json({ error: 'Ошибка ручного добавления смены' });
+  }
+});
+
+clientRouter.put('/logs/manual', async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const { empId, clockIn, clockOut, notes, logIds } = req.body;
+
+    const employee = await prisma.employee.findFirst({
+      where: { empId, clientId },
+    });
+    if (!employee) {
+      res.status(404).json({ error: 'Сотрудник не найден' });
+      return;
+    }
+
+    const inTime = parseClientDateTime(clockIn);
+    const outTime = parseClientDateTime(clockOut);
+
+    if (outTime <= inTime) {
+      res.status(400).json({ error: 'Время окончания смены должно быть позже времени начала' });
+      return;
+    }
+
+    if (Array.isArray(logIds) && logIds.length >= 2) {
+      const logs = await prisma.timeLog.findMany({
+        where: { id: { in: logIds }, clientId, empId },
+        orderBy: { dateTime: 'asc' },
+      });
+      const inLog = logs.find((l) => l.action === 'CLOCK_IN') || logs[0];
+      const outLog =
+        logs.find((l) => l.action === 'CLOCK_OUT' || l.action === 'AUTO_EXIT') ||
+        logs[logs.length - 1];
+
+      if (inLog) {
+        await prisma.timeLog.update({
+          where: { id: inLog.id },
+          data: { dateTime: inTime, isManual: true },
+        });
+      }
+      if (outLog && outLog.id !== inLog?.id) {
+        await prisma.timeLog.update({
+          where: { id: outLog.id },
+          data: { dateTime: outTime, isManual: true },
+        });
+      }
+    } else {
+      await prisma.timeLog.create({
+        data: {
+          empId,
+          employeeId: employee.id,
+          clientId,
+          action: 'CLOCK_IN',
+          dateTime: inTime,
+          isManual: true,
+        },
+      });
+      await prisma.timeLog.create({
+        data: {
+          empId,
+          employeeId: employee.id,
+          clientId,
+          action: 'CLOCK_OUT',
+          dateTime: outTime,
+          isManual: true,
+        },
+      });
+    }
+
+    if (typeof notes === 'string') {
+      const dStr = getJerusalemParts(inTime).dateStr;
+      const existingNote = await prisma.dailyNote.findFirst({
+        where: { clientId, empId, date: dStr },
+      });
+      if (notes.trim()) {
+        if (existingNote) {
+          await prisma.dailyNote.update({
+            where: { id: existingNote.id },
+            data: { noteText: notes.trim() },
+          });
+        } else {
+          await prisma.dailyNote.create({
+            data: {
+              clientId,
+              empId,
+              employeeId: employee.id,
+              date: dStr,
+              noteText: notes.trim(),
+              expense: 0,
+            },
+          });
+        }
+      } else if (existingNote) {
+        await prisma.dailyNote.delete({
+          where: { id: existingNote.id },
+        });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Edit manual shift error:', err);
+    res.status(500).json({ error: 'Ошибка обновления смены' });
+  }
+});
+
+clientRouter.delete('/logs/manual', async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const { logIds, empId, date } = req.body || {};
+
+    let deletedCount = 0;
+    if (Array.isArray(logIds) && logIds.length > 0) {
+      const result = await prisma.timeLog.deleteMany({
+        where: { id: { in: logIds }, clientId },
+      });
+      deletedCount = result.count;
+    } else if (empId && date) {
+      const dayStart = jerusalemDateTimeToDate(date, '00:00');
+      const dayEnd = jerusalemDateTimeToDate(addDays(date, 1), '12:00');
+      const result = await prisma.timeLog.deleteMany({
+        where: {
+          clientId,
+          empId,
+          dateTime: { gte: dayStart, lte: dayEnd },
+        },
+      });
+      deletedCount = result.count;
+    }
+
+    res.json({ success: true, count: deletedCount });
+  } catch (err) {
+    console.error('Delete shift error:', err);
+    res.status(500).json({ error: 'Ошибка удаления смены' });
   }
 });
 
@@ -609,8 +776,8 @@ clientRouter.post('/logs/manual', async (req: Request, res: Response) => {
  */
 async function computeClientReportRows(
   clientId: string,
-  startDate: Date,
-  endDate: Date,
+  startDateInput: Date,
+  endDateInput: Date,
   foremanId?: string
 ): Promise<{ rows: ReportRow[]; clientName: string; logoUrl: string | null }> {
   const client = await prisma.client.findUnique({
@@ -631,47 +798,70 @@ async function computeClientReportRows(
   const whereEmp: any = { clientId };
   if (foremanId) whereEmp.foremanId = foremanId;
 
+  const startParts = getJerusalemParts(startDateInput);
+  const endParts = getJerusalemParts(endDateInput);
+  const startDateStr = startParts.dateStr;
+  const endDateStr = endParts.dateStr;
+
+  const qStart = jerusalemDateTimeToDate(startDateStr, '00:00');
+  const qEnd = jerusalemDateTimeToDate(addDays(endDateStr, 1), '23:59');
+
   const employees = await prisma.employee.findMany({
     where: whereEmp,
     include: {
       logs: {
-        where: { dateTime: { gte: startDate, lte: endDate } },
+        where: { dateTime: { gte: qStart, lte: qEnd } },
         orderBy: { dateTime: 'asc' },
       },
       dailyNotes: {
         where: {
           date: {
-            gte: getJerusalemParts(startDate).dateStr,
-            lte: getJerusalemParts(endDate).dateStr,
+            gte: startDateStr,
+            lte: endDateStr,
           },
         },
       },
     },
   });
 
+  interface TrackedSession extends WorkSession {
+    inLogId: number;
+    outLogId?: number;
+    isManual: boolean;
+    allLogIds: number[];
+  }
+
   const reportRows: ReportRow[] = [];
 
   for (const emp of employees) {
     // 1. Group logs into sessions (In -> Out)
-    const sessions: WorkSession[] = [];
-    let currentIn: Date | null = null;
+    const sessions: TrackedSession[] = [];
+    let currentInLog: { id: number; dateTime: Date; isManual: boolean } | null = null;
 
     for (const log of emp.logs) {
       if (log.action === 'CLOCK_IN') {
-        currentIn = log.dateTime;
+        currentInLog = { id: log.id, dateTime: log.dateTime, isManual: !!log.isManual };
       } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
-        if (currentIn) {
-          sessions.push({ clockIn: currentIn, clockOut: log.dateTime });
-          currentIn = null;
+        if (currentInLog) {
+          sessions.push({
+            clockIn: currentInLog.dateTime,
+            clockOut: log.dateTime,
+            inLogId: currentInLog.id,
+            outLogId: log.id,
+            isManual: currentInLog.isManual || !!log.isManual,
+            allLogIds: [currentInLog.id, log.id],
+          });
+          currentInLog = null;
         }
       }
     }
 
     // 2. Group sessions by calendar date in Asia/Jerusalem
-    const sessionsByDate: Record<string, WorkSession[]> = {};
+    const sessionsByDate: Record<string, TrackedSession[]> = {};
     for (const s of sessions) {
       const parts = getJerusalemParts(s.clockIn);
       const d = parts.dateStr;
+      if (d < startDateStr || d > endDateStr) continue;
       if (!sessionsByDate[d]) sessionsByDate[d] = [];
       sessionsByDate[d].push(s);
     }
@@ -693,6 +883,8 @@ async function computeClientReportRows(
 
       const firstInParts = getJerusalemParts(daySessions[0]!.clockIn);
       const lastOutParts = getJerusalemParts(daySessions[daySessions.length - 1]!.clockOut);
+      const hasManual = daySessions.some((s) => s.isManual);
+      const allLogIds = daySessions.flatMap((s) => s.allLogIds);
 
       reportRows.push({
         empId: emp.empId,
@@ -707,6 +899,8 @@ async function computeClientReportRows(
         saturdayHours: dailyCalc.saturdayHours,
         overtimeHours: dailyCalc.overtimeHours,
         notes: notesByDate[dateStr] || '',
+        isManual: hasManual,
+        logIds: allLogIds,
       });
     }
   }
@@ -730,8 +924,8 @@ clientRouter.get('/hours', async (req: Request, res: Response) => {
     const startDateStr = req.query['startDate'] as string;
     const endDateStr = req.query['endDate'] as string;
 
-    const startDate = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 30 * 86400000);
-    const endDate = endDateStr ? new Date(endDateStr) : new Date();
+    const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 86400000);
+    const endDate = endDateStr ? parseClientDateTime(endDateStr) : new Date();
 
     const isForeman = req.user?.role === 'foreman';
     const foremanId = isForeman ? req.user?.id : undefined;
@@ -765,8 +959,8 @@ clientRouter.get('/reports/csv', async (req: Request, res: Response) => {
     const startDateStr = req.query['startDate'] as string;
     const endDateStr = req.query['endDate'] as string;
 
-    const startDate = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 30 * 86400000);
-    const endDate = endDateStr ? new Date(endDateStr) : new Date();
+    const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 86400000);
+    const endDate = endDateStr ? parseClientDateTime(endDateStr) : new Date();
 
     const isForeman = req.user?.role === 'foreman';
     const foremanId = isForeman ? req.user?.id : undefined;
@@ -799,8 +993,8 @@ clientRouter.get('/reports/pdf', async (req: Request, res: Response) => {
     const startDateStr = req.query['startDate'] as string;
     const endDateStr = req.query['endDate'] as string;
 
-    const startDate = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 30 * 86400000);
-    const endDate = endDateStr ? new Date(endDateStr) : new Date();
+    const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 86400000);
+    const endDate = endDateStr ? parseClientDateTime(endDateStr) : new Date();
 
     const isForeman = req.user?.role === 'foreman';
     const foremanId = isForeman ? req.user?.id : undefined;
@@ -813,9 +1007,11 @@ clientRouter.get('/reports/pdf', async (req: Request, res: Response) => {
     );
 
     const lang = (req.query['lang'] as string) || 'he';
-    const periodTitle = `${startDate.toISOString().slice(0, 10)} - ${endDate.toISOString().slice(0, 10)}`;
+    const sDate = startDateStr || startDate.toISOString().slice(0, 10);
+    const eDate = endDateStr || endDate.toISOString().slice(0, 10);
+    const periodTitle = `${formatIsoToDisplayDate(sDate)} - ${formatIsoToDisplayDate(eDate)}`;
     const pdfBytes = await generatePdfReport(rows, clientName, periodTitle, logoUrl, lang);
-    const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${startDate.toISOString().slice(0, 10)}.pdf`;
+    const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${sDate}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

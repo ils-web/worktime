@@ -4,6 +4,7 @@ import { apiRequest } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Phone, Mail, Trash2, Edit3, Loader2 } from 'lucide-react';
+import { formatIsoToDisplayDate } from '@timetracker/shared';
 
 export function OwnerLeadsTab() {
   const queryClient = useQueryClient();
@@ -104,7 +105,7 @@ export function OwnerLeadsTab() {
                         {lead.comment || '—'}
                       </td>
                       <td className="p-4 text-xs text-slate-500 whitespace-nowrap">
-                        {new Date(lead.createdAt).toLocaleDateString()}
+                        {formatIsoToDisplayDate(lead.createdAt.slice(0, 10))}
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-2">

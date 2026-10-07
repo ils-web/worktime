@@ -2,6 +2,7 @@ import { PDFDocument, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { ReportRow } from './csvReportService';
 import { getArialRegularBytes, getArialBoldBytes } from './fontAssets';
+import { formatIsoToDisplayDate } from '@timetracker/shared';
 
 /**
  * Normalizes text for PDF rendering with Arial Unicode font.
@@ -498,7 +499,7 @@ export async function generatePdfReport(
 
       switch (rCol.def.key) {
         case 'date':
-          rawVal = r.date;
+          rawVal = (formatIsoToDisplayDate(r.date) || r.date) + (r.isManual ? ' *' : '');
           break;
         case 'name':
           rawVal = r.name;
