@@ -187,8 +187,8 @@ export async function generatePdfReport(
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
-  const font = await pdfDoc.embedFont(getArialRegularBytes());
-  const fontBold = await pdfDoc.embedFont(getArialBoldBytes());
+  const font = await pdfDoc.embedFont(getArialRegularBytes(), { subset: true });
+  const fontBold = await pdfDoc.embedFont(getArialBoldBytes(), { subset: true });
 
   // A4 Landscape format
   const pageWidth = 841.89;
@@ -267,7 +267,7 @@ export async function generatePdfReport(
   if (isRtl) {
     // In RTL: Label on the right, value to the left of the label
     const compLabelW = fontBold.widthOfTextAtSize(t.companyLabel, 10.5);
-    const compValW = fontBold.widthOfTextAtSize(safeClientName, 10.5);
+    const compValW = safeClientName ? fontBold.widthOfTextAtSize(safeClientName, 10.5) : 0;
     page.drawText(t.companyLabel, {
       x: rightEdge - compLabelW,
       y: y + 16,
@@ -275,16 +275,18 @@ export async function generatePdfReport(
       font: fontBold,
       color: rgb(1, 1, 1),
     });
-    page.drawText(safeClientName, {
-      x: rightEdge - compLabelW - 6 - compValW,
-      y: y + 16,
-      size: 10.5,
-      font: fontBold,
-      color: rgb(1, 1, 1),
-    });
+    if (safeClientName) {
+      page.drawText(safeClientName, {
+        x: rightEdge - compLabelW - 6 - compValW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+    }
 
     const periodLabelW = font.widthOfTextAtSize(t.periodLabel, 9);
-    const periodValW = font.widthOfTextAtSize(safePeriodTitle, 9);
+    const periodValW = safePeriodTitle ? font.widthOfTextAtSize(safePeriodTitle, 9) : 0;
     page.drawText(t.periodLabel, {
       x: rightEdge - periodLabelW,
       y: y + 2,
@@ -292,16 +294,18 @@ export async function generatePdfReport(
       font,
       color: rgb(0.75, 0.8, 0.9),
     });
-    page.drawText(safePeriodTitle, {
-      x: rightEdge - periodLabelW - 6 - periodValW,
-      y: y + 2,
-      size: 9,
-      font,
-      color: rgb(0.75, 0.8, 0.9),
-    });
+    if (safePeriodTitle) {
+      page.drawText(safePeriodTitle, {
+        x: rightEdge - periodLabelW - 6 - periodValW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: rgb(0.75, 0.8, 0.9),
+      });
+    }
   } else {
     // In LTR: Label on the left, value on the right
-    const compStr = `${t.companyLabel} ${safeClientName}`;
+    const compStr = safeClientName ? `${t.companyLabel} ${safeClientName}` : t.companyLabel;
     const compW = fontBold.widthOfTextAtSize(compStr, 10.5);
     page.drawText(compStr, {
       x: rightEdge - compW,
@@ -311,7 +315,7 @@ export async function generatePdfReport(
       color: rgb(1, 1, 1),
     });
 
-    const periodStr = `${t.periodLabel} ${safePeriodTitle}`;
+    const periodStr = safePeriodTitle ? `${t.periodLabel} ${safePeriodTitle}` : t.periodLabel;
     const periodW = font.widthOfTextAtSize(periodStr, 9);
     page.drawText(periodStr, {
       x: rightEdge - periodW,
@@ -541,24 +545,27 @@ export async function generatePdfReport(
       const fontSize = 7.5;
       const maxW = rCol.width - 8;
       const cellText = truncateToWidth(rawVal, maxW, activeFont, fontSize);
-      const textW = activeFont.widthOfTextAtSize(cellText, fontSize);
 
-      let textX: number;
-      if (rCol.def.align === 'center') {
-        textX = rCol.x + (rCol.width - textW) / 2;
-      } else if (rCol.def.align === 'right' || isRtl) {
-        textX = rCol.x + rCol.width - 5 - textW;
-      } else {
-        textX = rCol.x + 5;
+      if (cellText && cellText.trim() !== '') {
+        const textW = activeFont.widthOfTextAtSize(cellText, fontSize);
+
+        let textX: number;
+        if (rCol.def.align === 'center') {
+          textX = rCol.x + (rCol.width - textW) / 2;
+        } else if (rCol.def.align === 'right' || isRtl) {
+          textX = rCol.x + rCol.width - 5 - textW;
+        } else {
+          textX = rCol.x + 5;
+        }
+
+        page.drawText(cellText, {
+          x: textX,
+          y: y + 1.5,
+          size: fontSize,
+          font: activeFont,
+          color: cellColor,
+        });
       }
-
-      page.drawText(cellText, {
-        x: textX,
-        y: y + 1.5,
-        size: fontSize,
-        font: activeFont,
-        color: cellColor,
-      });
     }
 
     y -= rowHeight;

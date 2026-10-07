@@ -71,6 +71,20 @@ describe('PDF Report Service', () => {
         overtimeHours: 2.77,
         notes: 'Заметка на русском',
       },
+      {
+        empId: 'E104',
+        name: 'דוד לוי',
+        date: '2026-10-06',
+        firstIn: '08:00',
+        lastOut: '16:00',
+        grossHours: 8.0,
+        lunchDeducted: 0.0,
+        netHours: 8.0,
+        nightHours: 0.0,
+        saturdayHours: 0.0,
+        overtimeHours: 0.0,
+        notes: '',
+      },
     ];
 
     const pdfBytes = await generatePdfReport(
@@ -82,10 +96,18 @@ describe('PDF Report Service', () => {
     );
 
     expect(pdfBytes).toBeInstanceOf(Uint8Array);
+    // With font subsetting, PDF size is compact (~25KB-50KB) instead of bloated 1.15MB
     expect(pdfBytes.length).toBeGreaterThan(10000);
+    expect(pdfBytes.length).toBeLessThan(100000);
 
     // Verify PDF header magic bytes: %PDF
     const headerStr = Buffer.from(pdfBytes.slice(0, 5)).toString();
     expect(headerStr).toContain('%PDF');
+
+    const pdfRaw = Buffer.from(pdfBytes).toString('latin1');
+    // Ensure no empty text operators that cause printer PostScript/PCL stack errors
+    expect(pdfRaw).not.toContain('<> Tj');
+    // Ensure large unsubsetted OpenType GPOS table is stripped
+    expect(pdfRaw).not.toContain('GPOS');
   });
 });
