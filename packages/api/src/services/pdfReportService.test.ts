@@ -110,4 +110,52 @@ describe('PDF Report Service', () => {
     // Ensure large unsubsetted OpenType GPOS table is stripped
     expect(pdfRaw).not.toContain('GPOS');
   });
+
+  it('generates a single employee PDF report with day of week column and employee in header', async () => {
+    const singleWorkerRows: ReportRow[] = [
+      {
+        empId: 'EMP_001',
+        name: 'Andrey Patrikeev',
+        date: '2026-10-01',
+        firstIn: '08:00',
+        lastOut: '17:00',
+        grossHours: 9.0,
+        lunchDeducted: 0.5,
+        netHours: 8.5,
+        nightHours: 0.0,
+        saturdayHours: 0.0,
+        overtimeHours: 0.0,
+        notes: '',
+        isManual: true,
+      },
+      {
+        empId: 'EMP_001',
+        name: 'Andrey Patrikeev',
+        date: '2026-10-02',
+        firstIn: '08:00',
+        lastOut: '14:00',
+        grossHours: 6.0,
+        lunchDeducted: 0.0,
+        netHours: 6.0,
+        nightHours: 0.0,
+        saturdayHours: 0.0,
+        overtimeHours: 0.0,
+        notes: 'Short Friday',
+      },
+    ];
+
+    const pdfBytes = await generatePdfReport(
+      singleWorkerRows,
+      'naot ha tichon',
+      '01/10/2026 - 02/10/2026',
+      null,
+      'he',
+      'Andrey Patrikeev'
+    );
+
+    expect(pdfBytes).toBeInstanceOf(Uint8Array);
+    expect(pdfBytes.length).toBeGreaterThan(10000);
+    const headerStr = Buffer.from(pdfBytes.slice(0, 5)).toString();
+    expect(headerStr).toContain('%PDF');
+  });
 });

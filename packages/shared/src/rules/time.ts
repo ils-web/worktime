@@ -357,3 +357,30 @@ export function parseDisplayToIsoDate(displayStr?: string | null): string {
   return displayStr;
 }
 
+/**
+ * Returns localized day of week name for a given ISO date string (YYYY-MM-DD).
+ * For Hebrew ('he'): יום א', יום ב', יום ג', יום ד', יום ה', יום ו', שבת
+ * For Russian ('ru'): Вс, Пн, Вт, Ср, Чт, Пт, Сб
+ * For English ('en'): Sun, Mon, Tue, Wed, Thu, Fri, Sat
+ */
+export function getDayOfWeek(dateStr?: string | null, lang: string = 'he'): string {
+  if (!dateStr) return '';
+  const clean = dateStr.includes('T') ? dateStr.split('T')[0]! : dateStr;
+  const parts = clean.split('-');
+  if (parts.length !== 3) return '';
+  const y = parseInt(parts[0]!, 10);
+  const m = parseInt(parts[1]!, 10);
+  const d = parseInt(parts[2]!, 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return '';
+  const dayIdx = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
+
+  const HE_DAYS = ["יום א'", "יום ב'", "יום ג'", "יום ד'", "יום ה'", "יום ו'", 'שבת'];
+  const RU_DAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+  const EN_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const norm = (lang || 'he').toLowerCase();
+  if (norm.startsWith('he') || norm.startsWith('ar')) return HE_DAYS[dayIdx] || '';
+  if (norm.startsWith('ru')) return RU_DAYS[dayIdx] || '';
+  return EN_DAYS[dayIdx] || '';
+}
+

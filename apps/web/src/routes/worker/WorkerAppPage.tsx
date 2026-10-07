@@ -31,7 +31,7 @@ import {
   onQueueChange,
   OfflineLogItem,
 } from '../../lib/offlineQueue';
-import { formatIsoToDisplayDate } from '@timetracker/shared';
+import { formatIsoToDisplayDate, getDayOfWeek } from '@timetracker/shared';
 
 interface WorkerProfile {
   id: string;
@@ -965,8 +965,11 @@ export function WorkerAppPage() {
                 <div className="divide-y divide-slate-800/60 max-h-60 overflow-y-auto">
                   {monthlyDays.map((d) => (
                     <div key={d.date} className="px-3.5 py-2.5 flex justify-between items-center text-xs">
-                      <span className="font-mono text-slate-300 flex items-center gap-1">
-                        {formatIsoToDisplayDate(d.date)}
+                      <span className="font-mono text-slate-300 flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {getDayOfWeek(d.date, i18n.language)}
+                        </span>
+                        <span>{formatIsoToDisplayDate(d.date)}</span>
                         {d.isManual && (
                           <span className="text-amber-400 font-bold" title={t('admin.manualShiftTooltip')}>*</span>
                         )}

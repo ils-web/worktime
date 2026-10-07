@@ -8,6 +8,7 @@ import {
   formatIsoToDisplayDate,
   parseDisplayToIsoDate,
   addDays,
+  getDayOfWeek,
 } from './time';
 import { calculateClientBilling } from './billing';
 
@@ -168,5 +169,34 @@ describe('Billing Rules', () => {
     expect(parseDisplayToIsoDate('01/10/2026')).toBe('2026-10-01');
     expect(parseDisplayToIsoDate('19.05.2026')).toBe('2026-05-19');
     expect(addDays('2026-10-01', 1)).toBe('2026-10-02');
+  });
+
+  it('computes localized day of week correctly', () => {
+    // 2026-10-01 is Thursday
+    expect(getDayOfWeek('2026-10-01', 'he')).toBe("יום ה'");
+    expect(getDayOfWeek('2026-10-01', 'ru')).toBe('Чт');
+    expect(getDayOfWeek('2026-10-01', 'en')).toBe('Thu');
+
+    // 2026-10-02 is Friday
+    expect(getDayOfWeek('2026-10-02', 'he')).toBe("יום ו'");
+    expect(getDayOfWeek('2026-10-02', 'ru')).toBe('Пт');
+
+    // 2026-10-03 is Saturday (Shabbat)
+    expect(getDayOfWeek('2026-10-03', 'he')).toBe('שבת');
+    expect(getDayOfWeek('2026-10-03', 'ru')).toBe('Сб');
+
+    // 2026-10-04 is Sunday
+    expect(getDayOfWeek('2026-10-04', 'he')).toBe("יום א'");
+    expect(getDayOfWeek('2026-10-04', 'ru')).toBe('Вс');
+
+    // 2026-10-05 is Monday
+    expect(getDayOfWeek('2026-10-05', 'he')).toBe("יום ב'");
+    expect(getDayOfWeek('2026-10-05', 'ru')).toBe('Пн');
+
+    // 2026-10-06 is Tuesday
+    expect(getDayOfWeek('2026-10-06', 'he')).toBe("יום ג'");
+
+    // 2026-10-07 is Wednesday
+    expect(getDayOfWeek('2026-10-07', 'he')).toBe("יום ד'");
   });
 });

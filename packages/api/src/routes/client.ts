@@ -11,6 +11,7 @@ import {
   parseClientDateTime,
   addDays,
   formatIsoToDisplayDate,
+  getDayOfWeek,
 } from '@timetracker/shared';
 import { authRequired, requireRole } from '../middleware/auth';
 import { generateCsvReport, ReportRow } from '../services/csvReportService';
@@ -778,7 +779,8 @@ async function computeClientReportRows(
   clientId: string,
   startDateInput: Date,
   endDateInput: Date,
-  foremanId?: string
+  foremanId?: string,
+  empId?: string
 ): Promise<{ rows: ReportRow[]; clientName: string; logoUrl: string | null }> {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -797,6 +799,7 @@ async function computeClientReportRows(
 
   const whereEmp: any = { clientId };
   if (foremanId) whereEmp.foremanId = foremanId;
+  if (empId) whereEmp.empId = empId;
 
   const startParts = getJerusalemParts(startDateInput);
   const endParts = getJerusalemParts(endDateInput);
@@ -890,6 +893,7 @@ async function computeClientReportRows(
         empId: emp.empId,
         name: emp.name,
         date: dateStr,
+        dayOfWeek: getDayOfWeek(dateStr, 'he'),
         firstIn: firstInParts.timeStr,
         lastOut: lastOutParts.timeStr,
         grossHours: dailyCalc.grossHours,
@@ -923,6 +927,7 @@ clientRouter.get('/hours', async (req: Request, res: Response) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query['startDate'] as string;
     const endDateStr = req.query['endDate'] as string;
+    const empId = req.query['empId'] as string | undefined;
 
     const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 86400000);
     const endDate = endDateStr ? parseClientDateTime(endDateStr) : new Date();
@@ -934,7 +939,8 @@ clientRouter.get('/hours', async (req: Request, res: Response) => {
       clientId,
       startDate,
       endDate,
-      foremanId
+      foremanId,
+      empId
     );
 
     res.json({
@@ -958,6 +964,7 @@ clientRouter.get('/reports/csv', async (req: Request, res: Response) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query['startDate'] as string;
     const endDateStr = req.query['endDate'] as string;
+    const empId = req.query['empId'] as string | undefined;
 
     const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 86400000);
     const endDate = endDateStr ? parseClientDateTime(endDateStr) : new Date();
@@ -969,7 +976,8 @@ clientRouter.get('/reports/csv', async (req: Request, res: Response) => {
       clientId,
       startDate,
       endDate,
-      foremanId
+      foremanId,
+      empId
     );
 
     const csvData = generateCsvReport(rows, clientName);
@@ -992,6 +1000,7 @@ clientRouter.get('/reports/pdf', async (req: Request, res: Response) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query['startDate'] as string;
     const endDateStr = req.query['endDate'] as string;
+    const empId = req.query['empId'] as string | undefined;
 
     const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 86400000);
     const endDate = endDateStr ? parseClientDateTime(endDateStr) : new Date();
@@ -1003,15 +1012,27 @@ clientRouter.get('/reports/pdf', async (req: Request, res: Response) => {
       clientId,
       startDate,
       endDate,
-      foremanId
+      foremanId,
+      empId
     );
 
     const lang = (req.query['lang'] as string) || 'he';
     const sDate = startDateStr || startDate.toISOString().slice(0, 10);
     const eDate = endDateStr || endDate.toISOString().slice(0, 10);
     const periodTitle = `${formatIsoToDisplayDate(sDate)} - ${formatIsoToDisplayDate(eDate)}`;
-    const pdfBytes = await generatePdfReport(rows, clientName, periodTitle, logoUrl, lang);
-    const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${sDate}.pdf`;
+    let singleEmpName: string | null = null;
+    if (empId) {
+      singleEmpName = rows.find((r) => r.empId === empId)?.name || null;
+      if (!singleEmpName) {
+        const empRecord = await prisma.employee.findFirst({
+          where: { empId, clientId },
+          select: { name: true },
+        });
+        singleEmpName = empRecord?.name || null;
+      }
+    }
+    const pdfBytes = await generatePdfReport(rows, clientName, periodTitle, logoUrl, lang, singleEmpName);
+    const filename = `Report_${(singleEmpName || clientName).replace(/[^a-zA-Z0-9_-]/g, '_')}_${sDate}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

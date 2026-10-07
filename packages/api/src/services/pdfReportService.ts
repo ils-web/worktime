@@ -2,7 +2,7 @@ import { PDFDocument, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { ReportRow } from './csvReportService';
 import { getArialRegularBytes, getArialBoldBytes } from './fontAssets';
-import { formatIsoToDisplayDate } from '@timetracker/shared';
+import { formatIsoToDisplayDate, getDayOfWeek } from '@timetracker/shared';
 
 /**
  * Normalizes text for PDF rendering with Arial Unicode font.
@@ -23,7 +23,7 @@ export function toPdfSafe(text: string): string {
 }
 
 interface ColumnDef {
-  key: keyof ReportRow | 'index';
+  key: keyof ReportRow | 'index' | 'dayOfWeek';
   title: string;
   width: number;
   align?: 'left' | 'center' | 'right';
@@ -34,8 +34,10 @@ interface LocaleStrings {
   systemTitle: string;
   reportTitle: string;
   companyLabel: string;
+  employeeLabel: string;
   periodLabel: string;
   generatedLabel: string;
+  shiftsLabel: string;
   summaryGross: string;
   summaryLunch: string;
   summaryNet: string;
@@ -55,8 +57,10 @@ const LOCALES: Record<string, LocaleStrings> = {
     systemTitle: 'TimeTracker SaaS',
     reportTitle: 'דוח נוכחות ושעות עבודה',
     companyLabel: 'חברה:',
+    employeeLabel: 'עובד:',
     periodLabel: 'תקופה:',
     generatedLabel: 'הופק בתאריך:',
+    shiftsLabel: 'משמרות:',
     summaryGross: 'סה"כ ברוטו',
     summaryLunch: 'ניכוי הפסקה',
     summaryNet: 'סה"כ נטו',
@@ -69,25 +73,27 @@ const LOCALES: Record<string, LocaleStrings> = {
     hoursUnit: 'שעות',
     isRtl: true,
     columns: [
-      { key: 'date', title: 'תאריך', width: 68, align: 'center' },
-      { key: 'name', title: 'שם עובד', width: 130, align: 'right' },
-      { key: 'firstIn', title: 'כניסה', width: 44, align: 'center' },
-      { key: 'lastOut', title: 'יציאה', width: 44, align: 'center' },
-      { key: 'grossHours', title: 'ברוטו', width: 48, align: 'center' },
-      { key: 'lunchDeducted', title: 'הפסקה', width: 48, align: 'center' },
-      { key: 'netHours', title: 'נטו', width: 48, align: 'center', bold: true },
-      { key: 'nightHours', title: 'לילה', width: 44, align: 'center' },
-      { key: 'saturdayHours', title: 'שבת', width: 44, align: 'center' },
-      { key: 'overtimeHours', title: 'נוספות', width: 48, align: 'center' },
-      { key: 'notes', title: 'הערות', width: 200, align: 'right' },
+      { key: 'date', title: 'תאריך', width: 72, align: 'center' },
+      { key: 'dayOfWeek', title: 'יום', width: 52, align: 'center' },
+      { key: 'firstIn', title: 'כניסה', width: 46, align: 'center' },
+      { key: 'lastOut', title: 'יציאה', width: 46, align: 'center' },
+      { key: 'grossHours', title: 'ברוטו', width: 50, align: 'center' },
+      { key: 'lunchDeducted', title: 'הפסקה', width: 50, align: 'center' },
+      { key: 'netHours', title: 'נטו', width: 52, align: 'center', bold: true },
+      { key: 'nightHours', title: 'לילה', width: 48, align: 'center' },
+      { key: 'saturdayHours', title: 'שבת', width: 48, align: 'center' },
+      { key: 'overtimeHours', title: 'נוספות', width: 50, align: 'center' },
+      { key: 'notes', title: 'הערות', width: 258, align: 'right' },
     ],
   },
   ru: {
     systemTitle: 'TimeTracker SaaS',
     reportTitle: 'Табель учёта рабочего времени',
     companyLabel: 'Компания:',
+    employeeLabel: 'Сотрудник:',
     periodLabel: 'Период:',
     generatedLabel: 'Сформирован:',
+    shiftsLabel: 'Смен:',
     summaryGross: 'Всего брутто',
     summaryLunch: 'Вычет обеда',
     summaryNet: 'Итого нетто',
@@ -100,25 +106,27 @@ const LOCALES: Record<string, LocaleStrings> = {
     hoursUnit: 'ч',
     isRtl: false,
     columns: [
-      { key: 'date', title: 'Дата', width: 68, align: 'center' },
-      { key: 'name', title: 'Сотрудник', width: 130, align: 'left' },
-      { key: 'firstIn', title: 'Вход', width: 44, align: 'center' },
-      { key: 'lastOut', title: 'Выход', width: 44, align: 'center' },
-      { key: 'grossHours', title: 'Брутто', width: 48, align: 'center' },
-      { key: 'lunchDeducted', title: 'Обед', width: 48, align: 'center' },
-      { key: 'netHours', title: 'Нетто', width: 48, align: 'center', bold: true },
-      { key: 'nightHours', title: 'Ночные', width: 44, align: 'center' },
-      { key: 'saturdayHours', title: 'Суббота', width: 44, align: 'center' },
-      { key: 'overtimeHours', title: 'Овертайм', width: 48, align: 'center' },
-      { key: 'notes', title: 'Заметки', width: 200, align: 'left' },
+      { key: 'date', title: 'Дата', width: 72, align: 'center' },
+      { key: 'dayOfWeek', title: 'День', width: 52, align: 'center' },
+      { key: 'firstIn', title: 'Вход', width: 46, align: 'center' },
+      { key: 'lastOut', title: 'Выход', width: 46, align: 'center' },
+      { key: 'grossHours', title: 'Брутто', width: 50, align: 'center' },
+      { key: 'lunchDeducted', title: 'Обед', width: 50, align: 'center' },
+      { key: 'netHours', title: 'Нетто', width: 52, align: 'center', bold: true },
+      { key: 'nightHours', title: 'Ночные', width: 48, align: 'center' },
+      { key: 'saturdayHours', title: 'Суббота', width: 48, align: 'center' },
+      { key: 'overtimeHours', title: 'Овертайм', width: 50, align: 'center' },
+      { key: 'notes', title: 'Заметки', width: 258, align: 'left' },
     ],
   },
   en: {
     systemTitle: 'TimeTracker SaaS',
     reportTitle: 'Timesheet & Attendance Report',
     companyLabel: 'Company:',
+    employeeLabel: 'Employee:',
     periodLabel: 'Period:',
     generatedLabel: 'Generated:',
+    shiftsLabel: 'Shifts:',
     summaryGross: 'Gross Total',
     summaryLunch: 'Lunch Deduct',
     summaryNet: 'Net Total',
@@ -131,17 +139,17 @@ const LOCALES: Record<string, LocaleStrings> = {
     hoursUnit: 'h',
     isRtl: false,
     columns: [
-      { key: 'date', title: 'Date', width: 68, align: 'center' },
-      { key: 'name', title: 'Employee', width: 130, align: 'left' },
-      { key: 'firstIn', title: 'In', width: 44, align: 'center' },
-      { key: 'lastOut', title: 'Out', width: 44, align: 'center' },
-      { key: 'grossHours', title: 'Gross', width: 48, align: 'center' },
-      { key: 'lunchDeducted', title: 'Lunch', width: 48, align: 'center' },
-      { key: 'netHours', title: 'Net', width: 48, align: 'center', bold: true },
-      { key: 'nightHours', title: 'Night', width: 44, align: 'center' },
-      { key: 'saturdayHours', title: 'Sat', width: 44, align: 'center' },
-      { key: 'overtimeHours', title: 'OT', width: 48, align: 'center' },
-      { key: 'notes', title: 'Notes', width: 200, align: 'left' },
+      { key: 'date', title: 'Date', width: 72, align: 'center' },
+      { key: 'dayOfWeek', title: 'Day', width: 52, align: 'center' },
+      { key: 'firstIn', title: 'In', width: 46, align: 'center' },
+      { key: 'lastOut', title: 'Out', width: 46, align: 'center' },
+      { key: 'grossHours', title: 'Gross', width: 50, align: 'center' },
+      { key: 'lunchDeducted', title: 'Lunch', width: 50, align: 'center' },
+      { key: 'netHours', title: 'Net', width: 52, align: 'center', bold: true },
+      { key: 'nightHours', title: 'Night', width: 48, align: 'center' },
+      { key: 'saturdayHours', title: 'Sat', width: 48, align: 'center' },
+      { key: 'overtimeHours', title: 'OT', width: 50, align: 'center' },
+      { key: 'notes', title: 'Notes', width: 258, align: 'left' },
     ],
   },
 };
@@ -172,7 +180,8 @@ export async function generatePdfReport(
   clientName: string,
   periodTitle: string,
   _logoUrl?: string | null,
-  lang: string = 'he'
+  lang: string = 'he',
+  employeeName?: string | null
 ): Promise<Uint8Array> {
   const normLang = lang?.toLowerCase().startsWith('he')
     ? 'he'
@@ -204,6 +213,10 @@ export async function generatePdfReport(
   const totalNight = rows.reduce((acc, r) => acc + (r.nightHours || 0), 0);
   const totalSat = rows.reduce((acc, r) => acc + (r.saturdayHours || 0), 0);
   const totalOt = rows.reduce((acc, r) => acc + (r.overtimeHours || 0), 0);
+
+  // Determine employee context
+  const uniqueEmployees = Array.from(new Set(rows.map((r) => r.name))).filter(Boolean);
+  const singleEmployeeName = employeeName || (uniqueEmployees.length === 1 ? uniqueEmployees[0] : null);
 
   // Compute calculated X coordinates for each column based on RTL / LTR
   interface RenderCol {
@@ -260,13 +273,14 @@ export async function generatePdfReport(
     color: rgb(0.7, 0.75, 0.85),
   });
 
-  // Company and Period info on right
+  // Company, Period, and Employee info on right/center
   const rightEdge = startX + totalTableWidth - 16;
   const safeClientName = clientName?.trim() || '';
   const safePeriodTitle = periodTitle?.trim() || '';
 
   if (isRtl) {
-    // In RTL: Label on the right, value to the left of the label
+    // In RTL:
+    // 1. Right block: Company & Period
     const compLabelW = fontBold.widthOfTextAtSize(t.companyLabel, 10.5);
     const compValW = safeClientName ? fontBold.widthOfTextAtSize(safeClientName, 10.5) : 0;
     page.drawText(t.companyLabel, {
@@ -304,8 +318,61 @@ export async function generatePdfReport(
         color: rgb(0.75, 0.8, 0.9),
       });
     }
+
+    // 2. Middle-right block: Employee info (matching user red box)
+    const col1Width = Math.max(compLabelW + compValW + 12, periodLabelW + periodValW + 12);
+    const col2Right = rightEdge - col1Width - 32;
+
+    if (singleEmployeeName) {
+      const empLabelW = fontBold.widthOfTextAtSize(t.employeeLabel, 10.5);
+      const empValW = fontBold.widthOfTextAtSize(singleEmployeeName, 10.5);
+      page.drawText(t.employeeLabel, {
+        x: col2Right - empLabelW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+      page.drawText(singleEmployeeName, {
+        x: col2Right - empLabelW - 6 - empValW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: rgb(0.25, 0.9, 0.55), // emerald accent for the worker name
+      });
+
+      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
+      page.drawText(shiftsText, {
+        x: col2Right - shiftsW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: rgb(0.75, 0.8, 0.9),
+      });
+    } else if (uniqueEmployees.length > 1) {
+      const multiEmpText = `${t.employeeLabel} ${uniqueEmployees.length}`;
+      const multiEmpW = fontBold.widthOfTextAtSize(multiEmpText, 10.5);
+      page.drawText(multiEmpText, {
+        x: col2Right - multiEmpW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+
+      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
+      page.drawText(shiftsText, {
+        x: col2Right - shiftsW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: rgb(0.75, 0.8, 0.9),
+      });
+    }
   } else {
-    // In LTR: Label on the left, value on the right
+    // In LTR:
     const compStr = safeClientName ? `${t.companyLabel} ${safeClientName}` : t.companyLabel;
     const compW = fontBold.widthOfTextAtSize(compStr, 10.5);
     page.drawText(compStr, {
@@ -325,6 +392,51 @@ export async function generatePdfReport(
       font,
       color: rgb(0.75, 0.8, 0.9),
     });
+
+    const col1Width = Math.max(compW, periodW);
+    const col2Right = rightEdge - col1Width - 32;
+
+    if (singleEmployeeName) {
+      const empStr = `${t.employeeLabel} ${singleEmployeeName}`;
+      const empW = fontBold.widthOfTextAtSize(empStr, 10.5);
+      page.drawText(empStr, {
+        x: col2Right - empW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: rgb(0.25, 0.9, 0.55),
+      });
+
+      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
+      page.drawText(shiftsText, {
+        x: col2Right - shiftsW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: rgb(0.75, 0.8, 0.9),
+      });
+    } else if (uniqueEmployees.length > 1) {
+      const empsStr = `${t.employeeLabel} ${uniqueEmployees.length}`;
+      const empsW = fontBold.widthOfTextAtSize(empsStr, 10.5);
+      page.drawText(empsStr, {
+        x: col2Right - empsW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+
+      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
+      page.drawText(shiftsText, {
+        x: col2Right - shiftsW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: rgb(0.75, 0.8, 0.9),
+      });
+    }
   }
 
   y -= 48;
@@ -464,9 +576,50 @@ export async function generatePdfReport(
 
   const rowHeight = 16.5;
 
-  // 3. Render Table Rows
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i]!;
+  // 3. Render Table Rows (grouped by employee if multiple employees)
+  const displayRows = [...rows];
+  if (uniqueEmployees.length > 1) {
+    displayRows.sort((a, b) => (a.name || '').localeCompare(b.name || '') || a.date.localeCompare(b.date));
+  }
+
+  let lastEmployeeName: string | null = null;
+
+  for (let i = 0; i < displayRows.length; i++) {
+    const r = displayRows[i]!;
+
+    // Multi-employee section divider
+    if (uniqueEmployees.length > 1 && r.name !== lastEmployeeName) {
+      lastEmployeeName = r.name;
+      if (y < 46) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        currentPageIndex++;
+        pages.push(page);
+        y = pageHeight - 45;
+        drawTableHeader(page, y);
+        y -= 18;
+      }
+
+      page.drawRectangle({
+        x: startX,
+        y: y - 4,
+        width: totalTableWidth,
+        height: 17,
+        color: rgb(0.12, 0.16, 0.24),
+      });
+
+      const secTitle = `${t.employeeLabel} ${r.name} (${r.empId})`;
+      const secW = fontBold.widthOfTextAtSize(secTitle, 8.5);
+      const secX = isRtl ? startX + totalTableWidth - 10 - secW : startX + 10;
+      page.drawText(secTitle, {
+        x: secX,
+        y: y + 1,
+        size: 8.5,
+        font: fontBold,
+        color: rgb(0.25, 0.9, 0.55),
+      });
+
+      y -= 17;
+    }
 
     // Pagination check: bottom margin is 35pt
     if (y < 42) {
@@ -500,6 +653,9 @@ export async function generatePdfReport(
       switch (rCol.def.key) {
         case 'date':
           rawVal = (formatIsoToDisplayDate(r.date) || r.date) + (r.isManual ? ' *' : '');
+          break;
+        case 'dayOfWeek':
+          rawVal = r.dayOfWeek || getDayOfWeek(r.date, normLang);
           break;
         case 'name':
           rawVal = r.name;

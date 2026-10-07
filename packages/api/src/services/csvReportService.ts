@@ -13,9 +13,10 @@ export interface ReportRow {
   notes: string;
   isManual?: boolean;
   logIds?: number[];
+  dayOfWeek?: string;
 }
 
-import { formatIsoToDisplayDate } from '@timetracker/shared';
+import { formatIsoToDisplayDate, getDayOfWeek } from '@timetracker/shared';
 
 /**
  * Generates CSV string for report rows with UTF-8 BOM for Excel compatibility
@@ -26,6 +27,7 @@ export function generateCsvReport(rows: ReportRow[], clientName: string): string
     'ID Сотрудника',
     'Имя',
     'Дата',
+    'День недели',
     'Первый вход',
     'Последний выход',
     'Общие часы',
@@ -39,10 +41,12 @@ export function generateCsvReport(rows: ReportRow[], clientName: string): string
 
   const csvRows = rows.map((r) => {
     const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? ' *' : '');
+    const dayStr = r.dayOfWeek || getDayOfWeek(r.date, 'ru');
     return [
       `"${r.empId}"`,
       `"${r.name.replace(/"/g, '""')}"`,
       `"${displayDate}"`,
+      `"${dayStr}"`,
       `"${r.firstIn}"`,
       `"${r.lastOut}"`,
       r.grossHours.toFixed(2),

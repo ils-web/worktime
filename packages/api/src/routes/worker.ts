@@ -8,6 +8,7 @@ import {
   WorkSession,
   GeofenceConfig,
   ClientShiftsConfig,
+  getDayOfWeek,
 } from '@timetracker/shared';
 import { generatePdfReport } from '../services/pdfReportService';
 import { ReportRow } from '../services/csvReportService';
@@ -514,6 +515,7 @@ workerRouter.get('/report/:empId', async (req: Request, res: Response) => {
 
       days.push({
         date: dateStr,
+        dayOfWeek: getDayOfWeek(dateStr, 'he'),
         grossHours: daily.grossHours,
         lunchDeducted: daily.lunchDeductedHours,
         netHours: daily.netHours,
@@ -615,6 +617,7 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
         empId: employee.empId,
         name: employee.name,
         date: dateStr,
+        dayOfWeek: getDayOfWeek(dateStr, 'he'),
         firstIn,
         lastOut,
         grossHours: daily.grossHours,
@@ -632,7 +635,9 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
       rows,
       employee.client.name,
       `Employee ${employee.name} - ${month}`,
-      employee.client.logoUrl
+      employee.client.logoUrl,
+      'he',
+      employee.name
     );
 
     res.setHeader('Content-Type', 'application/pdf');

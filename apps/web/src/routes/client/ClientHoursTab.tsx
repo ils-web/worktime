@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
 import { DatePicker } from '../../components/ui/DatePicker';
-import { formatIsoToDisplayDate, addDays } from '@timetracker/shared';
+import { formatIsoToDisplayDate, addDays, getDayOfWeek } from '@timetracker/shared';
 import {
   Download,
   FileSpreadsheet,
@@ -15,6 +15,7 @@ import {
   Loader2,
   Edit2,
   Trash2,
+  User,
 } from 'lucide-react';
 
 export function ClientHoursTab() {
@@ -26,6 +27,7 @@ export function ClientHoursTab() {
     return d.toISOString().slice(0, 10);
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
 
   const [isQuickOpen, setIsQuickOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
@@ -43,10 +45,10 @@ export function ClientHoursTab() {
 
   // Queries
   const { data, isLoading } = useQuery({
-    queryKey: ['client-hours', startDate, endDate],
+    queryKey: ['client-hours', startDate, endDate, selectedEmpId],
     queryFn: () =>
       apiRequest<{ hours: any[]; clientName: string }>(
-        `/api/client/hours?startDate=${startDate}&endDate=${endDate}`
+        `/api/client/hours?startDate=${startDate}&endDate=${endDate}${selectedEmpId ? `&empId=${encodeURIComponent(selectedEmpId)}` : ''}`
       ),
   });
 
@@ -138,13 +140,16 @@ export function ClientHoursTab() {
   const handleDownloadPdf = async (customLang?: string) => {
     try {
       const lang = customLang || 'he';
+      const empParam = selectedEmpId ? `&empId=${encodeURIComponent(selectedEmpId)}` : '';
       const blob = await apiRequest<Blob>(
-        `/api/client/reports/pdf?startDate=${startDate}&endDate=${endDate}&lang=${lang}`
+        `/api/client/reports/pdf?startDate=${startDate}&endDate=${endDate}&lang=${lang}${empParam}`
       );
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Timesheet_${startDate}_${endDate}.pdf`;
+      const currentEmp = selectedEmpId ? employees.find((e: any) => e.empId === selectedEmpId) : null;
+      const empSuffix = currentEmp ? `_${currentEmp.name.replace(/\s+/g, '_')}` : '';
+      a.download = `Timesheet_${startDate}_${endDate}${empSuffix}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -157,13 +162,16 @@ export function ClientHoursTab() {
   // Download CSV
   const handleDownloadCsv = async () => {
     try {
+      const empParam = selectedEmpId ? `&empId=${encodeURIComponent(selectedEmpId)}` : '';
       const blob = await apiRequest<Blob>(
-        `/api/client/reports/csv?startDate=${startDate}&endDate=${endDate}`
+        `/api/client/reports/csv?startDate=${startDate}&endDate=${endDate}${empParam}`
       );
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Timesheet_${startDate}_${endDate}.csv`;
+      const currentEmp = selectedEmpId ? employees.find((e: any) => e.empId === selectedEmpId) : null;
+      const empSuffix = currentEmp ? `_${currentEmp.name.replace(/\s+/g, '_')}` : '';
+      a.download = `Timesheet_${startDate}_${endDate}${empSuffix}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -224,6 +232,25 @@ export function ClientHoursTab() {
               <span className="text-slate-400 font-semibold">{t('admin.dateTo')}:</span>
               <DatePicker compact value={endDate} onChange={setEndDate} />
             </div>
+          </div>
+
+          {/* Employee Filter */}
+          <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 p-1.5 rounded-xl text-xs shadow-sm">
+            <User className="w-3.5 h-3.5 text-slate-400 ml-1 shrink-0" />
+            <select
+              value={selectedEmpId}
+              onChange={(e) => setSelectedEmpId(e.target.value)}
+              className="bg-transparent text-slate-200 text-xs font-semibold focus:outline-none cursor-pointer pr-2"
+            >
+              <option value="" className="bg-slate-900 text-slate-200">
+                {t('admin.allEmployees')}
+              </option>
+              {employees.map((emp: any) => (
+                <option key={emp.empId} value={emp.empId} className="bg-slate-900 text-slate-200">
+                  {emp.name} ({emp.empId})
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Quick Actions */}
@@ -336,6 +363,7 @@ export function ClientHoursTab() {
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/50 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   <th className="p-3.5">{t('admin.thDate')}</th>
+                  <th className="p-3.5">{t('admin.thDay')}</th>
                   <th className="p-3.5">{t('admin.thEmployee')}</th>
                   <th className="p-3.5">{t('admin.thIn')}</th>
                   <th className="p-3.5">{t('admin.thOut')}</th>
@@ -352,7 +380,7 @@ export function ClientHoursTab() {
               <tbody className="divide-y divide-slate-800/60">
                 {hoursList.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="p-8 text-center text-slate-500">
+                    <td colSpan={13} className="p-8 text-center text-slate-500">
                       {t('admin.noShiftsPeriod')}
                     </td>
                   </tr>
@@ -369,6 +397,11 @@ export function ClientHoursTab() {
                             *
                           </span>
                         )}
+                      </td>
+                      <td className="p-3.5 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {row.dayOfWeek || getDayOfWeek(row.date, i18n.language)}
+                        </span>
                       </td>
                       <td className="p-3.5 font-semibold text-white">
                         {row.name}

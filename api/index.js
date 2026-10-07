@@ -97133,6 +97133,24 @@ function formatIsoToDisplayDate(dateStr) {
   }
   return dateStr;
 }
+function getDayOfWeek(dateStr, lang = "he") {
+  if (!dateStr) return "";
+  const clean = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+  const parts = clean.split("-");
+  if (parts.length !== 3) return "";
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return "";
+  const dayIdx = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay();
+  const HE_DAYS = ["\u05D9\u05D5\u05DD \u05D0'", "\u05D9\u05D5\u05DD \u05D1'", "\u05D9\u05D5\u05DD \u05D2'", "\u05D9\u05D5\u05DD \u05D3'", "\u05D9\u05D5\u05DD \u05D4'", "\u05D9\u05D5\u05DD \u05D5'", "\u05E9\u05D1\u05EA"];
+  const RU_DAYS = ["\u0412\u0441", "\u041F\u043D", "\u0412\u0442", "\u0421\u0440", "\u0427\u0442", "\u041F\u0442", "\u0421\u0431"];
+  const EN_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const norm = (lang || "he").toLowerCase();
+  if (norm.startsWith("he") || norm.startsWith("ar")) return HE_DAYS[dayIdx] || "";
+  if (norm.startsWith("ru")) return RU_DAYS[dayIdx] || "";
+  return EN_DAYS[dayIdx] || "";
+}
 
 // packages/shared/src/rules/billing.ts
 function calculateWorkerDays(employee, period) {
@@ -97537,6 +97555,7 @@ function generateCsvReport(rows, clientName) {
     "ID \u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430",
     "\u0418\u043C\u044F",
     "\u0414\u0430\u0442\u0430",
+    "\u0414\u0435\u043D\u044C \u043D\u0435\u0434\u0435\u043B\u0438",
     "\u041F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434",
     "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0432\u044B\u0445\u043E\u0434",
     "\u041E\u0431\u0449\u0438\u0435 \u0447\u0430\u0441\u044B",
@@ -97549,10 +97568,12 @@ function generateCsvReport(rows, clientName) {
   ].join(",");
   const csvRows = rows.map((r) => {
     const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? " *" : "");
+    const dayStr = r.dayOfWeek || getDayOfWeek(r.date, "ru");
     return [
       `"${r.empId}"`,
       `"${r.name.replace(/"/g, '""')}"`,
       `"${displayDate}"`,
+      `"${dayStr}"`,
       `"${r.firstIn}"`,
       `"${r.lastOut}"`,
       r.grossHours.toFixed(2),
@@ -97596,8 +97617,10 @@ var LOCALES = {
     systemTitle: "TimeTracker SaaS",
     reportTitle: "\u05D3\u05D5\u05D7 \u05E0\u05D5\u05DB\u05D7\u05D5\u05EA \u05D5\u05E9\u05E2\u05D5\u05EA \u05E2\u05D1\u05D5\u05D3\u05D4",
     companyLabel: "\u05D7\u05D1\u05E8\u05D4:",
+    employeeLabel: "\u05E2\u05D5\u05D1\u05D3:",
     periodLabel: "\u05EA\u05E7\u05D5\u05E4\u05D4:",
     generatedLabel: "\u05D4\u05D5\u05E4\u05E7 \u05D1\u05EA\u05D0\u05E8\u05D9\u05DA:",
+    shiftsLabel: "\u05DE\u05E9\u05DE\u05E8\u05D5\u05EA:",
     summaryGross: '\u05E1\u05D4"\u05DB \u05D1\u05E8\u05D5\u05D8\u05D5',
     summaryLunch: "\u05E0\u05D9\u05DB\u05D5\u05D9 \u05D4\u05E4\u05E1\u05E7\u05D4",
     summaryNet: '\u05E1\u05D4"\u05DB \u05E0\u05D8\u05D5',
@@ -97610,25 +97633,27 @@ var LOCALES = {
     hoursUnit: "\u05E9\u05E2\u05D5\u05EA",
     isRtl: true,
     columns: [
-      { key: "date", title: "\u05EA\u05D0\u05E8\u05D9\u05DA", width: 68, align: "center" },
-      { key: "name", title: "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3", width: 130, align: "right" },
-      { key: "firstIn", title: "\u05DB\u05E0\u05D9\u05E1\u05D4", width: 44, align: "center" },
-      { key: "lastOut", title: "\u05D9\u05E6\u05D9\u05D0\u05D4", width: 44, align: "center" },
-      { key: "grossHours", title: "\u05D1\u05E8\u05D5\u05D8\u05D5", width: 48, align: "center" },
-      { key: "lunchDeducted", title: "\u05D4\u05E4\u05E1\u05E7\u05D4", width: 48, align: "center" },
-      { key: "netHours", title: "\u05E0\u05D8\u05D5", width: 48, align: "center", bold: true },
-      { key: "nightHours", title: "\u05DC\u05D9\u05DC\u05D4", width: 44, align: "center" },
-      { key: "saturdayHours", title: "\u05E9\u05D1\u05EA", width: 44, align: "center" },
-      { key: "overtimeHours", title: "\u05E0\u05D5\u05E1\u05E4\u05D5\u05EA", width: 48, align: "center" },
-      { key: "notes", title: "\u05D4\u05E2\u05E8\u05D5\u05EA", width: 200, align: "right" }
+      { key: "date", title: "\u05EA\u05D0\u05E8\u05D9\u05DA", width: 72, align: "center" },
+      { key: "dayOfWeek", title: "\u05D9\u05D5\u05DD", width: 52, align: "center" },
+      { key: "firstIn", title: "\u05DB\u05E0\u05D9\u05E1\u05D4", width: 46, align: "center" },
+      { key: "lastOut", title: "\u05D9\u05E6\u05D9\u05D0\u05D4", width: 46, align: "center" },
+      { key: "grossHours", title: "\u05D1\u05E8\u05D5\u05D8\u05D5", width: 50, align: "center" },
+      { key: "lunchDeducted", title: "\u05D4\u05E4\u05E1\u05E7\u05D4", width: 50, align: "center" },
+      { key: "netHours", title: "\u05E0\u05D8\u05D5", width: 52, align: "center", bold: true },
+      { key: "nightHours", title: "\u05DC\u05D9\u05DC\u05D4", width: 48, align: "center" },
+      { key: "saturdayHours", title: "\u05E9\u05D1\u05EA", width: 48, align: "center" },
+      { key: "overtimeHours", title: "\u05E0\u05D5\u05E1\u05E4\u05D5\u05EA", width: 50, align: "center" },
+      { key: "notes", title: "\u05D4\u05E2\u05E8\u05D5\u05EA", width: 258, align: "right" }
     ]
   },
   ru: {
     systemTitle: "TimeTracker SaaS",
     reportTitle: "\u0422\u0430\u0431\u0435\u043B\u044C \u0443\u0447\u0451\u0442\u0430 \u0440\u0430\u0431\u043E\u0447\u0435\u0433\u043E \u0432\u0440\u0435\u043C\u0435\u043D\u0438",
     companyLabel: "\u041A\u043E\u043C\u043F\u0430\u043D\u0438\u044F:",
+    employeeLabel: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A:",
     periodLabel: "\u041F\u0435\u0440\u0438\u043E\u0434:",
     generatedLabel: "\u0421\u0444\u043E\u0440\u043C\u0438\u0440\u043E\u0432\u0430\u043D:",
+    shiftsLabel: "\u0421\u043C\u0435\u043D:",
     summaryGross: "\u0412\u0441\u0435\u0433\u043E \u0431\u0440\u0443\u0442\u0442\u043E",
     summaryLunch: "\u0412\u044B\u0447\u0435\u0442 \u043E\u0431\u0435\u0434\u0430",
     summaryNet: "\u0418\u0442\u043E\u0433\u043E \u043D\u0435\u0442\u0442\u043E",
@@ -97641,25 +97666,27 @@ var LOCALES = {
     hoursUnit: "\u0447",
     isRtl: false,
     columns: [
-      { key: "date", title: "\u0414\u0430\u0442\u0430", width: 68, align: "center" },
-      { key: "name", title: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A", width: 130, align: "left" },
-      { key: "firstIn", title: "\u0412\u0445\u043E\u0434", width: 44, align: "center" },
-      { key: "lastOut", title: "\u0412\u044B\u0445\u043E\u0434", width: 44, align: "center" },
-      { key: "grossHours", title: "\u0411\u0440\u0443\u0442\u0442\u043E", width: 48, align: "center" },
-      { key: "lunchDeducted", title: "\u041E\u0431\u0435\u0434", width: 48, align: "center" },
-      { key: "netHours", title: "\u041D\u0435\u0442\u0442\u043E", width: 48, align: "center", bold: true },
-      { key: "nightHours", title: "\u041D\u043E\u0447\u043D\u044B\u0435", width: 44, align: "center" },
-      { key: "saturdayHours", title: "\u0421\u0443\u0431\u0431\u043E\u0442\u0430", width: 44, align: "center" },
-      { key: "overtimeHours", title: "\u041E\u0432\u0435\u0440\u0442\u0430\u0439\u043C", width: 48, align: "center" },
-      { key: "notes", title: "\u0417\u0430\u043C\u0435\u0442\u043A\u0438", width: 200, align: "left" }
+      { key: "date", title: "\u0414\u0430\u0442\u0430", width: 72, align: "center" },
+      { key: "dayOfWeek", title: "\u0414\u0435\u043D\u044C", width: 52, align: "center" },
+      { key: "firstIn", title: "\u0412\u0445\u043E\u0434", width: 46, align: "center" },
+      { key: "lastOut", title: "\u0412\u044B\u0445\u043E\u0434", width: 46, align: "center" },
+      { key: "grossHours", title: "\u0411\u0440\u0443\u0442\u0442\u043E", width: 50, align: "center" },
+      { key: "lunchDeducted", title: "\u041E\u0431\u0435\u0434", width: 50, align: "center" },
+      { key: "netHours", title: "\u041D\u0435\u0442\u0442\u043E", width: 52, align: "center", bold: true },
+      { key: "nightHours", title: "\u041D\u043E\u0447\u043D\u044B\u0435", width: 48, align: "center" },
+      { key: "saturdayHours", title: "\u0421\u0443\u0431\u0431\u043E\u0442\u0430", width: 48, align: "center" },
+      { key: "overtimeHours", title: "\u041E\u0432\u0435\u0440\u0442\u0430\u0439\u043C", width: 50, align: "center" },
+      { key: "notes", title: "\u0417\u0430\u043C\u0435\u0442\u043A\u0438", width: 258, align: "left" }
     ]
   },
   en: {
     systemTitle: "TimeTracker SaaS",
     reportTitle: "Timesheet & Attendance Report",
     companyLabel: "Company:",
+    employeeLabel: "Employee:",
     periodLabel: "Period:",
     generatedLabel: "Generated:",
+    shiftsLabel: "Shifts:",
     summaryGross: "Gross Total",
     summaryLunch: "Lunch Deduct",
     summaryNet: "Net Total",
@@ -97672,17 +97699,17 @@ var LOCALES = {
     hoursUnit: "h",
     isRtl: false,
     columns: [
-      { key: "date", title: "Date", width: 68, align: "center" },
-      { key: "name", title: "Employee", width: 130, align: "left" },
-      { key: "firstIn", title: "In", width: 44, align: "center" },
-      { key: "lastOut", title: "Out", width: 44, align: "center" },
-      { key: "grossHours", title: "Gross", width: 48, align: "center" },
-      { key: "lunchDeducted", title: "Lunch", width: 48, align: "center" },
-      { key: "netHours", title: "Net", width: 48, align: "center", bold: true },
-      { key: "nightHours", title: "Night", width: 44, align: "center" },
-      { key: "saturdayHours", title: "Sat", width: 44, align: "center" },
-      { key: "overtimeHours", title: "OT", width: 48, align: "center" },
-      { key: "notes", title: "Notes", width: 200, align: "left" }
+      { key: "date", title: "Date", width: 72, align: "center" },
+      { key: "dayOfWeek", title: "Day", width: 52, align: "center" },
+      { key: "firstIn", title: "In", width: 46, align: "center" },
+      { key: "lastOut", title: "Out", width: 46, align: "center" },
+      { key: "grossHours", title: "Gross", width: 50, align: "center" },
+      { key: "lunchDeducted", title: "Lunch", width: 50, align: "center" },
+      { key: "netHours", title: "Net", width: 52, align: "center", bold: true },
+      { key: "nightHours", title: "Night", width: 48, align: "center" },
+      { key: "saturdayHours", title: "Sat", width: 48, align: "center" },
+      { key: "overtimeHours", title: "OT", width: 50, align: "center" },
+      { key: "notes", title: "Notes", width: 258, align: "left" }
     ]
   }
 };
@@ -97700,7 +97727,7 @@ function truncateToWidth(text, maxWidth, font, fontSize) {
   }
   return current;
 }
-async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang = "he") {
+async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang = "he", employeeName) {
   const normLang = lang?.toLowerCase().startsWith("he") ? "he" : lang?.toLowerCase().startsWith("ru") ? "ru" : lang?.toLowerCase().startsWith("ar") ? "he" : "en";
   const t = LOCALES[normLang] || LOCALES["he"];
   const isRtl = t.isRtl;
@@ -97718,6 +97745,8 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
   const totalNight = rows.reduce((acc, r) => acc + (r.nightHours || 0), 0);
   const totalSat = rows.reduce((acc, r) => acc + (r.saturdayHours || 0), 0);
   const totalOt = rows.reduce((acc, r) => acc + (r.overtimeHours || 0), 0);
+  const uniqueEmployees = Array.from(new Set(rows.map((r) => r.name))).filter(Boolean);
+  const singleEmployeeName = employeeName || (uniqueEmployees.length === 1 ? uniqueEmployees[0] : null);
   const renderCols = [];
   if (isRtl) {
     let currentRight = startX + totalTableWidth;
@@ -97799,6 +97828,55 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         color: (0, import_pdf_lib.rgb)(0.75, 0.8, 0.9)
       });
     }
+    const col1Width = Math.max(compLabelW + compValW + 12, periodLabelW + periodValW + 12);
+    const col2Right = rightEdge - col1Width - 32;
+    if (singleEmployeeName) {
+      const empLabelW = fontBold.widthOfTextAtSize(t.employeeLabel, 10.5);
+      const empValW = fontBold.widthOfTextAtSize(singleEmployeeName, 10.5);
+      page.drawText(t.employeeLabel, {
+        x: col2Right - empLabelW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: (0, import_pdf_lib.rgb)(1, 1, 1)
+      });
+      page.drawText(singleEmployeeName, {
+        x: col2Right - empLabelW - 6 - empValW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: (0, import_pdf_lib.rgb)(0.25, 0.9, 0.55)
+        // emerald accent for the worker name
+      });
+      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
+      page.drawText(shiftsText, {
+        x: col2Right - shiftsW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: (0, import_pdf_lib.rgb)(0.75, 0.8, 0.9)
+      });
+    } else if (uniqueEmployees.length > 1) {
+      const multiEmpText = `${t.employeeLabel} ${uniqueEmployees.length}`;
+      const multiEmpW = fontBold.widthOfTextAtSize(multiEmpText, 10.5);
+      page.drawText(multiEmpText, {
+        x: col2Right - multiEmpW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: (0, import_pdf_lib.rgb)(1, 1, 1)
+      });
+      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
+      page.drawText(shiftsText, {
+        x: col2Right - shiftsW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: (0, import_pdf_lib.rgb)(0.75, 0.8, 0.9)
+      });
+    }
   } else {
     const compStr = safeClientName ? `${t.companyLabel} ${safeClientName}` : t.companyLabel;
     const compW = fontBold.widthOfTextAtSize(compStr, 10.5);
@@ -97818,6 +97896,47 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
       font,
       color: (0, import_pdf_lib.rgb)(0.75, 0.8, 0.9)
     });
+    const col1Width = Math.max(compW, periodW);
+    const col2Right = rightEdge - col1Width - 32;
+    if (singleEmployeeName) {
+      const empStr = `${t.employeeLabel} ${singleEmployeeName}`;
+      const empW = fontBold.widthOfTextAtSize(empStr, 10.5);
+      page.drawText(empStr, {
+        x: col2Right - empW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: (0, import_pdf_lib.rgb)(0.25, 0.9, 0.55)
+      });
+      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
+      page.drawText(shiftsText, {
+        x: col2Right - shiftsW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: (0, import_pdf_lib.rgb)(0.75, 0.8, 0.9)
+      });
+    } else if (uniqueEmployees.length > 1) {
+      const empsStr = `${t.employeeLabel} ${uniqueEmployees.length}`;
+      const empsW = fontBold.widthOfTextAtSize(empsStr, 10.5);
+      page.drawText(empsStr, {
+        x: col2Right - empsW,
+        y: y + 16,
+        size: 10.5,
+        font: fontBold,
+        color: (0, import_pdf_lib.rgb)(1, 1, 1)
+      });
+      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
+      page.drawText(shiftsText, {
+        x: col2Right - shiftsW,
+        y: y + 2,
+        size: 9,
+        font,
+        color: (0, import_pdf_lib.rgb)(0.75, 0.8, 0.9)
+      });
+    }
   }
   y -= 48;
   const summaryBoxes = [
@@ -97935,8 +98054,42 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
     });
   }
   const rowHeight = 16.5;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
+  const displayRows = [...rows];
+  if (uniqueEmployees.length > 1) {
+    displayRows.sort((a, b) => (a.name || "").localeCompare(b.name || "") || a.date.localeCompare(b.date));
+  }
+  let lastEmployeeName = null;
+  for (let i = 0; i < displayRows.length; i++) {
+    const r = displayRows[i];
+    if (uniqueEmployees.length > 1 && r.name !== lastEmployeeName) {
+      lastEmployeeName = r.name;
+      if (y < 46) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        currentPageIndex++;
+        pages.push(page);
+        y = pageHeight - 45;
+        drawTableHeader(page, y);
+        y -= 18;
+      }
+      page.drawRectangle({
+        x: startX,
+        y: y - 4,
+        width: totalTableWidth,
+        height: 17,
+        color: (0, import_pdf_lib.rgb)(0.12, 0.16, 0.24)
+      });
+      const secTitle = `${t.employeeLabel} ${r.name} (${r.empId})`;
+      const secW = fontBold.widthOfTextAtSize(secTitle, 8.5);
+      const secX = isRtl ? startX + totalTableWidth - 10 - secW : startX + 10;
+      page.drawText(secTitle, {
+        x: secX,
+        y: y + 1,
+        size: 8.5,
+        font: fontBold,
+        color: (0, import_pdf_lib.rgb)(0.25, 0.9, 0.55)
+      });
+      y -= 17;
+    }
     if (y < 42) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
       currentPageIndex++;
@@ -97962,6 +98115,9 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
       switch (rCol.def.key) {
         case "date":
           rawVal = (formatIsoToDisplayDate(r.date) || r.date) + (r.isManual ? " *" : "");
+          break;
+        case "dayOfWeek":
+          rawVal = r.dayOfWeek || getDayOfWeek(r.date, normLang);
           break;
         case "name":
           rawVal = r.name;
@@ -98681,7 +98837,7 @@ clientRouter.delete("/logs/manual", async (req, res) => {
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0441\u043C\u0435\u043D\u044B" });
   }
 });
-async function computeClientReportRows(clientId, startDateInput, endDateInput, foremanId) {
+async function computeClientReportRows(clientId, startDateInput, endDateInput, foremanId, empId) {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     select: { name: true, logoUrl: true, autoDeductLunch: true, defaultShifts: true }
@@ -98696,6 +98852,7 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
   const autoDeductLunch = client?.autoDeductLunch ?? false;
   const whereEmp = { clientId };
   if (foremanId) whereEmp.foremanId = foremanId;
+  if (empId) whereEmp.empId = empId;
   const startParts = getJerusalemParts(startDateInput);
   const endParts = getJerusalemParts(endDateInput);
   const startDateStr = startParts.dateStr;
@@ -98767,6 +98924,7 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
         empId: emp.empId,
         name: emp.name,
         date: dateStr,
+        dayOfWeek: getDayOfWeek(dateStr, "he"),
         firstIn: firstInParts.timeStr,
         lastOut: lastOutParts.timeStr,
         grossHours: dailyCalc.grossHours,
@@ -98793,6 +98951,7 @@ clientRouter.get("/hours", async (req, res) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query["startDate"];
     const endDateStr = req.query["endDate"];
+    const empId = req.query["empId"];
     const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 864e5);
     const endDate = endDateStr ? parseClientDateTime(endDateStr) : /* @__PURE__ */ new Date();
     const isForeman = req.user?.role === "foreman";
@@ -98801,7 +98960,8 @@ clientRouter.get("/hours", async (req, res) => {
       clientId,
       startDate,
       endDate,
-      foremanId
+      foremanId,
+      empId
     );
     res.json({
       success: true,
@@ -98820,6 +98980,7 @@ clientRouter.get("/reports/csv", async (req, res) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query["startDate"];
     const endDateStr = req.query["endDate"];
+    const empId = req.query["empId"];
     const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 864e5);
     const endDate = endDateStr ? parseClientDateTime(endDateStr) : /* @__PURE__ */ new Date();
     const isForeman = req.user?.role === "foreman";
@@ -98828,7 +98989,8 @@ clientRouter.get("/reports/csv", async (req, res) => {
       clientId,
       startDate,
       endDate,
-      foremanId
+      foremanId,
+      empId
     );
     const csvData = generateCsvReport(rows, clientName);
     const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, "_")}_${startDate.toISOString().slice(0, 10)}.csv`;
@@ -98845,6 +99007,7 @@ clientRouter.get("/reports/pdf", async (req, res) => {
     const clientId = getTargetClientId(req);
     const startDateStr = req.query["startDate"];
     const endDateStr = req.query["endDate"];
+    const empId = req.query["empId"];
     const startDate = startDateStr ? parseClientDateTime(startDateStr) : new Date(Date.now() - 30 * 864e5);
     const endDate = endDateStr ? parseClientDateTime(endDateStr) : /* @__PURE__ */ new Date();
     const isForeman = req.user?.role === "foreman";
@@ -98853,14 +99016,26 @@ clientRouter.get("/reports/pdf", async (req, res) => {
       clientId,
       startDate,
       endDate,
-      foremanId
+      foremanId,
+      empId
     );
     const lang = req.query["lang"] || "he";
     const sDate = startDateStr || startDate.toISOString().slice(0, 10);
     const eDate = endDateStr || endDate.toISOString().slice(0, 10);
     const periodTitle = `${formatIsoToDisplayDate(sDate)} - ${formatIsoToDisplayDate(eDate)}`;
-    const pdfBytes = await generatePdfReport(rows, clientName, periodTitle, logoUrl, lang);
-    const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, "_")}_${sDate}.pdf`;
+    let singleEmpName = null;
+    if (empId) {
+      singleEmpName = rows.find((r) => r.empId === empId)?.name || null;
+      if (!singleEmpName) {
+        const empRecord = await prisma.employee.findFirst({
+          where: { empId, clientId },
+          select: { name: true }
+        });
+        singleEmpName = empRecord?.name || null;
+      }
+    }
+    const pdfBytes = await generatePdfReport(rows, clientName, periodTitle, logoUrl, lang, singleEmpName);
+    const filename = `Report_${(singleEmpName || clientName).replace(/[^a-zA-Z0-9_-]/g, "_")}_${sDate}.pdf`;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(Buffer.from(pdfBytes));
@@ -99469,6 +99644,7 @@ workerRouter.get("/report/:empId", async (req, res) => {
       totalOt += daily.overtimeHours;
       days.push({
         date: dateStr,
+        dayOfWeek: getDayOfWeek(dateStr, "he"),
         grossHours: daily.grossHours,
         lunchDeducted: daily.lunchDeductedHours,
         netHours: daily.netHours,
@@ -99555,6 +99731,7 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
         empId: employee.empId,
         name: employee.name,
         date: dateStr,
+        dayOfWeek: getDayOfWeek(dateStr, "he"),
         firstIn,
         lastOut,
         grossHours: daily.grossHours,
@@ -99571,7 +99748,9 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
       rows,
       employee.client.name,
       `Employee ${employee.name} - ${month}`,
-      employee.client.logoUrl
+      employee.client.logoUrl,
+      "he",
+      employee.name
     );
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="Worker_${employee.empId}_${month}.pdf"`);
