@@ -53,9 +53,10 @@ model Employee {
   clientId  String
   empId     String   @unique // Public alphanumeric ID for /w/:empId
   name      String
-  isMobile  Boolean  @default(false)
-  strictGps Boolean  @default(false)
-  createdAt DateTime @default(now())
+  isMobile       Boolean  @default(false)
+  strictGps      Boolean  @default(false)
+  autoCloseShift Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
   geofence  Json?    // { lat, lng, radius, address } — null for mobile
   shifts    Json?    // Employee-level shift overrides

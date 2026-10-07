@@ -40,6 +40,7 @@ interface WorkerProfile {
   companyName: string;
   isMobile: boolean;
   strictGps: boolean;
+  autoCloseShift?: boolean;
   geofence?: {
     lat: number;
     lng: number;
@@ -52,6 +53,9 @@ interface WorkerStatus {
   isOnShift: boolean;
   lastAction: string | null;
   lastActionTime: string | null;
+  scheduledEndTime?: string | null;
+  scheduledShiftType?: string | null;
+  autoClosedDueToShiftEnd?: boolean;
 }
 
 interface MonthlyReportSummary {
@@ -127,11 +131,43 @@ export function WorkerAppPage() {
   // Clock Out Accidental Protection & Shift Completion Modal
   const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
   const [showShiftCompleteModal, setShowShiftCompleteModal] = useState(false);
+  const [scheduledEndTime, setScheduledEndTime] = useState<string | null>(null);
+  const [showAutoCloseAlert, setShowAutoCloseAlert] = useState(false);
   const [completedShiftSummary, setCompletedShiftSummary] = useState<{
     hours: number;
     minutes: number;
     text: string;
   } | null>(null);
+
+  const playAlertChime = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.6);
+    } catch {
+      // Audio autoplay restrictions or unsupported
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showAutoCloseAlert) {
+      playAlertChime();
+      if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200, 100, 200]);
+      }
+    }
+  }, [showAutoCloseAlert, playAlertChime]);
 
   const formatWorkedMessage = (hours: number, minutes: number, lang: string) => {
     if (lang === 'ru') {
@@ -209,6 +245,10 @@ export function WorkerAppPage() {
 
       setProfile(res.employee);
       setStatus(res.status);
+      setScheduledEndTime(res.status.scheduledEndTime ?? null);
+      if (res.status.autoClosedDueToShiftEnd) {
+        setShowAutoCloseAlert(true);
+      }
     } catch (err: any) {
       setProfileError(err.message || 'Worker not found');
     } finally {
@@ -377,12 +417,31 @@ export function WorkerAppPage() {
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   }, [elapsedSeconds]);
 
+  // 6.1 Check for scheduled end time expiration when autoCloseShift is enabled
+  useEffect(() => {
+    if (!status.isOnShift || !profile?.autoCloseShift || !scheduledEndTime) {
+      return;
+    }
+
+    const checkScheduledEnd = () => {
+      const scheduledEndMs = new Date(scheduledEndTime).getTime();
+      const nowMs = Date.now();
+      if (nowMs >= scheduledEndMs && !isSubmittingAction) {
+        handleClockAction('AUTO_EXIT');
+      }
+    };
+
+    checkScheduledEnd();
+    const interval = setInterval(checkScheduledEnd, 2000);
+    return () => clearInterval(interval);
+  }, [status.isOnShift, profile?.autoCloseShift, scheduledEndTime, isSubmittingAction]);
+
   // 7. Clock In / Out Action Handlers
-  const handleClockAction = async (action: 'CLOCK_IN' | 'CLOCK_OUT') => {
+  const handleClockAction = async (action: 'CLOCK_IN' | 'CLOCK_OUT' | 'AUTO_EXIT') => {
     if (!empId || isSubmittingAction) return;
 
     if (navigator.vibrate) {
-      navigator.vibrate([100, 50, 100]);
+      navigator.vibrate(action === 'AUTO_EXIT' ? [200, 100, 200, 100, 200] : [100, 50, 100]);
     }
 
     setIsSubmittingAction(true);
@@ -429,6 +488,10 @@ export function WorkerAppPage() {
         setCompletedShiftSummary({ hours: fallbackH, minutes: fallbackM, text: msg });
         setShowClockOutConfirm(false);
         setShowShiftCompleteModal(true);
+      } else if (action === 'AUTO_EXIT') {
+        const msg = formatWorkedMessage(fallbackH, fallbackM, i18n.language);
+        setCompletedShiftSummary({ hours: fallbackH, minutes: fallbackM, text: msg });
+        setShowAutoCloseAlert(true);
       }
 
       setOfflineNotice(t('worker.offlineNotice'));
@@ -453,13 +516,21 @@ export function WorkerAppPage() {
         });
         refreshLocation();
 
-        if (action === 'CLOCK_OUT') {
+        if (action === 'CLOCK_IN') {
+          fetchProfile();
+        } else if (action === 'CLOCK_OUT') {
           const h = res.todaySummary?.hours ?? fallbackH;
           const m = res.todaySummary?.minutes ?? fallbackM;
           const msg = formatWorkedMessage(h, m, i18n.language);
           setCompletedShiftSummary({ hours: h, minutes: m, text: msg });
           setShowClockOutConfirm(false);
           setShowShiftCompleteModal(true);
+        } else if (action === 'AUTO_EXIT') {
+          const h = res.todaySummary?.hours ?? fallbackH;
+          const m = res.todaySummary?.minutes ?? fallbackM;
+          const msg = formatWorkedMessage(h, m, i18n.language);
+          setCompletedShiftSummary({ hours: h, minutes: m, text: msg });
+          setShowAutoCloseAlert(true);
         }
       }
     } catch (err: any) {
@@ -484,6 +555,10 @@ export function WorkerAppPage() {
           setCompletedShiftSummary({ hours: fallbackH, minutes: fallbackM, text: msg });
           setShowClockOutConfirm(false);
           setShowShiftCompleteModal(true);
+        } else if (action === 'AUTO_EXIT') {
+          const msg = formatWorkedMessage(fallbackH, fallbackM, i18n.language);
+          setCompletedShiftSummary({ hours: fallbackH, minutes: fallbackM, text: msg });
+          setShowAutoCloseAlert(true);
         }
 
         setOfflineNotice(t('worker.offlineNotice'));
@@ -831,6 +906,19 @@ export function WorkerAppPage() {
                   <span>
                     {t('worker.startedAt', {
                       time: new Date(status.lastActionTime).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }),
+                    })}
+                  </span>
+                </div>
+              )}
+              {status.isOnShift && profile.autoCloseShift && scheduledEndTime && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 mt-2.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {t('worker.autoShiftScheduledEndBadge', {
+                      time: new Date(scheduledEndTime).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
                       }),
@@ -1215,6 +1303,66 @@ export function WorkerAppPage() {
           <button
             onClick={() => setShowShiftCompleteModal(false)}
             className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-98 font-bold rounded-xl text-white transition text-sm shadow-lg shadow-emerald-600/30"
+          >
+            {t('worker.shiftCompleteOk')}
+          </button>
+        </div>
+      </Modal>
+
+      {/* 4. Modal: Auto-Close Shift Alert */}
+      <Modal
+        isOpen={showAutoCloseAlert}
+        onClose={() => setShowAutoCloseAlert(false)}
+        title={t('worker.autoShiftCompletedTitle')}
+      >
+        <div className="py-3 text-center space-y-5">
+          {/* Glowing Alarm Badge */}
+          <div className="relative mx-auto w-20 h-20">
+            <div className="absolute inset-0 bg-amber-500/20 blur-xl rounded-full" />
+            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 to-amber-400 flex items-center justify-center text-slate-950 shadow-xl shadow-amber-500/25">
+              <Clock className="w-10 h-10" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-xl font-black text-white tracking-tight">
+              {t('worker.autoShiftCompletedTitle')}
+            </h3>
+            <p className="text-xs font-medium text-slate-300 bg-slate-800/80 border border-slate-700/80 rounded-2xl py-3 px-4 inline-block shadow-inner leading-relaxed">
+              {t('worker.autoShiftCompletedDesc')}
+            </p>
+          </div>
+
+          {/* Shift Details Breakdown Card */}
+          <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 text-left space-y-2.5 shadow-inner">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">{t('worker.summaryEmployee')}</span>
+              <span className="font-bold text-white">{profile.name}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">{t('worker.summaryCompany')}</span>
+              <span className="font-semibold text-emerald-300">{profile.companyName}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">{t('worker.summaryEndTime')}</span>
+              <span className="font-mono font-bold text-amber-300">
+                {scheduledEndTime
+                  ? new Date(scheduledEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-700/60">
+              <span className="text-slate-400">{t('worker.summaryStatus')}</span>
+              <span className="inline-flex items-center gap-1 text-amber-400 font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {t('worker.summaryCompleted')}
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowAutoCloseAlert(false)}
+            className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-98 font-bold rounded-xl text-slate-950 transition text-sm shadow-lg shadow-amber-500/25"
           >
             {t('worker.shiftCompleteOk')}
           </button>

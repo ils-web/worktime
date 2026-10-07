@@ -384,3 +384,16 @@ export function getDayOfWeek(dateStr?: string | null, lang: string = 'he'): stri
   return EN_DAYS[dayIdx] || '';
 }
 
+/**
+ * Calculates the exact scheduled shift end Date given a clock-in Date and shift end time string ("HH:mm").
+ * Correctly accounts for overnight shifts that span across midnight (e.g., 22:00 -> 06:00).
+ */
+export function getScheduledShiftEndTime(clockInDate: Date, shiftEndStr: string): Date {
+  const inParts = getJerusalemParts(clockInDate);
+  const inMinutes = inParts.hour * 60 + inParts.minute;
+  const endMinutes = parseTimeToMinutes(shiftEndStr);
+
+  const targetDateStr = endMinutes <= inMinutes ? addDays(inParts.dateStr, 1) : inParts.dateStr;
+  return jerusalemDateTimeToDate(targetDateStr, shiftEndStr);
+}
+

@@ -9,6 +9,7 @@ import {
   GeofenceConfig,
   ClientShiftsConfig,
   getDayOfWeek,
+  getScheduledShiftEndTime,
 } from '@timetracker/shared';
 import { generatePdfReport } from '../services/pdfReportService';
 import { ReportRow } from '../services/csvReportService';
@@ -37,11 +38,12 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
             defaultShifts: true,
           },
         },
+        schedules: true,
         sites: {
           include: { site: true },
         },
         logs: {
-          take: 1,
+          take: 5,
           orderBy: { dateTime: 'desc' },
         },
       },
@@ -52,11 +54,46 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
       return;
     }
 
-    const lastLog = employee.logs[0];
-    const isOnShift = lastLog ? lastLog.action === 'CLOCK_IN' || lastLog.action === 'AUTO_RESUME' : false;
+    let lastLog = employee.logs[0];
+    let isOnShift = lastLog ? lastLog.action === 'CLOCK_IN' || lastLog.action === 'AUTO_RESUME' : false;
+    let autoClosedDueToShiftEnd = false;
+    let scheduledEndTimeStr: string | null = null;
+    let scheduledShiftType: string | null = null;
 
     // Shift overrides or client default shifts
-    const effectiveShifts = employee.shifts || employee.client.defaultShifts;
+    const effectiveShifts = (employee.shifts || employee.client.defaultShifts) as unknown as ClientShiftsConfig;
+
+    if (employee.autoCloseShift && isOnShift && lastLog) {
+      const inParts = getJerusalemParts(lastLog.dateTime);
+      const daySchedule = employee.schedules?.find((s) => s.dayOfWeek === inParts.dayOfWeek);
+      const shiftType = (daySchedule?.shiftType && daySchedule.shiftType !== 'off') ? daySchedule.shiftType : 'morning';
+      scheduledShiftType = shiftType;
+      const shiftWindow = effectiveShifts?.[shiftType as keyof ClientShiftsConfig] || { start: '08:00', end: '17:00' };
+      const scheduledEndDate = getScheduledShiftEndTime(lastLog.dateTime, shiftWindow.end);
+      scheduledEndTimeStr = scheduledEndDate.toISOString();
+
+      const now = new Date();
+      if (now.getTime() >= scheduledEndDate.getTime()) {
+        const autoExit = await prisma.timeLog.create({
+          data: {
+            empId: employee.empId,
+            employeeId: employee.id,
+            clientId: employee.clientId,
+            action: 'AUTO_EXIT',
+            dateTime: scheduledEndDate,
+            isManual: false,
+          },
+        });
+        isOnShift = false;
+        autoClosedDueToShiftEnd = true;
+        lastLog = autoExit;
+      }
+    } else if (employee.autoCloseShift && !isOnShift && lastLog && lastLog.action === 'AUTO_EXIT') {
+      const diffHours = (Date.now() - new Date(lastLog.dateTime).getTime()) / 3600000;
+      if (diffHours < 24) {
+        autoClosedDueToShiftEnd = true;
+      }
+    }
 
     const sitesList = employee.sites.map((es) => es.site);
 
@@ -69,6 +106,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         companyName: employee.client.name,
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,
+        autoCloseShift: employee.autoCloseShift ?? false,
         geofence: employee.geofence,
         sites: sitesList,
         shifts: effectiveShifts,
@@ -77,6 +115,9 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         isOnShift,
         lastAction: lastLog?.action ?? null,
         lastActionTime: lastLog?.dateTime ?? null,
+        scheduledEndTime: scheduledEndTimeStr,
+        scheduledShiftType,
+        autoClosedDueToShiftEnd,
       },
     });
   } catch (err) {
@@ -201,9 +242,9 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
       });
     }
 
-    // Calculate today's worked hours summary on CLOCK_OUT
+    // Calculate today's worked hours summary on CLOCK_OUT or AUTO_EXIT
     let todaySummary: { totalNetHours: number; hours: number; minutes: number } | null = null;
-    if (data.action === 'CLOCK_OUT') {
+    if (data.action === 'CLOCK_OUT' || data.action === 'AUTO_EXIT') {
       try {
         const jerusalemParts = getJerusalemParts(logDateTime);
         const startOfDay = new Date(logDateTime);

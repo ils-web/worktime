@@ -19,6 +19,7 @@ import {
   MapPin,
   Edit2,
   Building2,
+  Clock,
 } from 'lucide-react';
 
 interface ClientEmployeesTabProps {
@@ -40,6 +41,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     name: '',
     isMobile: false,
     strictGps: false,
+    autoCloseShift: false,
     foremanId: '',
     siteIds: [] as string[],
     geofenceLat: 32.0853,
@@ -54,6 +56,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     newEmpId: '',
     isMobile: false,
     strictGps: false,
+    autoCloseShift: false,
     foremanId: '',
     siteIds: [] as string[],
     geofenceLat: 32.0853,
@@ -94,6 +97,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
         name: '',
         isMobile: false,
         strictGps: false,
+        autoCloseShift: false,
         foremanId: '',
         siteIds: [],
         geofenceLat: 32.0853,
@@ -232,13 +236,21 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                         )}
                       </td>
                       <td className="p-4">
-                        {emp.isMobile ? (
-                          <Badge variant="blue">{t('admin.mobile')}</Badge>
-                        ) : emp.strictGps ? (
-                          <Badge variant="amber">{t('admin.strictGps')}</Badge>
-                        ) : (
-                          <Badge variant="slate">{t('admin.standardGps')}</Badge>
-                        )}
+                        <div className="flex flex-col gap-1 items-start">
+                          {emp.isMobile ? (
+                            <Badge variant="blue">{t('admin.mobile')}</Badge>
+                          ) : emp.strictGps ? (
+                            <Badge variant="amber">{t('admin.strictGps')}</Badge>
+                          ) : (
+                            <Badge variant="slate">{t('admin.standardGps')}</Badge>
+                          )}
+                          {emp.autoCloseShift && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" title={t('admin.empAutoCloseShift')}>
+                              <Clock className="w-2.5 h-2.5" />
+                              <span>{t('admin.empAutoCloseShift')}</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4 text-xs text-slate-400">
                         {emp.isMobile ? (
@@ -281,6 +293,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                                 newEmpId: emp.empId,
                                 isMobile: !!emp.isMobile,
                                 strictGps: !!emp.strictGps,
+                                autoCloseShift: !!emp.autoCloseShift,
                                 foremanId: emp.foremanId || '',
                                 siteIds: assignedSiteIds,
                                 geofenceLat: emp.geofence?.lat || 32.0853,
@@ -356,6 +369,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
               name: form.name,
               isMobile: form.isMobile,
               strictGps: form.strictGps,
+              autoCloseShift: form.autoCloseShift,
               foremanId: form.foremanId || null,
               siteIds: form.siteIds,
               geofence: form.isMobile
@@ -420,6 +434,25 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
               <span className="text-xs text-white">{t('admin.empStrictMode')}</span>
             </label>
           </div>
+
+          {/* Auto Close Shift Option */}
+          <label className="flex items-start gap-3 p-3 bg-slate-950/60 border border-slate-800 hover:border-slate-700 rounded-xl cursor-pointer transition">
+            <input
+              type="checkbox"
+              checked={form.autoCloseShift}
+              onChange={(e) => setForm({ ...form, autoCloseShift: e.target.checked })}
+              className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 mt-0.5"
+            />
+            <div className="flex flex-col">
+              <span className="text-xs text-white font-semibold flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                {t('admin.empAutoCloseShift')}
+              </span>
+              <span className="text-[11px] text-slate-400 mt-0.5">
+                {t('admin.empAutoCloseShiftDesc')}
+              </span>
+            </div>
+          </label>
 
           {userRole === 'client' && foremen.length > 0 && (
             <div>
@@ -583,6 +616,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                   newEmpId: editForm.newEmpId,
                   isMobile: editForm.isMobile,
                   strictGps: editForm.strictGps,
+                  autoCloseShift: editForm.autoCloseShift,
                   foremanId: editForm.foremanId || null,
                   siteIds: editForm.siteIds,
                   geofence: editForm.isMobile
@@ -646,6 +680,25 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 <span className="text-xs text-white">{t('admin.empStrictMode')}</span>
               </label>
             </div>
+
+            {/* Auto Close Shift Option */}
+            <label className="flex items-start gap-3 p-3 bg-slate-950/60 border border-slate-800 hover:border-slate-700 rounded-xl cursor-pointer transition">
+              <input
+                type="checkbox"
+                checked={editForm.autoCloseShift}
+                onChange={(e) => setEditForm({ ...editForm, autoCloseShift: e.target.checked })}
+                className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 mt-0.5"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs text-white font-semibold flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  {t('admin.empAutoCloseShift')}
+                </span>
+                <span className="text-[11px] text-slate-400 mt-0.5">
+                  {t('admin.empAutoCloseShiftDesc')}
+                </span>
+              </div>
+            </label>
 
             {userRole === 'client' && foremen.length > 0 && (
               <div>

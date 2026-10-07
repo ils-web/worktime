@@ -78,6 +78,7 @@ const createEmployeeSchema = z.object({
   name: z.string().min(2),
   isMobile: z.boolean().default(false),
   strictGps: z.boolean().default(false),
+  autoCloseShift: z.boolean().default(false),
   geofence: z.any().optional(),
   shifts: z.any().optional(),
   foremanId: z.string().optional().nullable(),
@@ -107,6 +108,7 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
         name: data.name,
         isMobile: data.isMobile,
         strictGps: data.strictGps,
+        autoCloseShift: data.autoCloseShift,
         geofence: data.geofence || null,
         shifts: data.shifts || null,
         foremanId: data.foremanId || null,
@@ -144,7 +146,7 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
   try {
     const clientId = getTargetClientId(req);
     const currentEmpId = req.params['empId'] as string;
-    const { name, newEmpId, isMobile, strictGps, geofence, shifts, foremanId, siteIds } = req.body;
+    const { name, newEmpId, isMobile, strictGps, autoCloseShift, geofence, shifts, foremanId, siteIds } = req.body;
 
     const employee = await prisma.employee.findFirst({
       where: { empId: currentEmpId, clientId },
@@ -171,6 +173,7 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
         ...(name ? { name } : {}),
         ...(isMobile !== undefined ? { isMobile } : {}),
         ...(strictGps !== undefined ? { strictGps } : {}),
+        ...(autoCloseShift !== undefined ? { autoCloseShift } : {}),
         ...(geofence !== undefined ? { geofence } : {}),
         ...(shifts !== undefined ? { shifts } : {}),
         ...(foremanId !== undefined ? { foremanId: foremanId || null } : {}),

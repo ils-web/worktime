@@ -41,6 +41,7 @@ export interface WorkerSessionState {
   name: string;
   isMobile: boolean;
   strictGps: boolean;
+  autoCloseShift?: boolean;
   geofence: GeofenceConfig | null;
   currentShift: ShiftType | null;
   activeSession: {

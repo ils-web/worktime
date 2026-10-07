@@ -9,6 +9,7 @@ import {
   parseDisplayToIsoDate,
   addDays,
   getDayOfWeek,
+  getScheduledShiftEndTime,
 } from './time';
 import { calculateClientBilling } from './billing';
 
@@ -198,5 +199,17 @@ describe('Billing Rules', () => {
 
     // 2026-10-07 is Wednesday
     expect(getDayOfWeek('2026-10-07', 'he')).toBe("יום ד'");
+  });
+
+  it('accurately calculates scheduled shift end time including overnight shifts', () => {
+    // 1. Regular day shift: clocked in at 08:00 IDT, shift ends at 17:00
+    const inDate = jerusalemDateTimeToDate('2026-10-07', '08:00');
+    const endDate = getScheduledShiftEndTime(inDate, '17:00');
+    expect(endDate.toISOString()).toBe(jerusalemDateTimeToDate('2026-10-07', '17:00').toISOString());
+
+    // 2. Overnight night shift: clocked in at 22:30 IDT, shift ends at 06:00 next day
+    const nightIn = jerusalemDateTimeToDate('2026-10-07', '22:30');
+    const nightEnd = getScheduledShiftEndTime(nightIn, '06:00');
+    expect(nightEnd.toISOString()).toBe(jerusalemDateTimeToDate('2026-10-08', '06:00').toISOString());
   });
 });

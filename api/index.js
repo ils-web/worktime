@@ -97151,6 +97151,13 @@ function getDayOfWeek(dateStr, lang = "he") {
   if (norm.startsWith("ru")) return RU_DAYS[dayIdx] || "";
   return EN_DAYS[dayIdx] || "";
 }
+function getScheduledShiftEndTime(clockInDate, shiftEndStr) {
+  const inParts = getJerusalemParts(clockInDate);
+  const inMinutes = inParts.hour * 60 + inParts.minute;
+  const endMinutes = parseTimeToMinutes(shiftEndStr);
+  const targetDateStr = endMinutes <= inMinutes ? addDays(inParts.dateStr, 1) : inParts.dateStr;
+  return jerusalemDateTimeToDate(targetDateStr, shiftEndStr);
+}
 
 // packages/shared/src/rules/billing.ts
 function calculateWorkerDays(employee, period) {
@@ -98255,6 +98262,7 @@ var createEmployeeSchema = external_exports.object({
   name: external_exports.string().min(2),
   isMobile: external_exports.boolean().default(false),
   strictGps: external_exports.boolean().default(false),
+  autoCloseShift: external_exports.boolean().default(false),
   geofence: external_exports.any().optional(),
   shifts: external_exports.any().optional(),
   foremanId: external_exports.string().optional().nullable(),
@@ -98278,6 +98286,7 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
         name: data.name,
         isMobile: data.isMobile,
         strictGps: data.strictGps,
+        autoCloseShift: data.autoCloseShift,
         geofence: data.geofence || null,
         shifts: data.shifts || null,
         foremanId: data.foremanId || null
@@ -98309,7 +98318,7 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
   try {
     const clientId = getTargetClientId(req);
     const currentEmpId = req.params["empId"];
-    const { name, newEmpId, isMobile, strictGps, geofence, shifts, foremanId, siteIds } = req.body;
+    const { name, newEmpId, isMobile, strictGps, autoCloseShift, geofence, shifts, foremanId, siteIds } = req.body;
     const employee = await prisma.employee.findFirst({
       where: { empId: currentEmpId, clientId }
     });
@@ -98333,6 +98342,7 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
         ...name ? { name } : {},
         ...isMobile !== void 0 ? { isMobile } : {},
         ...strictGps !== void 0 ? { strictGps } : {},
+        ...autoCloseShift !== void 0 ? { autoCloseShift } : {},
         ...geofence !== void 0 ? { geofence } : {},
         ...shifts !== void 0 ? { shifts } : {},
         ...foremanId !== void 0 ? { foremanId: foremanId || null } : {}
@@ -99251,11 +99261,12 @@ workerRouter.get("/profile/:empId", async (req, res) => {
             defaultShifts: true
           }
         },
+        schedules: true,
         sites: {
           include: { site: true }
         },
         logs: {
-          take: 1,
+          take: 5,
           orderBy: { dateTime: "desc" }
         }
       }
@@ -99264,9 +99275,42 @@ workerRouter.get("/profile/:empId", async (req, res) => {
       res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0438\u043B\u0438 \u0430\u043A\u043A\u0430\u0443\u043D\u0442 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438 \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D" });
       return;
     }
-    const lastLog = employee.logs[0];
-    const isOnShift = lastLog ? lastLog.action === "CLOCK_IN" || lastLog.action === "AUTO_RESUME" : false;
+    let lastLog = employee.logs[0];
+    let isOnShift = lastLog ? lastLog.action === "CLOCK_IN" || lastLog.action === "AUTO_RESUME" : false;
+    let autoClosedDueToShiftEnd = false;
+    let scheduledEndTimeStr = null;
+    let scheduledShiftType = null;
     const effectiveShifts = employee.shifts || employee.client.defaultShifts;
+    if (employee.autoCloseShift && isOnShift && lastLog) {
+      const inParts = getJerusalemParts(lastLog.dateTime);
+      const daySchedule = employee.schedules?.find((s) => s.dayOfWeek === inParts.dayOfWeek);
+      const shiftType = daySchedule?.shiftType && daySchedule.shiftType !== "off" ? daySchedule.shiftType : "morning";
+      scheduledShiftType = shiftType;
+      const shiftWindow = effectiveShifts?.[shiftType] || { start: "08:00", end: "17:00" };
+      const scheduledEndDate = getScheduledShiftEndTime(lastLog.dateTime, shiftWindow.end);
+      scheduledEndTimeStr = scheduledEndDate.toISOString();
+      const now = /* @__PURE__ */ new Date();
+      if (now.getTime() >= scheduledEndDate.getTime()) {
+        const autoExit = await prisma.timeLog.create({
+          data: {
+            empId: employee.empId,
+            employeeId: employee.id,
+            clientId: employee.clientId,
+            action: "AUTO_EXIT",
+            dateTime: scheduledEndDate,
+            isManual: false
+          }
+        });
+        isOnShift = false;
+        autoClosedDueToShiftEnd = true;
+        lastLog = autoExit;
+      }
+    } else if (employee.autoCloseShift && !isOnShift && lastLog && lastLog.action === "AUTO_EXIT") {
+      const diffHours = (Date.now() - new Date(lastLog.dateTime).getTime()) / 36e5;
+      if (diffHours < 24) {
+        autoClosedDueToShiftEnd = true;
+      }
+    }
     const sitesList = employee.sites.map((es) => es.site);
     res.json({
       success: true,
@@ -99277,6 +99321,7 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         companyName: employee.client.name,
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,
+        autoCloseShift: employee.autoCloseShift ?? false,
         geofence: employee.geofence,
         sites: sitesList,
         shifts: effectiveShifts
@@ -99284,7 +99329,10 @@ workerRouter.get("/profile/:empId", async (req, res) => {
       status: {
         isOnShift,
         lastAction: lastLog?.action ?? null,
-        lastActionTime: lastLog?.dateTime ?? null
+        lastActionTime: lastLog?.dateTime ?? null,
+        scheduledEndTime: scheduledEndTimeStr,
+        scheduledShiftType,
+        autoClosedDueToShiftEnd
       }
     });
   } catch (err) {
@@ -99387,7 +99435,7 @@ workerRouter.post("/log", async (req, res) => {
       });
     }
     let todaySummary = null;
-    if (data.action === "CLOCK_OUT") {
+    if (data.action === "CLOCK_OUT" || data.action === "AUTO_EXIT") {
       try {
         const jerusalemParts = getJerusalemParts(logDateTime);
         const startOfDay = new Date(logDateTime);
