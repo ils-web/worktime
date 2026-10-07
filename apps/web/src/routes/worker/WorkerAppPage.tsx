@@ -23,7 +23,7 @@ import {
 import { Modal } from '../../components/ui/Modal';
 import { api } from '../../lib/api';
 import { changeLanguage } from '../../lib/i18n';
-import { getCurrentCoordinates, evaluateGeofence, GeoLocationResult, GeofenceStatus } from '../../lib/geo';
+import { getCurrentCoordinates, evaluateWorkerGeofence, GeoLocationResult, GeofenceStatus } from '../../lib/geo';
 import {
   enqueueOfflineLog,
   getPendingCount,
@@ -32,6 +32,15 @@ import {
   OfflineLogItem,
 } from '../../lib/offlineQueue';
 import { formatIsoToDisplayDate, getDayOfWeek } from '@timetracker/shared';
+
+export interface WorkerSite {
+  id: string;
+  name: string;
+  address?: string | null;
+  lat: number;
+  lng: number;
+  radius: number;
+}
 
 interface WorkerProfile {
   id: string;
@@ -45,7 +54,9 @@ interface WorkerProfile {
     lat: number;
     lng: number;
     radius: number;
+    address?: string | null;
   } | null;
+  sites?: WorkerSite[];
   shifts?: any;
 }
 
@@ -334,14 +345,8 @@ export function WorkerAppPage() {
       const coords = await getCurrentCoordinates(10000);
       setGeoResult(coords);
 
-      if (profile && !profile.isMobile && profile.geofence?.lat && profile.geofence?.lng) {
-        const ev = evaluateGeofence(
-          coords.lat,
-          coords.lng,
-          profile.geofence.lat,
-          profile.geofence.lng,
-          profile.geofence.radius
-        );
+      if (profile && !profile.isMobile) {
+        const ev = evaluateWorkerGeofence(coords.lat, coords.lng, profile);
         setGeofenceEval(ev);
       }
     } catch (err: any) {
@@ -372,14 +377,8 @@ export function WorkerAppPage() {
           timestamp: pos.timestamp,
         });
 
-        if (profile.geofence?.lat && profile.geofence?.lng) {
-          const ev = evaluateGeofence(
-            pos.coords.latitude,
-            pos.coords.longitude,
-            profile.geofence.lat,
-            profile.geofence.lng,
-            profile.geofence.radius
-          );
+        if (profile && !profile.isMobile) {
+          const ev = evaluateWorkerGeofence(pos.coords.latitude, pos.coords.longitude, profile);
           setGeofenceEval(ev);
         }
       },
@@ -448,7 +447,7 @@ export function WorkerAppPage() {
     setOfflineNotice(null);
 
     // If CLOCK_IN, check geofence boundary locally
-    if (action === 'CLOCK_IN' && profile && !profile.isMobile && profile.geofence) {
+    if (action === 'CLOCK_IN' && profile && !profile.isMobile) {
       if (geofenceEval && !geofenceEval.isInside) {
         alert(
           t('worker.geoOutBlock', {
@@ -856,12 +855,19 @@ export function WorkerAppPage() {
                       {profile.isMobile
                         ? t('worker.mobileWorker')
                         : geofenceEval?.isInside
-                        ? t('worker.insideGeofence', { dist: geofenceEval?.distanceMeters ?? 0 })
+                        ? geofenceEval.targetName
+                          ? `${t('worker.insideGeofence', { dist: geofenceEval.distanceMeters })} • ${geofenceEval.targetName}`
+                          : t('worker.insideGeofence', { dist: geofenceEval.distanceMeters })
                         : geofenceEval
-                        ? t('worker.outsideGeofence', {
-                            dist: geofenceEval.distanceMeters,
-                            radius: geofenceEval.allowedRadius,
-                          })
+                        ? geofenceEval.targetName
+                          ? `${t('worker.outsideGeofence', {
+                              dist: geofenceEval.distanceMeters,
+                              radius: geofenceEval.allowedRadius,
+                            })} • ${geofenceEval.targetName}`
+                          : t('worker.outsideGeofence', {
+                              dist: geofenceEval.distanceMeters,
+                              radius: geofenceEval.allowedRadius,
+                            })
                         : isLocating
                         ? t('worker.gpsSearching')
                         : t('worker.gpsActive')}

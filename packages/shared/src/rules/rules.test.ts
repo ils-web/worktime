@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateHaversineDistance, checkGeofence } from './geo';
+import { calculateHaversineDistance, checkGeofence, evaluateWorkerGeofence } from './geo';
 import {
   calculateSessionHours,
   calculateDailyHours,
@@ -32,6 +32,49 @@ describe('Geo Rules', () => {
     const outside = checkGeofence(32.0953, 34.7818, fence.lat, fence.lng, fence.radius);
     expect(outside.isInside).toBe(false);
     expect(outside.distanceMeters).toBeGreaterThan(100);
+  });
+
+  it('evaluates worker geofence correctly against assigned work sites', () => {
+    const profile = {
+      isMobile: false,
+      geofence: { lat: 32.0853, lng: 34.7818, radius: 100 }, // Tel Aviv default ~5983m away
+      sites: [
+        {
+          name: 'נאות התיכון',
+          lat: 32.03975,
+          lng: 34.74787,
+          radius: 150,
+        },
+      ],
+    };
+
+    // 1. Worker is at Bat Yam / Jaffa near site (approx 6 meters away)
+    const insideRes = evaluateWorkerGeofence(32.0398, 34.7479, profile);
+    expect(insideRes).not.toBeNull();
+    expect(insideRes?.isInside).toBe(true);
+    expect(insideRes?.targetName).toBe('נאות התיכון');
+    expect(insideRes?.allowedRadius).toBe(150);
+    expect(insideRes?.distanceMeters).toBeLessThan(15);
+
+    // 2. Worker is far away from the site (at central Tel Aviv)
+    const outsideRes = evaluateWorkerGeofence(32.0853, 34.7818, profile);
+    expect(outsideRes).not.toBeNull();
+    expect(outsideRes?.isInside).toBe(false);
+    expect(outsideRes?.targetName).toBe('נאות התיכון');
+    expect(outsideRes?.distanceMeters).toBeGreaterThan(5000);
+
+    // 3. Mobile worker has no geofence restrictions
+    const mobileRes = evaluateWorkerGeofence(32.0853, 34.7818, { isMobile: true });
+    expect(mobileRes).toBeNull();
+
+    // 4. Fallback to individual geofence when no sites are assigned
+    const fallbackRes = evaluateWorkerGeofence(32.0853, 34.7818, {
+      isMobile: false,
+      geofence: { lat: 32.0853, lng: 34.7818, radius: 100, address: 'Personal Site' },
+      sites: [],
+    });
+    expect(fallbackRes?.isInside).toBe(true);
+    expect(fallbackRes?.targetName).toBe('Personal Site');
   });
 });
 

@@ -1,18 +1,18 @@
-import { calculateHaversineDistance } from '@timetracker/shared';
+import {
+  calculateHaversineDistance,
+  evaluateWorkerGeofence,
+  GeofenceStatus,
+  WorkerGeofenceProfile,
+} from '@timetracker/shared';
+
+export type { GeofenceStatus, WorkerGeofenceProfile };
+export { evaluateWorkerGeofence };
 
 export interface GeoLocationResult {
   lat: number;
   lng: number;
   accuracy: number;
   timestamp: number;
-}
-
-export interface GeofenceStatus {
-  isInside: boolean;
-  distanceMeters: number;
-  allowedRadius: number;
-  targetLat: number;
-  targetLng: number;
 }
 
 export class GeoLocationError extends Error {
@@ -64,7 +64,7 @@ export function getCurrentCoordinates(timeout = 10000): Promise<GeoLocationResul
 }
 
 /**
- * Check employee geofence boundary
+ * Check single geofence boundary (legacy / direct helper)
  */
 export function evaluateGeofence(
   currentLat: number,
