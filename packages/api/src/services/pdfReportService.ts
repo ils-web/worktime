@@ -1,44 +1,17 @@
 import { PDFDocument, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import bidiFactory from 'bidi-js';
 import { ReportRow } from './csvReportService';
 import { getArialRegularBytes, getArialBoldBytes } from './fontAssets';
 
-const bidi = bidiFactory();
-
-const RTL_MIRROR_MAP: Record<string, string> = {
-  '(': ')',
-  ')': '(',
-  '[': ']',
-  ']': '[',
-  '{': '}',
-  '}': '{',
-  '<': '>',
-  '>': '<',
-};
-
 /**
- * Reorders Hebrew text to visual representation for PDF rendering without gibberish.
- * Preserves numbers, Latin characters, and punctuation in their correct reading order.
+ * Normalizes text for PDF rendering with Arial Unicode font.
+ * Fontkit handles OpenType glyph layout and bidirectional Hebrew script natively.
+ * Text is preserved in its natural logical order so Hebrew words are read naturally RTL
+ * and numbers/dates remain strictly LTR.
  */
 export function formatBidiText(text: string | null | undefined): string {
   if (!text) return '';
-  const str = String(text).trim();
-  // Check if string contains Hebrew characters (U+0590 to U+05FF)
-  if (/[\u0590-\u05FF]/.test(str)) {
-    const embeddingLevels = bidi.getEmbeddingLevels(str);
-    const indices = bidi.getReorderedIndices(str, embeddingLevels);
-    return indices
-      .map((i) => {
-        const ch = str[i];
-        if (embeddingLevels[i] % 2 === 1 && RTL_MIRROR_MAP[ch]) {
-          return RTL_MIRROR_MAP[ch];
-        }
-        return ch;
-      })
-      .join('');
-  }
-  return str;
+  return String(text).trim();
 }
 
 /**
@@ -86,9 +59,9 @@ const LOCALES: Record<string, LocaleStrings> = {
     summaryGross: 'סה"כ ברוטו',
     summaryLunch: 'ניכוי הפסקה',
     summaryNet: 'סה"כ נטו',
-    summaryNight: 'לילה',
-    summarySat: 'שבת',
-    summaryOvertime: 'נוספות',
+    summaryNight: 'שעות לילה',
+    summarySat: 'שעות שבת',
+    summaryOvertime: 'שעות נוספות',
     page: 'עמוד',
     of: 'מתוך',
     noData: 'אין נתונים לתקופה שנבחרה',
@@ -112,7 +85,7 @@ const LOCALES: Record<string, LocaleStrings> = {
     systemTitle: 'TimeTracker SaaS',
     reportTitle: 'Табель учёта рабочего времени',
     companyLabel: 'Компания:',
-    periodLabel: 'Периоד:',
+    periodLabel: 'Период:',
     generatedLabel: 'Сформирован:',
     summaryGross: 'Всего брутто',
     summaryLunch: 'Вычет обеда',
@@ -176,22 +149,21 @@ function truncateToWidth(
   text: string,
   maxWidth: number,
   font: PDFFont,
-  fontSize: number,
-  isRtl: boolean
+  fontSize: number
 ): string {
-  const formatted = formatBidiText(text);
-  const textWidth = font.widthOfTextAtSize(formatted, fontSize);
-  if (textWidth <= maxWidth) return formatted;
+  if (!text) return '';
+  const textWidth = font.widthOfTextAtSize(text, fontSize);
+  if (textWidth <= maxWidth) return text;
 
   let current = text;
   while (current.length > 2) {
     current = current.slice(0, -1);
-    const candidate = formatBidiText(current + '…');
+    const candidate = current + '…';
     if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
       return candidate;
     }
   }
-  return formatBidiText(current);
+  return current;
 }
 
 export async function generatePdfReport(
@@ -279,7 +251,7 @@ export async function generatePdfReport(
     color: rgb(0.13, 0.77, 0.37), // emerald
   });
 
-  page.drawText(formatBidiText(t.reportTitle), {
+  page.drawText(t.reportTitle, {
     x: startX + 16,
     y: y + 2,
     size: 9.5,
@@ -288,49 +260,117 @@ export async function generatePdfReport(
   });
 
   // Company and Period info on right
-  const headerRightText1 = formatBidiText(`${t.companyLabel} ${clientName}`);
-  const headerRightText2 = formatBidiText(`${t.periodLabel} ${periodTitle}`);
+  const rightEdge = startX + totalTableWidth - 16;
+  const safeClientName = clientName?.trim() || '';
+  const safePeriodTitle = periodTitle?.trim() || '';
 
-  const rightW1 = fontBold.widthOfTextAtSize(headerRightText1, 11);
-  const rightW2 = font.widthOfTextAtSize(headerRightText2, 9);
+  if (isRtl) {
+    // In RTL: Label on the right, value to the left of the label
+    const compLabelW = fontBold.widthOfTextAtSize(t.companyLabel, 10.5);
+    const compValW = fontBold.widthOfTextAtSize(safeClientName, 10.5);
+    page.drawText(t.companyLabel, {
+      x: rightEdge - compLabelW,
+      y: y + 16,
+      size: 10.5,
+      font: fontBold,
+      color: rgb(1, 1, 1),
+    });
+    page.drawText(safeClientName, {
+      x: rightEdge - compLabelW - 6 - compValW,
+      y: y + 16,
+      size: 10.5,
+      font: fontBold,
+      color: rgb(1, 1, 1),
+    });
 
-  page.drawText(headerRightText1, {
-    x: startX + totalTableWidth - rightW1 - 16,
-    y: y + 16,
-    size: 11,
-    font: fontBold,
-    color: rgb(1, 1, 1),
-  });
+    const periodLabelW = font.widthOfTextAtSize(t.periodLabel, 9);
+    const periodValW = font.widthOfTextAtSize(safePeriodTitle, 9);
+    page.drawText(t.periodLabel, {
+      x: rightEdge - periodLabelW,
+      y: y + 2,
+      size: 9,
+      font,
+      color: rgb(0.75, 0.8, 0.9),
+    });
+    page.drawText(safePeriodTitle, {
+      x: rightEdge - periodLabelW - 6 - periodValW,
+      y: y + 2,
+      size: 9,
+      font,
+      color: rgb(0.75, 0.8, 0.9),
+    });
+  } else {
+    // In LTR: Label on the left, value on the right
+    const compStr = `${t.companyLabel} ${safeClientName}`;
+    const compW = fontBold.widthOfTextAtSize(compStr, 10.5);
+    page.drawText(compStr, {
+      x: rightEdge - compW,
+      y: y + 16,
+      size: 10.5,
+      font: fontBold,
+      color: rgb(1, 1, 1),
+    });
 
-  page.drawText(headerRightText2, {
-    x: startX + totalTableWidth - rightW2 - 16,
-    y: y + 2,
-    size: 9,
-    font,
-    color: rgb(0.75, 0.8, 0.9),
-  });
+    const periodStr = `${t.periodLabel} ${safePeriodTitle}`;
+    const periodW = font.widthOfTextAtSize(periodStr, 9);
+    page.drawText(periodStr, {
+      x: rightEdge - periodW,
+      y: y + 2,
+      size: 9,
+      font,
+      color: rgb(0.75, 0.8, 0.9),
+    });
+  }
 
   y -= 48;
 
   // 2. Summary KPI Metric Boxes (6 key metrics including Gross, Lunch, Net)
   const summaryBoxes = [
-    { label: t.summaryGross, value: `${totalGross.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.95, 0.96, 0.98), textCol: rgb(0.2, 0.25, 0.35) },
-    { label: t.summaryLunch, value: `-${totalLunch.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.99, 0.95, 0.95), textCol: rgb(0.85, 0.25, 0.25) },
-    { label: t.summaryNet, value: `${totalNet.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.93, 0.98, 0.95), textCol: rgb(0.06, 0.55, 0.28), isKey: true },
-    { label: t.summaryNight, value: `${totalNight.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.95, 0.96, 0.98), textCol: rgb(0.3, 0.35, 0.45) },
-    { label: t.summarySat, value: `${totalSat.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.95, 0.96, 0.98), textCol: rgb(0.3, 0.35, 0.45) },
-    { label: t.summaryOvertime, value: `${totalOt.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.99, 0.97, 0.93), textCol: rgb(0.8, 0.5, 0.1) },
+    {
+      label: t.summaryGross,
+      value: totalGross.toFixed(1),
+      bg: rgb(0.95, 0.96, 0.98),
+      textCol: rgb(0.2, 0.25, 0.35),
+    },
+    {
+      label: t.summaryLunch,
+      value: `-${totalLunch.toFixed(1)}`,
+      bg: rgb(0.99, 0.95, 0.95),
+      textCol: rgb(0.85, 0.25, 0.25),
+    },
+    {
+      label: t.summaryNet,
+      value: totalNet.toFixed(1),
+      bg: rgb(0.93, 0.98, 0.95),
+      textCol: rgb(0.06, 0.55, 0.28),
+      isKey: true,
+    },
+    {
+      label: t.summaryNight,
+      value: totalNight.toFixed(1),
+      bg: rgb(0.95, 0.96, 0.98),
+      textCol: rgb(0.3, 0.35, 0.45),
+    },
+    {
+      label: t.summarySat,
+      value: totalSat.toFixed(1),
+      bg: rgb(0.95, 0.96, 0.98),
+      textCol: rgb(0.3, 0.35, 0.45),
+    },
+    {
+      label: t.summaryOvertime,
+      value: totalOt.toFixed(1),
+      bg: rgb(0.99, 0.97, 0.93),
+      textCol: rgb(0.8, 0.5, 0.1),
+    },
   ];
 
   const boxGap = 8;
   const boxWidth = (totalTableWidth - (summaryBoxes.length - 1) * boxGap) / summaryBoxes.length;
   const boxHeight = 32;
 
-  // Render summary boxes (RTL vs LTR ordered)
-  const orderedBoxes = isRtl ? [...summaryBoxes] : [...summaryBoxes];
-
-  for (let bi = 0; bi < orderedBoxes.length; bi++) {
-    const box = orderedBoxes[bi]!;
+  for (let bi = 0; bi < summaryBoxes.length; bi++) {
+    const box = summaryBoxes[bi]!;
     const bx = isRtl
       ? startX + totalTableWidth - (bi + 1) * boxWidth - bi * boxGap
       : startX + bi * (boxWidth + boxGap);
@@ -346,13 +386,10 @@ export async function generatePdfReport(
       borderWidth: box.isKey ? 1.2 : 0.6,
     });
 
-    const valStr = formatBidiText(box.value);
-    const lblStr = formatBidiText(box.label);
+    const lblW = font.widthOfTextAtSize(box.label, 7.5);
+    const valW = fontBold.widthOfTextAtSize(box.value, 10.5);
 
-    const valW = fontBold.widthOfTextAtSize(valStr, 9.5);
-    const lblW = font.widthOfTextAtSize(lblStr, 7.5);
-
-    page.drawText(lblStr, {
+    page.drawText(box.label, {
       x: bx + (boxWidth - lblW) / 2,
       y: y + 10,
       size: 7.5,
@@ -360,10 +397,10 @@ export async function generatePdfReport(
       color: rgb(0.45, 0.5, 0.6),
     });
 
-    page.drawText(valStr, {
+    page.drawText(box.value, {
       x: bx + (boxWidth - valW) / 2,
       y: y - 2,
-      size: 9.5,
+      size: 10.5,
       font: fontBold,
       color: box.textCol,
     });
@@ -382,7 +419,7 @@ export async function generatePdfReport(
     });
 
     for (const rCol of renderCols) {
-      const titleStr = formatBidiText(rCol.def.title);
+      const titleStr = rCol.def.title;
       const titleW = fontBold.widthOfTextAtSize(titleStr, 8);
       let textX: number;
       if (rCol.def.align === 'center') {
@@ -409,7 +446,7 @@ export async function generatePdfReport(
 
   // If no rows
   if (rows.length === 0) {
-    const noDataStr = formatBidiText(t.noData);
+    const noDataStr = t.noData;
     const ndW = font.widthOfTextAtSize(noDataStr, 10);
     page.drawText(noDataStr, {
       x: startX + (totalTableWidth - ndW) / 2,
@@ -503,7 +540,7 @@ export async function generatePdfReport(
       const activeFont = isBold ? fontBold : font;
       const fontSize = 7.5;
       const maxW = rCol.width - 8;
-      const cellText = truncateToWidth(rawVal, maxW, activeFont, fontSize, isRtl);
+      const cellText = truncateToWidth(rawVal, maxW, activeFont, fontSize);
       const textW = activeFont.widthOfTextAtSize(cellText, fontSize);
 
       let textX: number;
@@ -531,9 +568,7 @@ export async function generatePdfReport(
   const totalPages = pages.length;
   for (let pIdx = 0; pIdx < totalPages; pIdx++) {
     const curP = pages[pIdx]!;
-    const footerText = formatBidiText(
-      `${t.page} ${pIdx + 1} ${t.of} ${totalPages} | ${t.systemTitle}`
-    );
+    const footerText = `${t.page} ${pIdx + 1} ${t.of} ${totalPages}`;
     const fW = font.widthOfTextAtSize(footerText, 7.5);
 
     curP.drawText(footerText, {
@@ -542,6 +577,15 @@ export async function generatePdfReport(
       size: 7.5,
       font,
       color: rgb(0.55, 0.6, 0.7),
+    });
+
+    const sysW = font.widthOfTextAtSize(t.systemTitle, 7.5);
+    curP.drawText(t.systemTitle, {
+      x: isRtl ? startX + 16 : startX + totalTableWidth - sysW - 16,
+      y: 18,
+      size: 7.5,
+      font,
+      color: rgb(0.65, 0.7, 0.78),
     });
   }
 

@@ -7,8 +7,8 @@ describe('PDF Report Service', () => {
     // Pure Hebrew name
     const hebrewName = 'יוסי כהן';
     const shaped = formatBidiText(hebrewName);
-    // In visual order for LTR PDF canvas, the characters must be reversed so the first letter appears on the right
-    expect(shaped).toBe('ןהכ יסוי');
+    // Hebrew text is preserved in natural order so Fontkit native OpenType layout renders it RTL
+    expect(shaped).toBe('יוסי כהן');
 
     // English text should remain in LTR order
     const englishName = 'Bashir Arabasi';
