@@ -98762,6 +98762,32 @@ clientRouter.put("/logs/manual", async (req, res) => {
           data: { dateTime: outTime, isManual: true }
         });
       }
+      const extraLogs = logs.filter((l) => l.id !== inLog?.id && l.id !== outLog?.id);
+      if (extraLogs.length > 0) {
+        await prisma.timeLog.deleteMany({
+          where: { id: { in: extraLogs.map((l) => l.id) } }
+        });
+      }
+    } else if (Array.isArray(logIds) && logIds.length === 1) {
+      const existing = await prisma.timeLog.findFirst({
+        where: { id: logIds[0], clientId, empId }
+      });
+      if (existing) {
+        await prisma.timeLog.update({
+          where: { id: existing.id },
+          data: { dateTime: inTime, action: "CLOCK_IN", isManual: true }
+        });
+        await prisma.timeLog.create({
+          data: {
+            empId,
+            employeeId: employee.id,
+            clientId,
+            action: "CLOCK_OUT",
+            dateTime: outTime,
+            isManual: true
+          }
+        });
+      }
     } else {
       await prisma.timeLog.create({
         data: {
@@ -98892,7 +98918,25 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
     let currentInLog = null;
     for (const log of emp.logs) {
       if (log.action === "CLOCK_IN") {
-        currentInLog = { id: log.id, dateTime: log.dateTime, isManual: !!log.isManual };
+        if (!currentInLog) {
+          currentInLog = {
+            id: log.id,
+            dateTime: log.dateTime,
+            isManual: !!log.isManual,
+            allLogIds: [log.id]
+          };
+        } else {
+          if (log.isManual && !currentInLog.isManual) {
+            currentInLog = {
+              id: log.id,
+              dateTime: log.dateTime,
+              isManual: true,
+              allLogIds: [...currentInLog.allLogIds, log.id]
+            };
+          } else {
+            currentInLog.allLogIds.push(log.id);
+          }
+        }
       } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
         if (currentInLog) {
           sessions.push({
@@ -98901,7 +98945,7 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
             inLogId: currentInLog.id,
             outLogId: log.id,
             isManual: currentInLog.isManual || !!log.isManual,
-            allLogIds: [currentInLog.id, log.id]
+            allLogIds: [...currentInLog.allLogIds, log.id]
           });
           currentInLog = null;
         }

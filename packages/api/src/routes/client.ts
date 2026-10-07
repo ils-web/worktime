@@ -684,6 +684,34 @@ clientRouter.put('/logs/manual', async (req: Request, res: Response) => {
           data: { dateTime: outTime, isManual: true },
         });
       }
+
+      // Delete any extraneous intermediate/duplicate logs that belonged to this shift session
+      const extraLogs = logs.filter((l) => l.id !== inLog?.id && l.id !== outLog?.id);
+      if (extraLogs.length > 0) {
+        await prisma.timeLog.deleteMany({
+          where: { id: { in: extraLogs.map((l) => l.id) } },
+        });
+      }
+    } else if (Array.isArray(logIds) && logIds.length === 1) {
+      const existing = await prisma.timeLog.findFirst({
+        where: { id: logIds[0], clientId, empId },
+      });
+      if (existing) {
+        await prisma.timeLog.update({
+          where: { id: existing.id },
+          data: { dateTime: inTime, action: 'CLOCK_IN', isManual: true },
+        });
+        await prisma.timeLog.create({
+          data: {
+            empId,
+            employeeId: employee.id,
+            clientId,
+            action: 'CLOCK_OUT',
+            dateTime: outTime,
+            isManual: true,
+          },
+        });
+      }
     } else {
       await prisma.timeLog.create({
         data: {
@@ -842,11 +870,32 @@ async function computeClientReportRows(
   for (const emp of employees) {
     // 1. Group logs into sessions (In -> Out)
     const sessions: TrackedSession[] = [];
-    let currentInLog: { id: number; dateTime: Date; isManual: boolean } | null = null;
+    let currentInLog: { id: number; dateTime: Date; isManual: boolean; allLogIds: number[] } | null = null;
 
     for (const log of emp.logs) {
       if (log.action === 'CLOCK_IN') {
-        currentInLog = { id: log.id, dateTime: log.dateTime, isManual: !!log.isManual };
+        if (!currentInLog) {
+          currentInLog = {
+            id: log.id,
+            dateTime: log.dateTime,
+            isManual: !!log.isManual,
+            allLogIds: [log.id],
+          };
+        } else {
+          // If an unclosed CLOCK_IN already exists:
+          // If the new one is manual and previous was not, prioritize the manual record.
+          // Otherwise, retain the earlier CLOCK_IN as the start of work, tracking all IDs.
+          if (log.isManual && !currentInLog.isManual) {
+            currentInLog = {
+              id: log.id,
+              dateTime: log.dateTime,
+              isManual: true,
+              allLogIds: [...currentInLog.allLogIds, log.id],
+            };
+          } else {
+            currentInLog.allLogIds.push(log.id);
+          }
+        }
       } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
         if (currentInLog) {
           sessions.push({
@@ -855,7 +904,7 @@ async function computeClientReportRows(
             inLogId: currentInLog.id,
             outLogId: log.id,
             isManual: currentInLog.isManual || !!log.isManual,
-            allLogIds: [currentInLog.id, log.id],
+            allLogIds: [...currentInLog.allLogIds, log.id],
           });
           currentInLog = null;
         }

@@ -18,6 +18,9 @@ import {
   User,
 } from 'lucide-react';
 
+const HOUR_OPTIONS = Array.from({ length: 24 }).map((_, i) => String(i).padStart(2, '0'));
+const MINUTE_OPTIONS = Array.from({ length: 60 }).map((_, i) => String(i).padStart(2, '0'));
+
 export function ClientHoursTab() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -436,8 +439,10 @@ export function ClientHoursTab() {
                               setEditingShift(row);
                               setManualEmpId(row.empId);
                               setManualShiftDate(row.date);
-                              setManualStartTime(row.firstIn && row.firstIn !== '—' ? row.firstIn : '08:00');
-                              setManualEndTime(row.lastOut && row.lastOut !== '—' ? row.lastOut : '17:00');
+                              const [startH = '08', startM = '00'] = (row.firstIn && row.firstIn !== '—' ? row.firstIn : '08:00').split(':');
+                              const [endH = '17', endM = '00'] = (row.lastOut && row.lastOut !== '—' ? row.lastOut : '17:00').split(':');
+                              setManualStartTime(`${startH.padStart(2, '0')}:${startM.padStart(2, '0')}`);
+                              setManualEndTime(`${endH.padStart(2, '0')}:${endM.padStart(2, '0')}`);
                               setManualNotes(row.notes || '');
                               const isNight =
                                 row.firstIn &&
@@ -671,14 +676,11 @@ export function ClientHoursTab() {
                   }}
                   className="bg-transparent text-white text-xs font-mono font-bold px-1 py-1 focus:outline-none cursor-pointer flex-1 text-center"
                 >
-                  {Array.from({ length: 24 }).map((_, i) => {
-                    const val = String(i).padStart(2, '0');
-                    return (
-                      <option key={val} value={val} className="bg-slate-900 text-white font-mono">
-                        {val}
-                      </option>
-                    );
-                  })}
+                  {HOUR_OPTIONS.map((val) => (
+                    <option key={val} value={val} className="bg-slate-900 text-white font-mono">
+                      {val}
+                    </option>
+                  ))}
                 </select>
                 <span className="text-slate-500 font-bold">:</span>
                 <select
@@ -689,12 +691,32 @@ export function ClientHoursTab() {
                   }}
                   className="bg-transparent text-white text-xs font-mono font-bold px-1 py-1 focus:outline-none cursor-pointer flex-1 text-center"
                 >
-                  {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map((m) => (
+                  {MINUTE_OPTIONS.map((m) => (
                     <option key={m} value={m} className="bg-slate-900 text-white font-mono">
                       {m}
                     </option>
                   ))}
                 </select>
+              </div>
+              {/* Quick minute snap buttons */}
+              <div className="flex items-center justify-center gap-1 mt-1.5">
+                {['00', '15', '30', '45'].map((quickM) => (
+                  <button
+                    key={quickM}
+                    type="button"
+                    onClick={() => {
+                      const h = manualStartTime.split(':')[0] || '08';
+                      setManualStartTime(`${h}:${quickM}`);
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                      (manualStartTime.split(':')[1] || '00') === quickM
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
+                        : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    :{quickM}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -715,14 +737,11 @@ export function ClientHoursTab() {
                   }}
                   className="bg-transparent text-white text-xs font-mono font-bold px-1 py-1 focus:outline-none cursor-pointer flex-1 text-center"
                 >
-                  {Array.from({ length: 24 }).map((_, i) => {
-                    const val = String(i).padStart(2, '0');
-                    return (
-                      <option key={val} value={val} className="bg-slate-900 text-white font-mono">
-                        {val}
-                      </option>
-                    );
-                  })}
+                  {HOUR_OPTIONS.map((val) => (
+                    <option key={val} value={val} className="bg-slate-900 text-white font-mono">
+                      {val}
+                    </option>
+                  ))}
                 </select>
                 <span className="text-slate-500 font-bold">:</span>
                 <select
@@ -733,12 +752,32 @@ export function ClientHoursTab() {
                   }}
                   className="bg-transparent text-white text-xs font-mono font-bold px-1 py-1 focus:outline-none cursor-pointer flex-1 text-center"
                 >
-                  {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map((m) => (
+                  {MINUTE_OPTIONS.map((m) => (
                     <option key={m} value={m} className="bg-slate-900 text-white font-mono">
                       {m}
                     </option>
                   ))}
                 </select>
+              </div>
+              {/* Quick minute snap buttons */}
+              <div className="flex items-center justify-center gap-1 mt-1.5">
+                {['00', '15', '30', '45'].map((quickM) => (
+                  <button
+                    key={quickM}
+                    type="button"
+                    onClick={() => {
+                      const h = manualEndTime.split(':')[0] || '17';
+                      setManualEndTime(`${h}:${quickM}`);
+                    }}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                      (manualEndTime.split(':')[1] || '00') === quickM
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
+                        : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                    }`}
+                  >
+                    :{quickM}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
