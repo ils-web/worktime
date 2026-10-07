@@ -812,8 +812,9 @@ clientRouter.get('/reports/pdf', async (req: Request, res: Response) => {
       foremanId
     );
 
+    const lang = (req.query['lang'] as string) || 'he';
     const periodTitle = `${startDate.toISOString().slice(0, 10)} - ${endDate.toISOString().slice(0, 10)}`;
-    const pdfBytes = await generatePdfReport(rows, clientName, periodTitle, logoUrl);
+    const pdfBytes = await generatePdfReport(rows, clientName, periodTitle, logoUrl, lang);
     const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${startDate.toISOString().slice(0, 10)}.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');

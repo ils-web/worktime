@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 export function ClientHoursTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
@@ -104,10 +104,11 @@ export function ClientHoursTab() {
   };
 
   // Download PDF
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = async (customLang?: string) => {
     try {
+      const lang = customLang || 'he';
       const blob = await apiRequest<Blob>(
-        `/api/client/reports/pdf?startDate=${startDate}&endDate=${endDate}`
+        `/api/client/reports/pdf?startDate=${startDate}&endDate=${endDate}&lang=${lang}`
       );
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -245,11 +246,14 @@ export function ClientHoursTab() {
 
           <button
             type="button"
-            onClick={handleDownloadPdf}
+            onClick={() => handleDownloadPdf('he')}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-emerald-950"
           >
             <Download className="w-3.5 h-3.5" />
-            {t('admin.downloadPdf')}
+            <span>{t('admin.downloadPdf')}</span>
+            {i18n.language !== 'he' && (
+              <span className="text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded font-bold">עברית</span>
+            )}
           </button>
         </div>
       </div>

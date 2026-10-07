@@ -1,155 +1,548 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb, PDFFont, PDFPage } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import bidiFactory from 'bidi-js';
 import { ReportRow } from './csvReportService';
+import { getArialRegularBytes, getArialBoldBytes } from './fontAssets';
+
+const bidi = bidiFactory();
+
+const RTL_MIRROR_MAP: Record<string, string> = {
+  '(': ')',
+  ')': '(',
+  '[': ']',
+  ']': '[',
+  '{': '}',
+  '}': '{',
+  '<': '>',
+  '>': '<',
+};
 
 /**
- * Ensures text only contains characters supported by standard PDF fonts (WinAnsi).
- * Transliterates Cyrillic and replaces non-encodable characters to prevent WinAnsi encode crashes.
+ * Reorders Hebrew text to visual representation for PDF rendering without gibberish.
+ * Preserves numbers, Latin characters, and punctuation in their correct reading order.
+ */
+export function formatBidiText(text: string | null | undefined): string {
+  if (!text) return '';
+  const str = String(text).trim();
+  // Check if string contains Hebrew characters (U+0590 to U+05FF)
+  if (/[\u0590-\u05FF]/.test(str)) {
+    const embeddingLevels = bidi.getEmbeddingLevels(str);
+    const indices = bidi.getReorderedIndices(str, embeddingLevels);
+    return indices
+      .map((i) => {
+        const ch = str[i];
+        if (embeddingLevels[i] % 2 === 1 && RTL_MIRROR_MAP[ch]) {
+          return RTL_MIRROR_MAP[ch];
+        }
+        return ch;
+      })
+      .join('');
+  }
+  return str;
+}
+
+/**
+ * Backwards-compatible alias for formatBidiText
  */
 export function toPdfSafe(text: string): string {
-  if (!text) return '';
-  const ruMap: Record<string, string> = {
-    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'Zh',
-    'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
-    'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts',
-    'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
-    'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
-    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
-    'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-  };
+  return formatBidiText(text);
+}
 
-  return text
-    .split('')
-    .map((c) => {
-      if (ruMap[c] !== undefined) return ruMap[c];
-      const code = c.charCodeAt(0);
-      // WinAnsi supported range: 32 - 255
-      if (code >= 32 && code <= 255) return c;
-      return '?';
-    })
-    .join('');
+interface ColumnDef {
+  key: keyof ReportRow | 'index';
+  title: string;
+  width: number;
+  align?: 'left' | 'center' | 'right';
+  bold?: boolean;
+}
+
+interface LocaleStrings {
+  systemTitle: string;
+  reportTitle: string;
+  companyLabel: string;
+  periodLabel: string;
+  generatedLabel: string;
+  summaryGross: string;
+  summaryLunch: string;
+  summaryNet: string;
+  summaryNight: string;
+  summarySat: string;
+  summaryOvertime: string;
+  page: string;
+  of: string;
+  noData: string;
+  hoursUnit: string;
+  isRtl: boolean;
+  columns: ColumnDef[];
+}
+
+const LOCALES: Record<string, LocaleStrings> = {
+  he: {
+    systemTitle: 'TimeTracker SaaS',
+    reportTitle: 'דוח נוכחות ושעות עבודה',
+    companyLabel: 'חברה:',
+    periodLabel: 'תקופה:',
+    generatedLabel: 'הופק בתאריך:',
+    summaryGross: 'סה"כ ברוטו',
+    summaryLunch: 'ניכוי הפסקה',
+    summaryNet: 'סה"כ נטו',
+    summaryNight: 'לילה',
+    summarySat: 'שבת',
+    summaryOvertime: 'נוספות',
+    page: 'עמוד',
+    of: 'מתוך',
+    noData: 'אין נתונים לתקופה שנבחרה',
+    hoursUnit: 'שעות',
+    isRtl: true,
+    columns: [
+      { key: 'date', title: 'תאריך', width: 68, align: 'center' },
+      { key: 'name', title: 'שם עובד', width: 130, align: 'right' },
+      { key: 'firstIn', title: 'כניסה', width: 44, align: 'center' },
+      { key: 'lastOut', title: 'יציאה', width: 44, align: 'center' },
+      { key: 'grossHours', title: 'ברוטו', width: 48, align: 'center' },
+      { key: 'lunchDeducted', title: 'הפסקה', width: 48, align: 'center' },
+      { key: 'netHours', title: 'נטו', width: 48, align: 'center', bold: true },
+      { key: 'nightHours', title: 'לילה', width: 44, align: 'center' },
+      { key: 'saturdayHours', title: 'שבת', width: 44, align: 'center' },
+      { key: 'overtimeHours', title: 'נוספות', width: 48, align: 'center' },
+      { key: 'notes', title: 'הערות', width: 200, align: 'right' },
+    ],
+  },
+  ru: {
+    systemTitle: 'TimeTracker SaaS',
+    reportTitle: 'Табель учёта рабочего времени',
+    companyLabel: 'Компания:',
+    periodLabel: 'Периоד:',
+    generatedLabel: 'Сформирован:',
+    summaryGross: 'Всего брутто',
+    summaryLunch: 'Вычет обеда',
+    summaryNet: 'Итого нетто',
+    summaryNight: 'Ночные',
+    summarySat: 'Суббота',
+    summaryOvertime: 'Сверхурочные',
+    page: 'Стр.',
+    of: 'из',
+    noData: 'Нет записей за выбранный период',
+    hoursUnit: 'ч',
+    isRtl: false,
+    columns: [
+      { key: 'date', title: 'Дата', width: 68, align: 'center' },
+      { key: 'name', title: 'Сотрудник', width: 130, align: 'left' },
+      { key: 'firstIn', title: 'Вход', width: 44, align: 'center' },
+      { key: 'lastOut', title: 'Выход', width: 44, align: 'center' },
+      { key: 'grossHours', title: 'Брутто', width: 48, align: 'center' },
+      { key: 'lunchDeducted', title: 'Обед', width: 48, align: 'center' },
+      { key: 'netHours', title: 'Нетто', width: 48, align: 'center', bold: true },
+      { key: 'nightHours', title: 'Ночные', width: 44, align: 'center' },
+      { key: 'saturdayHours', title: 'Суббота', width: 44, align: 'center' },
+      { key: 'overtimeHours', title: 'Овертайм', width: 48, align: 'center' },
+      { key: 'notes', title: 'Заметки', width: 200, align: 'left' },
+    ],
+  },
+  en: {
+    systemTitle: 'TimeTracker SaaS',
+    reportTitle: 'Timesheet & Attendance Report',
+    companyLabel: 'Company:',
+    periodLabel: 'Period:',
+    generatedLabel: 'Generated:',
+    summaryGross: 'Gross Total',
+    summaryLunch: 'Lunch Deduct',
+    summaryNet: 'Net Total',
+    summaryNight: 'Night',
+    summarySat: 'Saturday',
+    summaryOvertime: 'Overtime',
+    page: 'Page',
+    of: 'of',
+    noData: 'No records found for the selected period',
+    hoursUnit: 'h',
+    isRtl: false,
+    columns: [
+      { key: 'date', title: 'Date', width: 68, align: 'center' },
+      { key: 'name', title: 'Employee', width: 130, align: 'left' },
+      { key: 'firstIn', title: 'In', width: 44, align: 'center' },
+      { key: 'lastOut', title: 'Out', width: 44, align: 'center' },
+      { key: 'grossHours', title: 'Gross', width: 48, align: 'center' },
+      { key: 'lunchDeducted', title: 'Lunch', width: 48, align: 'center' },
+      { key: 'netHours', title: 'Net', width: 48, align: 'center', bold: true },
+      { key: 'nightHours', title: 'Night', width: 44, align: 'center' },
+      { key: 'saturdayHours', title: 'Sat', width: 44, align: 'center' },
+      { key: 'overtimeHours', title: 'OT', width: 48, align: 'center' },
+      { key: 'notes', title: 'Notes', width: 200, align: 'left' },
+    ],
+  },
+};
+
+function truncateToWidth(
+  text: string,
+  maxWidth: number,
+  font: PDFFont,
+  fontSize: number,
+  isRtl: boolean
+): string {
+  const formatted = formatBidiText(text);
+  const textWidth = font.widthOfTextAtSize(formatted, fontSize);
+  if (textWidth <= maxWidth) return formatted;
+
+  let current = text;
+  while (current.length > 2) {
+    current = current.slice(0, -1);
+    const candidate = formatBidiText(current + '…');
+    if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+      return candidate;
+    }
+  }
+  return formatBidiText(current);
 }
 
 export async function generatePdfReport(
   rows: ReportRow[],
   clientName: string,
   periodTitle: string,
-  _logoUrl?: string | null
+  _logoUrl?: string | null,
+  lang: string = 'he'
 ): Promise<Uint8Array> {
+  const normLang = lang?.toLowerCase().startsWith('he')
+    ? 'he'
+    : lang?.toLowerCase().startsWith('ru')
+    ? 'ru'
+    : lang?.toLowerCase().startsWith('ar')
+    ? 'he' // Use Hebrew RTL layout for Israel Arabic/Hebrew conventions
+    : 'en';
+
+  const t = LOCALES[normLang] || LOCALES['he']!;
+  const isRtl = t.isRtl;
+
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  pdfDoc.registerFontkit(fontkit);
 
-  let page = pdfDoc.addPage([595.28, 841.89]); // A4 portrait
-  const { width, height } = page.getSize();
+  const font = await pdfDoc.embedFont(getArialRegularBytes());
+  const fontBold = await pdfDoc.embedFont(getArialBoldBytes());
 
-  let y = height - 50;
+  // A4 Landscape format
+  const pageWidth = 841.89;
+  const pageHeight = 595.28;
+  const startX = 35;
+  const totalTableWidth = t.columns.reduce((sum, col) => sum + col.width, 0); // ~772
 
-  // Header Banner
+  // Summary statistics
+  const totalGross = rows.reduce((acc, r) => acc + (r.grossHours || 0), 0);
+  const totalLunch = rows.reduce((acc, r) => acc + (r.lunchDeducted || 0), 0);
+  const totalNet = rows.reduce((acc, r) => acc + (r.netHours || 0), 0);
+  const totalNight = rows.reduce((acc, r) => acc + (r.nightHours || 0), 0);
+  const totalSat = rows.reduce((acc, r) => acc + (r.saturdayHours || 0), 0);
+  const totalOt = rows.reduce((acc, r) => acc + (r.overtimeHours || 0), 0);
+
+  // Compute calculated X coordinates for each column based on RTL / LTR
+  interface RenderCol {
+    def: ColumnDef;
+    x: number;
+    width: number;
+  }
+
+  const renderCols: RenderCol[] = [];
+  if (isRtl) {
+    let currentRight = startX + totalTableWidth;
+    for (const col of t.columns) {
+      const colX = currentRight - col.width;
+      renderCols.push({ def: col, x: colX, width: col.width });
+      currentRight -= col.width;
+    }
+  } else {
+    let currentLeft = startX;
+    for (const col of t.columns) {
+      renderCols.push({ def: col, x: currentLeft, width: col.width });
+      currentLeft += col.width;
+    }
+  }
+
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let currentPageIndex = 1;
+  const pages: PDFPage[] = [page];
+
+  let y = pageHeight - 45;
+
+  // 1. Header Banner
   page.drawRectangle({
-    x: 40,
-    y: y - 10,
-    width: width - 80,
-    height: 40,
+    x: startX,
+    y: y - 8,
+    width: totalTableWidth,
+    height: 48,
     color: rgb(0.06, 0.09, 0.16),
   });
 
-  page.drawText('TimeTracker SaaS', {
-    x: 55,
-    y: y + 8,
-    size: 16,
+  // Logo / System title on left
+  page.drawText(t.systemTitle, {
+    x: startX + 16,
+    y: y + 16,
+    size: 15,
     font: fontBold,
     color: rgb(0.13, 0.77, 0.37), // emerald
   });
 
-  page.drawText(`Company: ${toPdfSafe(clientName)}`, {
-    x: 250,
-    y: y + 10,
+  page.drawText(formatBidiText(t.reportTitle), {
+    x: startX + 16,
+    y: y + 2,
+    size: 9.5,
+    font,
+    color: rgb(0.7, 0.75, 0.85),
+  });
+
+  // Company and Period info on right
+  const headerRightText1 = formatBidiText(`${t.companyLabel} ${clientName}`);
+  const headerRightText2 = formatBidiText(`${t.periodLabel} ${periodTitle}`);
+
+  const rightW1 = fontBold.widthOfTextAtSize(headerRightText1, 11);
+  const rightW2 = font.widthOfTextAtSize(headerRightText2, 9);
+
+  page.drawText(headerRightText1, {
+    x: startX + totalTableWidth - rightW1 - 16,
+    y: y + 16,
     size: 11,
     font: fontBold,
     color: rgb(1, 1, 1),
   });
 
-  page.drawText(`Period: ${toPdfSafe(periodTitle)}`, {
-    x: 250,
-    y: y - 2,
+  page.drawText(headerRightText2, {
+    x: startX + totalTableWidth - rightW2 - 16,
+    y: y + 2,
     size: 9,
     font,
-    color: rgb(0.8, 0.8, 0.8),
+    color: rgb(0.75, 0.8, 0.9),
   });
 
-  y -= 45;
+  y -= 48;
 
-  // Summary statistics
-  const totalNet = rows.reduce((acc, r) => acc + r.netHours, 0);
-  const totalNight = rows.reduce((acc, r) => acc + r.nightHours, 0);
-  const totalSat = rows.reduce((acc, r) => acc + r.saturdayHours, 0);
-  const totalOt = rows.reduce((acc, r) => acc + r.overtimeHours, 0);
-
-  page.drawText(
-    `Total Net Hours: ${totalNet.toFixed(1)}h | Night: ${totalNight.toFixed(1)}h | Sat: ${totalSat.toFixed(1)}h | Overtime: ${totalOt.toFixed(1)}h`,
-    {
-      x: 40,
-      y,
-      size: 9,
-      font: fontBold,
-      color: rgb(0.2, 0.2, 0.2),
-    }
-  );
-
-  y -= 20;
-
-  // Table header
-  page.drawRectangle({
-    x: 40,
-    y: y - 5,
-    width: width - 80,
-    height: 18,
-    color: rgb(0.92, 0.94, 0.96),
-  });
-
-  const columns = [
-    { title: 'Date', x: 45 },
-    { title: 'Employee', x: 105 },
-    { title: 'In', x: 220 },
-    { title: 'Out', x: 260 },
-    { title: 'Net (h)', x: 300 },
-    { title: 'Night', x: 345 },
-    { title: 'Sat', x: 385 },
-    { title: 'OT', x: 420 },
-    { title: 'Notes', x: 450 },
+  // 2. Summary KPI Metric Boxes (6 key metrics including Gross, Lunch, Net)
+  const summaryBoxes = [
+    { label: t.summaryGross, value: `${totalGross.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.95, 0.96, 0.98), textCol: rgb(0.2, 0.25, 0.35) },
+    { label: t.summaryLunch, value: `-${totalLunch.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.99, 0.95, 0.95), textCol: rgb(0.85, 0.25, 0.25) },
+    { label: t.summaryNet, value: `${totalNet.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.93, 0.98, 0.95), textCol: rgb(0.06, 0.55, 0.28), isKey: true },
+    { label: t.summaryNight, value: `${totalNight.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.95, 0.96, 0.98), textCol: rgb(0.3, 0.35, 0.45) },
+    { label: t.summarySat, value: `${totalSat.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.95, 0.96, 0.98), textCol: rgb(0.3, 0.35, 0.45) },
+    { label: t.summaryOvertime, value: `${totalOt.toFixed(1)} ${t.hoursUnit}`, bg: rgb(0.99, 0.97, 0.93), textCol: rgb(0.8, 0.5, 0.1) },
   ];
 
-  for (const col of columns) {
-    page.drawText(col.title, {
-      x: col.x,
-      y,
-      size: 8,
+  const boxGap = 8;
+  const boxWidth = (totalTableWidth - (summaryBoxes.length - 1) * boxGap) / summaryBoxes.length;
+  const boxHeight = 32;
+
+  // Render summary boxes (RTL vs LTR ordered)
+  const orderedBoxes = isRtl ? [...summaryBoxes] : [...summaryBoxes];
+
+  for (let bi = 0; bi < orderedBoxes.length; bi++) {
+    const box = orderedBoxes[bi]!;
+    const bx = isRtl
+      ? startX + totalTableWidth - (bi + 1) * boxWidth - bi * boxGap
+      : startX + bi * (boxWidth + boxGap);
+
+    // Box background
+    page.drawRectangle({
+      x: bx,
+      y: y - boxHeight + 8,
+      width: boxWidth,
+      height: boxHeight,
+      color: box.bg,
+      borderColor: box.isKey ? rgb(0.2, 0.7, 0.4) : rgb(0.88, 0.9, 0.94),
+      borderWidth: box.isKey ? 1.2 : 0.6,
+    });
+
+    const valStr = formatBidiText(box.value);
+    const lblStr = formatBidiText(box.label);
+
+    const valW = fontBold.widthOfTextAtSize(valStr, 9.5);
+    const lblW = font.widthOfTextAtSize(lblStr, 7.5);
+
+    page.drawText(lblStr, {
+      x: bx + (boxWidth - lblW) / 2,
+      y: y + 10,
+      size: 7.5,
+      font,
+      color: rgb(0.45, 0.5, 0.6),
+    });
+
+    page.drawText(valStr, {
+      x: bx + (boxWidth - valW) / 2,
+      y: y - 2,
+      size: 9.5,
       font: fontBold,
-      color: rgb(0.1, 0.1, 0.1),
+      color: box.textCol,
     });
   }
 
-  y -= 15;
+  y -= boxHeight + 14;
 
-  // Rows
-  for (const r of rows) {
-    if (y < 45) {
-      page = pdfDoc.addPage([595.28, 841.89]);
-      y = height - 50;
+  // Helper to draw Table Header Row
+  const drawTableHeader = (targetPage: PDFPage, currentY: number) => {
+    targetPage.drawRectangle({
+      x: startX,
+      y: currentY - 5,
+      width: totalTableWidth,
+      height: 20,
+      color: rgb(0.12, 0.16, 0.24), // dark sleek header
+    });
+
+    for (const rCol of renderCols) {
+      const titleStr = formatBidiText(rCol.def.title);
+      const titleW = fontBold.widthOfTextAtSize(titleStr, 8);
+      let textX: number;
+      if (rCol.def.align === 'center') {
+        textX = rCol.x + (rCol.width - titleW) / 2;
+      } else if (rCol.def.align === 'right' || isRtl) {
+        textX = rCol.x + rCol.width - 6 - titleW;
+      } else {
+        textX = rCol.x + 6;
+      }
+
+      targetPage.drawText(titleStr, {
+        x: textX,
+        y: currentY + 1,
+        size: 8,
+        font: fontBold,
+        color: rgb(0.95, 0.97, 1.0),
+      });
+    }
+  };
+
+  // Draw first table header
+  drawTableHeader(page, y);
+  y -= 18;
+
+  // If no rows
+  if (rows.length === 0) {
+    const noDataStr = formatBidiText(t.noData);
+    const ndW = font.widthOfTextAtSize(noDataStr, 10);
+    page.drawText(noDataStr, {
+      x: startX + (totalTableWidth - ndW) / 2,
+      y: y - 25,
+      size: 10,
+      font,
+      color: rgb(0.5, 0.55, 0.65),
+    });
+  }
+
+  const rowHeight = 16.5;
+
+  // 3. Render Table Rows
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+
+    // Pagination check: bottom margin is 35pt
+    if (y < 42) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      currentPageIndex++;
+      pages.push(page);
+      y = pageHeight - 45;
+      drawTableHeader(page, y);
+      y -= 18;
     }
 
-    page.drawText(toPdfSafe(r.date), { x: 45, y, size: 7.5, font });
-    page.drawText(toPdfSafe(r.name).slice(0, 20), { x: 105, y, size: 7.5, font });
-    page.drawText(toPdfSafe(r.firstIn), { x: 220, y, size: 7.5, font });
-    page.drawText(toPdfSafe(r.lastOut), { x: 260, y, size: 7.5, font });
-    page.drawText(r.netHours.toFixed(2), { x: 300, y, size: 7.5, font: fontBold });
-    page.drawText(r.nightHours.toFixed(2), { x: 345, y, size: 7.5, font });
-    page.drawText(r.saturdayHours.toFixed(2), { x: 385, y, size: 7.5, font });
-    page.drawText(r.overtimeHours.toFixed(2), { x: 420, y, size: 7.5, font });
-    page.drawText(toPdfSafe(r.notes).slice(0, 22), { x: 450, y, size: 7, font });
+    const isEven = i % 2 === 0;
 
-    y -= 14;
+    // Row background (alternating zebra stripes)
+    page.drawRectangle({
+      x: startX,
+      y: y - 4,
+      width: totalTableWidth,
+      height: rowHeight,
+      color: isEven ? rgb(0.98, 0.99, 1.0) : rgb(1, 1, 1),
+      borderColor: rgb(0.9, 0.92, 0.95),
+      borderWidth: 0.4,
+    });
+
+    // Draw row cells
+    for (const rCol of renderCols) {
+      let rawVal = '';
+      let isBold = false;
+      let cellColor = rgb(0.15, 0.18, 0.25);
+
+      switch (rCol.def.key) {
+        case 'date':
+          rawVal = r.date;
+          break;
+        case 'name':
+          rawVal = r.name;
+          break;
+        case 'firstIn':
+          rawVal = r.firstIn || '—';
+          break;
+        case 'lastOut':
+          rawVal = r.lastOut || '—';
+          break;
+        case 'grossHours':
+          rawVal = r.grossHours > 0 ? r.grossHours.toFixed(2) : '0.00';
+          break;
+        case 'lunchDeducted':
+          rawVal = r.lunchDeducted > 0 ? r.lunchDeducted.toFixed(2) : '0.00';
+          if (r.lunchDeducted > 0) cellColor = rgb(0.7, 0.2, 0.2); // subtle reddish for lunch deduction
+          break;
+        case 'netHours':
+          rawVal = r.netHours > 0 ? r.netHours.toFixed(2) : '0.00';
+          isBold = true;
+          cellColor = rgb(0.06, 0.55, 0.28); // emerald bold for Net
+          break;
+        case 'nightHours':
+          rawVal = r.nightHours > 0 ? r.nightHours.toFixed(2) : '0.00';
+          if (r.nightHours > 0) cellColor = rgb(0.2, 0.35, 0.65);
+          break;
+        case 'saturdayHours':
+          rawVal = r.saturdayHours > 0 ? r.saturdayHours.toFixed(2) : '0.00';
+          if (r.saturdayHours > 0) cellColor = rgb(0.55, 0.2, 0.65);
+          break;
+        case 'overtimeHours':
+          rawVal = r.overtimeHours > 0 ? r.overtimeHours.toFixed(2) : '0.00';
+          if (r.overtimeHours > 0) cellColor = rgb(0.75, 0.45, 0.05);
+          break;
+        case 'notes':
+          rawVal = r.notes || '';
+          cellColor = rgb(0.35, 0.4, 0.48);
+          break;
+        default:
+          rawVal = '';
+      }
+
+      const activeFont = isBold ? fontBold : font;
+      const fontSize = 7.5;
+      const maxW = rCol.width - 8;
+      const cellText = truncateToWidth(rawVal, maxW, activeFont, fontSize, isRtl);
+      const textW = activeFont.widthOfTextAtSize(cellText, fontSize);
+
+      let textX: number;
+      if (rCol.def.align === 'center') {
+        textX = rCol.x + (rCol.width - textW) / 2;
+      } else if (rCol.def.align === 'right' || isRtl) {
+        textX = rCol.x + rCol.width - 5 - textW;
+      } else {
+        textX = rCol.x + 5;
+      }
+
+      page.drawText(cellText, {
+        x: textX,
+        y: y + 1.5,
+        size: fontSize,
+        font: activeFont,
+        color: cellColor,
+      });
+    }
+
+    y -= rowHeight;
+  }
+
+  // 4. Page Footers (Page X of Y)
+  const totalPages = pages.length;
+  for (let pIdx = 0; pIdx < totalPages; pIdx++) {
+    const curP = pages[pIdx]!;
+    const footerText = formatBidiText(
+      `${t.page} ${pIdx + 1} ${t.of} ${totalPages} | ${t.systemTitle}`
+    );
+    const fW = font.widthOfTextAtSize(footerText, 7.5);
+
+    curP.drawText(footerText, {
+      x: startX + (totalTableWidth - fW) / 2,
+      y: 18,
+      size: 7.5,
+      font,
+      color: rgb(0.55, 0.6, 0.7),
+    });
   }
 
   return await pdfDoc.save();
