@@ -940,6 +940,9 @@ async function computeClientReportRows(
       const lastOutParts = getJerusalemParts(daySessions[daySessions.length - 1]!.clockOut);
       const hasManual = daySessions.some((s) => s.isManual);
       const allLogIds = daySessions.flatMap((s) => s.allLogIds);
+      const shiftsSummary = daySessions.length > 1
+        ? daySessions.map((s) => `${getJerusalemParts(s.clockIn).timeStr}-${getJerusalemParts(s.clockOut).timeStr}`).join(', ')
+        : undefined;
 
       reportRows.push({
         empId: emp.empId,
@@ -957,6 +960,8 @@ async function computeClientReportRows(
         notes: notesByDate[dateStr] || '',
         isManual: hasManual,
         logIds: allLogIds,
+        shiftsSummary,
+        sessionsCount: daySessions.length,
       });
     }
   }

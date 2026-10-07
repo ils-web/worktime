@@ -98974,6 +98974,7 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
       const lastOutParts = getJerusalemParts(daySessions[daySessions.length - 1].clockOut);
       const hasManual = daySessions.some((s) => s.isManual);
       const allLogIds = daySessions.flatMap((s) => s.allLogIds);
+      const shiftsSummary = daySessions.length > 1 ? daySessions.map((s) => `${getJerusalemParts(s.clockIn).timeStr}-${getJerusalemParts(s.clockOut).timeStr}`).join(", ") : void 0;
       reportRows.push({
         empId: emp.empId,
         name: emp.name,
@@ -98989,7 +98990,9 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
         overtimeHours: dailyCalc.overtimeHours,
         notes: notesByDate[dateStr] || "",
         isManual: hasManual,
-        logIds: allLogIds
+        logIds: allLogIds,
+        shiftsSummary,
+        sessionsCount: daySessions.length
       });
     }
   }
@@ -99327,10 +99330,20 @@ workerRouter.get("/profile/:empId", async (req, res) => {
     const effectiveShifts = employee.shifts || employee.client.defaultShifts;
     if (employee.autoCloseShift && isOnShift && lastLog) {
       const inParts = getJerusalemParts(lastLog.dateTime);
-      const daySchedule = employee.schedules?.find((s) => s.dayOfWeek === inParts.dayOfWeek);
-      const shiftType = daySchedule?.shiftType && daySchedule.shiftType !== "off" ? daySchedule.shiftType : "morning";
-      scheduledShiftType = shiftType;
-      const shiftWindow = effectiveShifts?.[shiftType] || { start: "08:00", end: "17:00" };
+      const rawShiftType = daySchedule?.shiftType && daySchedule.shiftType !== "off" ? daySchedule.shiftType : "morning";
+      let resolvedShiftType = rawShiftType;
+      const inMinutes = inParts.hour * 60 + inParts.minute;
+      if (rawShiftType === "morning_evening") {
+        resolvedShiftType = inMinutes >= 14 * 60 ? "evening" : "morning";
+      } else if (rawShiftType === "morning_night") {
+        resolvedShiftType = inMinutes >= 20 * 60 || inMinutes < 5 * 60 ? "night" : "morning";
+      } else if (rawShiftType === "evening_night") {
+        resolvedShiftType = inMinutes >= 21 * 60 || inMinutes < 5 * 60 ? "night" : "evening";
+      } else if (rawShiftType === "double") {
+        resolvedShiftType = "evening";
+      }
+      scheduledShiftType = resolvedShiftType;
+      const shiftWindow = effectiveShifts?.[resolvedShiftType] || { start: "08:00", end: "17:00" };
       const scheduledEndDate = getScheduledShiftEndTime(lastLog.dateTime, shiftWindow.end);
       scheduledEndTimeStr = scheduledEndDate.toISOString();
       const now = /* @__PURE__ */ new Date();

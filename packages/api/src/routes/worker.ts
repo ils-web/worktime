@@ -65,10 +65,23 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
 
     if (employee.autoCloseShift && isOnShift && lastLog) {
       const inParts = getJerusalemParts(lastLog.dateTime);
-      const daySchedule = employee.schedules?.find((s) => s.dayOfWeek === inParts.dayOfWeek);
-      const shiftType = (daySchedule?.shiftType && daySchedule.shiftType !== 'off') ? daySchedule.shiftType : 'morning';
-      scheduledShiftType = shiftType;
-      const shiftWindow = effectiveShifts?.[shiftType as keyof ClientShiftsConfig] || { start: '08:00', end: '17:00' };
+      const rawShiftType = (daySchedule?.shiftType && daySchedule.shiftType !== 'off') ? daySchedule.shiftType : 'morning';
+      let resolvedShiftType = rawShiftType;
+
+      // When scheduled with two shifts in a day, determine which shift window applies from the clock-in time:
+      const inMinutes = inParts.hour * 60 + inParts.minute;
+      if (rawShiftType === 'morning_evening') {
+        resolvedShiftType = inMinutes >= 14 * 60 ? 'evening' : 'morning';
+      } else if (rawShiftType === 'morning_night') {
+        resolvedShiftType = (inMinutes >= 20 * 60 || inMinutes < 5 * 60) ? 'night' : 'morning';
+      } else if (rawShiftType === 'evening_night') {
+        resolvedShiftType = (inMinutes >= 21 * 60 || inMinutes < 5 * 60) ? 'night' : 'evening';
+      } else if (rawShiftType === 'double') {
+        resolvedShiftType = 'evening';
+      }
+
+      scheduledShiftType = resolvedShiftType;
+      const shiftWindow = effectiveShifts?.[resolvedShiftType as keyof ClientShiftsConfig] || { start: '08:00', end: '17:00' };
       const scheduledEndDate = getScheduledShiftEndTime(lastLog.dateTime, shiftWindow.end);
       scheduledEndTimeStr = scheduledEndDate.toISOString();
 

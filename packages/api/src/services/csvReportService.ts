@@ -14,6 +14,8 @@ export interface ReportRow {
   isManual?: boolean;
   logIds?: number[];
   dayOfWeek?: string;
+  shiftsSummary?: string;
+  sessionsCount?: number;
 }
 
 import { formatIsoToDisplayDate, getDayOfWeek } from '@timetracker/shared';

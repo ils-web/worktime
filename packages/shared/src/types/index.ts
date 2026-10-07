@@ -9,7 +9,15 @@ export type LogAction =
   | 'AUTO_RESUME' 
   | 'AUTO_EXIT';
 
-export type ShiftType = 'morning' | 'evening' | 'night';
+export type ShiftType = 
+  | 'morning' 
+  | 'evening' 
+  | 'night' 
+  | 'morning_evening' 
+  | 'morning_night' 
+  | 'evening_night' 
+  | 'double' 
+  | 'off';
 
 export interface ShiftTimeWindow {
   start: string; // HH:mm format, e.g. "07:00"

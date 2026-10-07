@@ -9,6 +9,7 @@ describe('TimeTracker API Endpoints', () => {
   const testPassword = 'Password123!';
   let clientCookie: string = '';
   const testEmpId = `EMP_${Date.now()}`;
+  let testEmployeeDbId: number = 0;
 
   beforeAll(async () => {
     process.env['JWT_SECRET'] = 'test-secret-key-12345678901234567890';
@@ -107,6 +108,7 @@ describe('TimeTracker API Endpoints', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.employee.empId).toBe(testEmpId);
+    testEmployeeDbId = res.body.employee.id;
   });
 
   it('7. Worker profile is accessible by empId without password', async () => {
@@ -306,7 +308,34 @@ describe('TimeTracker API Endpoints', () => {
     expect(syncRes.body.logs[1].action).toBe('CLOCK_OUT');
   });
 
-  it('14. Owner can delete client and cleanup test clients', async () => {
+  it('14. Client can assign two shifts per day (morning_evening) in schedule matrix', async () => {
+    const schedRes = await request(app)
+      .post('/api/client/schedule')
+      .set('Cookie', clientCookie)
+      .send({
+        employeeId: testEmployeeDbId,
+        dayOfWeek: 1, // Monday
+        shiftType: 'morning_evening',
+      });
+
+    expect(schedRes.status).toBe(200);
+    expect(schedRes.body.success).toBe(true);
+    expect(schedRes.body.schedule.shiftType).toBe('morning_evening');
+
+    const getRes = await request(app)
+      .get('/api/client/schedule')
+      .set('Cookie', clientCookie);
+
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.success).toBe(true);
+    const found = getRes.body.schedules.find(
+      (s: any) => s.employeeId === testEmployeeDbId && s.dayOfWeek === 1
+    );
+    expect(found).toBeDefined();
+    expect(found.shiftType).toBe('morning_evening');
+  });
+
+  it('15. Owner can delete client and cleanup test clients', async () => {
     const ownerToken = signSessionToken({ id: 'owner', role: 'owner', name: 'Master Owner' });
     const ownerCookie = `session=${ownerToken}`;
 

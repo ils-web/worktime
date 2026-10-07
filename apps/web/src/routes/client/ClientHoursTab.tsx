@@ -410,7 +410,14 @@ export function ClientHoursTab() {
                         {row.name}
                         <span className="block text-[11px] font-mono text-slate-400">{row.empId}</span>
                       </td>
-                      <td className="p-3.5 text-xs text-slate-300">{row.firstIn}</td>
+                      <td className="p-3.5 text-xs text-slate-300">
+                        {row.firstIn}
+                        {row.shiftsSummary && (
+                          <span className="block text-[10px] text-amber-400 font-mono font-medium mt-0.5 whitespace-nowrap">
+                            ⚡ {row.shiftsSummary}
+                          </span>
+                        )}
+                      </td>
                       <td className="p-3.5 text-xs text-slate-300">{row.lastOut}</td>
                       <td className="p-3.5 text-xs text-slate-400">{row.grossHours?.toFixed(2)}</td>
                       <td className="p-3.5 text-xs text-slate-500">
