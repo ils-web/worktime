@@ -425,7 +425,14 @@ clientRouter.get('/settings', async (req: Request, res: Response) => {
       },
     });
 
-    res.json({ success: true, settings: client });
+    res.json({
+      success: true,
+      settings: client,
+      name: client?.name,
+      logoUrl: client?.logoUrl,
+      defaultShifts: client?.defaultShifts,
+      autoDeductLunch: client?.autoDeductLunch,
+    });
   } catch (err) {
     console.error('Get settings error:', err);
     res.status(500).json({ error: 'Ошибка получения настроек' });

@@ -53,9 +53,18 @@ export function ClientScheduleTab() {
     queryKey: ['client-settings'],
     queryFn: () =>
       apiRequest<{
-        name: string;
-        logoUrl: string | null;
-        defaultShifts: {
+        settings?: {
+          name: string;
+          logoUrl: string | null;
+          defaultShifts: {
+            morning: { start: string; end: string };
+            evening: { start: string; end: string };
+            night: { start: string; end: string };
+          };
+        };
+        name?: string;
+        logoUrl?: string | null;
+        defaultShifts?: {
           morning: { start: string; end: string };
           evening: { start: string; end: string };
           night: { start: string; end: string };
@@ -63,17 +72,37 @@ export function ClientScheduleTab() {
       }>('/api/client/settings'),
   });
 
-  const shiftsConfig = useMemo(() => {
-    return (
-      settingsData?.defaultShifts || {
-        morning: { start: '08:00', end: '17:00' },
-        evening: { start: '15:00', end: '23:00' },
-        night: { start: '22:00', end: '06:00' },
-      }
-    );
+  const clientSettings = useMemo(() => {
+    return (settingsData as any)?.settings || settingsData;
   }, [settingsData]);
 
-  const companyName = settingsData?.name || 'Company';
+  const shiftsConfig = useMemo(() => {
+    const raw = clientSettings?.defaultShifts;
+    if (!raw) {
+      return {
+        morning: { start: '07:00', end: '16:00' },
+        evening: { start: '16:00', end: '00:00' },
+        night: { start: '22:00', end: '06:00' },
+      };
+    }
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return {
+      morning: {
+        start: parsed.morning?.start || '07:00',
+        end: parsed.morning?.end || '16:00',
+      },
+      evening: {
+        start: parsed.evening?.start || '16:00',
+        end: parsed.evening?.end || '00:00',
+      },
+      night: {
+        start: parsed.night?.start || '22:00',
+        end: parsed.night?.end || '06:00',
+      },
+    };
+  }, [clientSettings]);
+
+  const companyName = clientSettings?.name || 'Company';
 
   // Calculate Sunday of the selected week
   const weekSunday = useMemo(() => {
@@ -127,9 +156,9 @@ export function ClientScheduleTab() {
 
   // Helper: Shift Details
   const getShiftDetails = (shiftKey: string): ShiftMeta => {
-    const morningHours = `${shiftsConfig.morning.start}—${shiftsConfig.morning.end}`;
-    const eveningHours = `${shiftsConfig.evening.start}—${shiftsConfig.evening.end}`;
-    const nightHours = `${shiftsConfig.night.start}—${shiftsConfig.night.end}`;
+    const morningHours = `${shiftsConfig.morning.start}–${shiftsConfig.morning.end}`;
+    const eveningHours = `${shiftsConfig.evening.start}–${shiftsConfig.evening.end}`;
+    const nightHours = `${shiftsConfig.night.start}–${shiftsConfig.night.end}`;
 
     switch (shiftKey) {
       case 'evening':
@@ -676,13 +705,13 @@ export function ClientScheduleTab() {
                             className={`w-full px-2 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${details.badgeClass}`}
                           >
                             <option value="morning" className="bg-slate-900 text-white">
-                              🌅 {t('admin.shiftMorning')}
+                              🌅 {t('admin.shiftMorning')} ({shiftsConfig.morning.start}–{shiftsConfig.morning.end})
                             </option>
                             <option value="evening" className="bg-slate-900 text-white">
-                              🌆 {t('admin.shiftEvening')}
+                              🌆 {t('admin.shiftEvening')} ({shiftsConfig.evening.start}–{shiftsConfig.evening.end})
                             </option>
                             <option value="night" className="bg-slate-900 text-white">
-                              🌙 {t('admin.shiftNight')}
+                              🌙 {t('admin.shiftNight')} ({shiftsConfig.night.start}–{shiftsConfig.night.end})
                             </option>
                             <option value="morning_evening" className="bg-slate-900 text-amber-300 font-bold">
                               🌅+🌆 {t('admin.shiftMorningEvening')}

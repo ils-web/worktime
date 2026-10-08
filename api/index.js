@@ -98547,7 +98547,14 @@ clientRouter.get("/settings", async (req, res) => {
         tariffMode: true
       }
     });
-    res.json({ success: true, settings: client });
+    res.json({
+      success: true,
+      settings: client,
+      name: client?.name,
+      logoUrl: client?.logoUrl,
+      defaultShifts: client?.defaultShifts,
+      autoDeductLunch: client?.autoDeductLunch
+    });
   } catch (err) {
     console.error("Get settings error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A" });
