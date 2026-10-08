@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -67,6 +67,7 @@ interface WorkerStatus {
   scheduledEndTime?: string | null;
   scheduledShiftType?: string | null;
   autoClosedDueToShiftEnd?: boolean;
+  autoClosedDueToStrictGps?: boolean;
 }
 
 interface MonthlyReportSummary {
@@ -144,6 +145,7 @@ export function WorkerAppPage() {
   const [showShiftCompleteModal, setShowShiftCompleteModal] = useState(false);
   const [scheduledEndTime, setScheduledEndTime] = useState<string | null>(null);
   const [showAutoCloseAlert, setShowAutoCloseAlert] = useState(false);
+  const [autoCloseReason, setAutoCloseReason] = useState<'SCHEDULE' | 'STRICT_GPS' | null>(null);
   const [completedShiftSummary, setCompletedShiftSummary] = useState<{
     hours: number;
     minutes: number;
@@ -257,7 +259,11 @@ export function WorkerAppPage() {
       setProfile(res.employee);
       setStatus(res.status);
       setScheduledEndTime(res.status.scheduledEndTime ?? null);
-      if (res.status.autoClosedDueToShiftEnd) {
+      if (res.status.autoClosedDueToStrictGps) {
+        setAutoCloseReason('STRICT_GPS');
+        setShowAutoCloseAlert(true);
+      } else if (res.status.autoClosedDueToShiftEnd) {
+        setAutoCloseReason('SCHEDULE');
         setShowAutoCloseAlert(true);
       }
     } catch (err: any) {
@@ -436,7 +442,11 @@ export function WorkerAppPage() {
   }, [status.isOnShift, profile?.autoCloseShift, scheduledEndTime, isSubmittingAction]);
 
   // 7. Clock In / Out Action Handlers
-  const handleClockAction = async (action: 'CLOCK_IN' | 'CLOCK_OUT' | 'AUTO_EXIT') => {
+  const handleClockAction = async (
+    action: 'CLOCK_IN' | 'CLOCK_OUT' | 'AUTO_EXIT',
+    customNote?: string,
+    reason?: 'SCHEDULE' | 'STRICT_GPS'
+  ) => {
     if (!empId || isSubmittingAction) return;
 
     if (navigator.vibrate) {
@@ -445,6 +455,10 @@ export function WorkerAppPage() {
 
     setIsSubmittingAction(true);
     setOfflineNotice(null);
+
+    if (action === 'AUTO_EXIT') {
+      setAutoCloseReason(reason || 'SCHEDULE');
+    }
 
     // If CLOCK_IN, check geofence boundary locally
     if (action === 'CLOCK_IN' && profile && !profile.isMobile) {
@@ -474,6 +488,7 @@ export function WorkerAppPage() {
         lat,
         lng,
         dateTime: actionTime,
+        note: customNote,
       });
 
       setStatus({
@@ -505,6 +520,7 @@ export function WorkerAppPage() {
         action,
         lat,
         lng,
+        note: customNote,
       });
 
       if (res.success) {
@@ -541,6 +557,7 @@ export function WorkerAppPage() {
           lat,
           lng,
           dateTime: actionTime,
+          note: customNote,
         });
 
         setStatus({
@@ -568,6 +585,76 @@ export function WorkerAppPage() {
       setIsSubmittingAction(false);
     }
   };
+
+  // Strict GPS out-of-bounds auto-exit monitor
+  const outOfZoneCountRef = useRef(0);
+
+  useEffect(() => {
+    if (!profile?.strictGps || !status.isOnShift || profile.isMobile || !geofenceEval || isSubmittingAction) {
+      outOfZoneCountRef.current = 0;
+      return;
+    }
+
+    if (!geofenceEval.isInside) {
+      const accuracy = geoResult?.accuracy || 0;
+      const isDefinitiveExit = geofenceEval.distanceMeters > geofenceEval.allowedRadius + Math.max(40, accuracy);
+      const isReliableAccuracy = accuracy <= 150;
+
+      if (isDefinitiveExit || isReliableAccuracy) {
+        outOfZoneCountRef.current += 1;
+        if (isDefinitiveExit || outOfZoneCountRef.current >= 2) {
+          outOfZoneCountRef.current = 0;
+          const targetSite = geofenceEval.targetName ? ` "${geofenceEval.targetName}"` : '';
+          const dist = Math.round(geofenceEval.distanceMeters);
+          const note = t('worker.strictExitNote', {
+            site: targetSite,
+            dist,
+          }) || `Покинул объект${targetSite} (строгий GPS, ${dist}м)`;
+
+          handleClockAction('AUTO_EXIT', note, 'STRICT_GPS');
+        }
+      }
+    } else {
+      outOfZoneCountRef.current = 0;
+    }
+  }, [
+    profile?.strictGps,
+    profile?.isMobile,
+    status.isOnShift,
+    geofenceEval,
+    geoResult?.accuracy,
+    isSubmittingAction,
+    t,
+  ]);
+
+  // Re-check profile & location on tab focus or screen unlock
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchProfile();
+        refreshLocation();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [fetchProfile, refreshLocation]);
+
+  // Periodic active polling for strict GPS workers on shift
+  useEffect(() => {
+    if (!profile?.strictGps || !status.isOnShift || profile.isMobile) return;
+
+    const interval = setInterval(() => {
+      if (!isSubmittingAction && !isLocating) {
+        refreshLocation();
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [profile?.strictGps, status.isOnShift, profile?.isMobile, isSubmittingAction, isLocating, refreshLocation]);
 
   // 8. Notes & Expenses Handler
   const handleSaveNote = async (e: React.FormEvent) => {
@@ -1319,23 +1406,45 @@ export function WorkerAppPage() {
       <Modal
         isOpen={showAutoCloseAlert}
         onClose={() => setShowAutoCloseAlert(false)}
-        title={t('worker.autoShiftCompletedTitle')}
+        title={
+          autoCloseReason === 'STRICT_GPS'
+            ? t('worker.strictGpsShiftExitTitle')
+            : t('worker.autoShiftCompletedTitle')
+        }
       >
         <div className="py-3 text-center space-y-5">
           {/* Glowing Alarm Badge */}
           <div className="relative mx-auto w-20 h-20">
-            <div className="absolute inset-0 bg-amber-500/20 blur-xl rounded-full" />
-            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500 to-amber-400 flex items-center justify-center text-slate-950 shadow-xl shadow-amber-500/25">
-              <Clock className="w-10 h-10" />
+            <div
+              className={`absolute inset-0 ${
+                autoCloseReason === 'STRICT_GPS' ? 'bg-rose-500/20' : 'bg-amber-500/20'
+              } blur-xl rounded-full`}
+            />
+            <div
+              className={`relative w-20 h-20 rounded-3xl bg-gradient-to-tr ${
+                autoCloseReason === 'STRICT_GPS'
+                  ? 'from-rose-500 to-amber-500 shadow-rose-500/25'
+                  : 'from-amber-500 to-amber-400 shadow-amber-500/25'
+              } flex items-center justify-center text-white shadow-xl`}
+            >
+              {autoCloseReason === 'STRICT_GPS' ? (
+                <MapPin className="w-10 h-10" />
+              ) : (
+                <Clock className="w-10 h-10 text-slate-950" />
+              )}
             </div>
           </div>
 
           <div className="space-y-2">
             <h3 className="text-xl font-black text-white tracking-tight">
-              {t('worker.autoShiftCompletedTitle')}
+              {autoCloseReason === 'STRICT_GPS'
+                ? t('worker.strictGpsShiftExitTitle')
+                : t('worker.autoShiftCompletedTitle')}
             </h3>
             <p className="text-xs font-medium text-slate-300 bg-slate-800/80 border border-slate-700/80 rounded-2xl py-3 px-4 inline-block shadow-inner leading-relaxed">
-              {t('worker.autoShiftCompletedDesc')}
+              {autoCloseReason === 'STRICT_GPS'
+                ? t('worker.strictGpsShiftExitDesc')
+                : t('worker.autoShiftCompletedDesc')}
             </p>
           </div>
 
@@ -1352,23 +1461,42 @@ export function WorkerAppPage() {
             <div className="flex justify-between items-center text-xs">
               <span className="text-slate-400">{t('worker.summaryEndTime')}</span>
               <span className="font-mono font-bold text-amber-300">
-                {scheduledEndTime
+                {autoCloseReason !== 'STRICT_GPS' && scheduledEndTime
                   ? new Date(scheduledEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                   : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
             <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-700/60">
               <span className="text-slate-400">{t('worker.summaryStatus')}</span>
-              <span className="inline-flex items-center gap-1 text-amber-400 font-bold">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {t('worker.summaryCompleted')}
+              <span
+                className={`inline-flex items-center gap-1 font-bold ${
+                  autoCloseReason === 'STRICT_GPS' ? 'text-rose-400' : 'text-amber-400'
+                }`}
+              >
+                {autoCloseReason === 'STRICT_GPS' ? (
+                  <MapPin className="w-3.5 h-3.5" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                )}
+                {autoCloseReason === 'STRICT_GPS'
+                  ? t('worker.strictGpsAutoClosedBadge')
+                  : t('worker.summaryCompleted')}
               </span>
             </div>
+            {completedShiftSummary && (
+              <div className="text-xs text-slate-300 pt-1 font-medium text-center bg-slate-900/50 rounded-lg py-2 border border-slate-700/40">
+                {completedShiftSummary.text}
+              </div>
+            )}
           </div>
 
           <button
             onClick={() => setShowAutoCloseAlert(false)}
-            className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-98 font-bold rounded-xl text-slate-950 transition text-sm shadow-lg shadow-amber-500/25"
+            className={`w-full py-3.5 bg-gradient-to-r ${
+              autoCloseReason === 'STRICT_GPS'
+                ? 'from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-white shadow-rose-500/25'
+                : 'from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-amber-500/25'
+            } active:scale-98 font-bold rounded-xl transition text-sm shadow-lg`}
           >
             {t('worker.shiftCompleteOk')}
           </button>

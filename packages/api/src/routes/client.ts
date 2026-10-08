@@ -924,7 +924,16 @@ async function computeClientReportRows(
     // 3. Notes by date
     const notesByDate: Record<string, string> = {};
     for (const n of emp.dailyNotes) {
-      notesByDate[n.date] = n.noteText;
+      if (!n.noteText) continue;
+      const clean = n.noteText.trim();
+      if (!clean) continue;
+      if (notesByDate[n.date]) {
+        if (!notesByDate[n.date].includes(clean)) {
+          notesByDate[n.date] += ' • ' + clean;
+        }
+      } else {
+        notesByDate[n.date] = clean;
+      }
     }
 
     // 4. Calculate for each date

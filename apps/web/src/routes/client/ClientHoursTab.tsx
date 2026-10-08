@@ -435,8 +435,21 @@ export function ClientHoursTab() {
                       <td className="p-3.5 text-xs text-rose-400">
                         {row.overtimeHours > 0 ? `${row.overtimeHours.toFixed(2)} ${t('admin.hourUnit')}` : '—'}
                       </td>
-                      <td className="p-3.5 text-xs text-slate-400 max-w-xs truncate">
-                        {row.notes || '—'}
+                      <td className="p-3.5 text-xs text-slate-400 max-w-xs truncate" title={row.notes || ''}>
+                        {row.notes ? (
+                          row.notes.includes('строгий GPS') ||
+                          row.notes.includes('strict GPS') ||
+                          row.notes.includes('GPS קפדני') ||
+                          row.notes.includes('GPS صارم') ? (
+                            <span className="inline-flex items-center gap-1 text-amber-300 font-semibold bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded text-[11px]">
+                              📍 {row.notes}
+                            </span>
+                          ) : (
+                            row.notes
+                          )
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td className="p-3.5 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">

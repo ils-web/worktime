@@ -98961,7 +98961,16 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
     }
     const notesByDate = {};
     for (const n of emp.dailyNotes) {
-      notesByDate[n.date] = n.noteText;
+      if (!n.noteText) continue;
+      const clean = n.noteText.trim();
+      if (!clean) continue;
+      if (notesByDate[n.date]) {
+        if (!notesByDate[n.date].includes(clean)) {
+          notesByDate[n.date] += " \u2022 " + clean;
+        }
+      } else {
+        notesByDate[n.date] = clean;
+      }
     }
     for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
       const dailyCalc = calculateDailyHours(
@@ -99330,6 +99339,7 @@ workerRouter.get("/profile/:empId", async (req, res) => {
     const effectiveShifts = employee.shifts || employee.client.defaultShifts;
     if (employee.autoCloseShift && isOnShift && lastLog) {
       const inParts = getJerusalemParts(lastLog.dateTime);
+      const daySchedule = employee.schedules.find((s) => s.dayOfWeek === inParts.dayOfWeek);
       const rawShiftType = daySchedule?.shiftType && daySchedule.shiftType !== "off" ? daySchedule.shiftType : "morning";
       let resolvedShiftType = rawShiftType;
       const inMinutes = inParts.hour * 60 + inParts.minute;
@@ -99368,6 +99378,28 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         autoClosedDueToShiftEnd = true;
       }
     }
+    let autoClosedDueToStrictGps = false;
+    if (employee.strictGps && !isOnShift && lastLog && lastLog.action === "AUTO_EXIT") {
+      const diffHours = (Date.now() - new Date(lastLog.dateTime).getTime()) / 36e5;
+      if (diffHours < 24) {
+        const dParts = getJerusalemParts(lastLog.dateTime);
+        const strictNote = await prisma.dailyNote.findFirst({
+          where: {
+            employeeId: employee.id,
+            date: dParts.dateStr,
+            OR: [
+              { noteText: { contains: "\u0441\u0442\u0440\u043E\u0433\u0438\u0439 GPS" } },
+              { noteText: { contains: "strict GPS" } },
+              { noteText: { contains: "GPS \u05E7\u05E4\u05D3\u05E0\u05D9" } },
+              { noteText: { contains: "GPS \u0635\u0627\u0631\u0645" } }
+            ]
+          }
+        });
+        if (strictNote) {
+          autoClosedDueToStrictGps = true;
+        }
+      }
+    }
     const sitesList = employee.sites.map((es) => es.site);
     res.json({
       success: true,
@@ -99389,7 +99421,8 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         lastActionTime: lastLog?.dateTime ?? null,
         scheduledEndTime: scheduledEndTimeStr,
         scheduledShiftType,
-        autoClosedDueToShiftEnd
+        autoClosedDueToShiftEnd,
+        autoClosedDueToStrictGps
       }
     });
   } catch (err) {

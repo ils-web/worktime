@@ -167,6 +167,49 @@ describe('TimeTracker API Endpoints', () => {
     expect(res.body.log.action).toBe('CLOCK_OUT');
   });
 
+  it('10b. Strict GPS auto-exit: stops shift when leaving site, records AUTO_EXIT and note', async () => {
+    // 1. Worker clocks in inside geofence
+    const clockInRes = await request(app)
+      .post('/api/worker/log')
+      .send({
+        empId: testEmpId,
+        action: 'CLOCK_IN',
+        lat: 32.0853,
+        lng: 34.7818,
+      });
+    expect(clockInRes.status).toBe(200);
+
+    // 2. Strict GPS triggers AUTO_EXIT when exiting geofence with note
+    const autoExitRes = await request(app)
+      .post('/api/worker/log')
+      .send({
+        empId: testEmpId,
+        action: 'AUTO_EXIT',
+        lat: 32.1800, // outside geofence
+        lng: 34.8900,
+        note: 'Покинул объект (строгий GPS, 1500м)',
+      });
+
+    expect(autoExitRes.status).toBe(200);
+    expect(autoExitRes.body.success).toBe(true);
+    expect(autoExitRes.body.log.action).toBe('AUTO_EXIT');
+
+    // 3. Worker profile shows shift is closed and autoClosedDueToStrictGps is true
+    const profileRes = await request(app).get(`/api/worker/profile/${testEmpId}`);
+    expect(profileRes.status).toBe(200);
+    expect(profileRes.body.status.isOnShift).toBe(false);
+    expect(profileRes.body.status.autoClosedDueToStrictGps).toBe(true);
+
+    // 4. Hours report contains the strict GPS note
+    const hoursRes = await request(app)
+      .get('/api/client/hours')
+      .set('Cookie', clientCookie);
+    expect(hoursRes.status).toBe(200);
+    const todayRow = hoursRes.body.hours.find((h: any) => h.empId === testEmpId);
+    expect(todayRow).toBeDefined();
+    expect(todayRow.notes).toContain('строгий GPS');
+  });
+
   it('11. Client can fetch server-generated CSV and PDF reports', async () => {
     const csvRes = await request(app)
       .get('/api/client/reports/csv')

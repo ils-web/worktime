@@ -65,6 +65,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
 
     if (employee.autoCloseShift && isOnShift && lastLog) {
       const inParts = getJerusalemParts(lastLog.dateTime);
+      const daySchedule = employee.schedules.find((s) => s.dayOfWeek === inParts.dayOfWeek);
       const rawShiftType = (daySchedule?.shiftType && daySchedule.shiftType !== 'off') ? daySchedule.shiftType : 'morning';
       let resolvedShiftType = rawShiftType;
 
@@ -108,6 +109,29 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
       }
     }
 
+    let autoClosedDueToStrictGps = false;
+    if (employee.strictGps && !isOnShift && lastLog && lastLog.action === 'AUTO_EXIT') {
+      const diffHours = (Date.now() - new Date(lastLog.dateTime).getTime()) / 3600000;
+      if (diffHours < 24) {
+        const dParts = getJerusalemParts(lastLog.dateTime);
+        const strictNote = await prisma.dailyNote.findFirst({
+          where: {
+            employeeId: employee.id,
+            date: dParts.dateStr,
+            OR: [
+              { noteText: { contains: 'строгий GPS' } },
+              { noteText: { contains: 'strict GPS' } },
+              { noteText: { contains: 'GPS קפדני' } },
+              { noteText: { contains: 'GPS صارم' } },
+            ],
+          },
+        });
+        if (strictNote) {
+          autoClosedDueToStrictGps = true;
+        }
+      }
+    }
+
     const sitesList = employee.sites.map((es) => es.site);
 
     res.json({
@@ -131,6 +155,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         scheduledEndTime: scheduledEndTimeStr,
         scheduledShiftType,
         autoClosedDueToShiftEnd,
+        autoClosedDueToStrictGps,
       },
     });
   } catch (err) {
