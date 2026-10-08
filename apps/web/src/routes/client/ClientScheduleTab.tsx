@@ -302,8 +302,150 @@ export function ClientScheduleTab() {
     }));
   };
 
-  const triggerPrint = () => {
-    window.print();
+  const triggerPrint = (areaId: string, docTitle: string) => {
+    const container = document.getElementById(areaId);
+    if (!container) {
+      window.print();
+      return;
+    }
+
+    const isRtl = i18n.language === 'he' || i18n.language === 'ar';
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('style', 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;');
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+<html lang="${i18n.language}" dir="${isRtl ? 'rtl' : 'ltr'}">
+  <head>
+    <meta charset="utf-8" />
+    <title>${docTitle}</title>
+    <style>
+      @page {
+        size: A4 portrait;
+        margin: 10mm 12mm;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+      html, body {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .print-page {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        padding: 0;
+        width: 100%;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+        margin-top: 10px;
+        page-break-inside: auto;
+      }
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+      th, td {
+        border: 1px solid #cbd5e1;
+        padding: 6px 8px;
+        color: #0f172a;
+      }
+      th {
+        background-color: #f1f5f9 !important;
+        color: #334155 !important;
+        font-weight: 700;
+      }
+      .text-center { text-align: center; }
+      .text-start { text-align: start; }
+      .text-right { text-align: right; }
+      .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .font-bold { font-weight: 700; }
+      .font-semibold { font-weight: 600; }
+      .font-medium { font-weight: 500; }
+      .text-xl { font-size: 18px; font-weight: bold; }
+      .text-base { font-size: 13px; font-weight: 600; }
+      .text-sm { font-size: 12px; }
+      .text-xs { font-size: 11px; }
+      .text-\\[10px\\] { font-size: 10px; }
+      .text-\\[11px\\] { font-size: 11px; }
+      .text-slate-950 { color: #020617; }
+      .text-slate-900 { color: #0f172a; }
+      .text-slate-800 { color: #1e293b; }
+      .text-slate-700 { color: #334155; }
+      .text-slate-600 { color: #475569; }
+      .text-slate-500 { color: #64748b; }
+      .text-slate-400 { color: #94a3b8; }
+      .text-slate-300 { color: #cbd5e1; }
+      .text-emerald-700 { color: #047857; font-weight: 600; }
+      .bg-white { background-color: #ffffff !important; }
+      .bg-slate-50 { background-color: #f8fafc !important; }
+      .bg-slate-50\\/60 { background-color: #f8fafc !important; }
+      .bg-slate-100 { background-color: #f1f5f9 !important; }
+      .border { border: 1px solid #e2e8f0; }
+      .border-b { border-bottom: 1px solid #e2e8f0; }
+      .border-t { border-top: 1px solid #e2e8f0; }
+      .border-r { border-right: 1px solid #cbd5e1; }
+      .border-slate-200 { border-color: #e2e8f0; }
+      .border-slate-300 { border-color: #cbd5e1; }
+      .rounded-xl, .rounded-lg, .rounded { border-radius: 4px; }
+      .p-2 { padding: 6px 8px; }
+      .p-3 { padding: 8px 12px; }
+      .p-6 { padding: 0 !important; }
+      .pb-3 { padding-bottom: 10px; }
+      .pt-4 { padding-top: 14px; }
+      .mt-0\\.5 { margin-top: 2px; }
+      .mr-1 { margin-right: 4px; }
+      .flex { display: flex; }
+      .justify-between { justify-content: space-between; }
+      .items-center { align-items: center; }
+      .items-start { align-items: flex-start; }
+      .inline-block { display: inline-block; }
+      .block { display: block; }
+      .whitespace-nowrap { white-space: nowrap; }
+      .space-y-4 > * + * { margin-top: 12px; }
+      .w-full { width: 100%; }
+      .w-24 { width: 80px; }
+      .w-48 { width: 140px; }
+      .w-28 { width: 90px; }
+      .shadow-sm, .shadow-md, .shadow-lg, .shadow-2xl { box-shadow: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="print-page">
+      ${container.innerHTML}
+    </div>
+  </body>
+</html>`);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+        }, 1500);
+      }
+    }, 250);
   };
 
   return (
@@ -360,11 +502,17 @@ export function ClientScheduleTab() {
           }
 
           /* Make only the schedule print area and its children visible */
+          #printable-employee-schedule-area,
+          #printable-employee-schedule-area *,
+          #printable-team-schedule-area,
+          #printable-team-schedule-area *,
           #printable-schedule-area,
           #printable-schedule-area * {
             visibility: visible !important;
           }
 
+          #printable-employee-schedule-area,
+          #printable-team-schedule-area,
           #printable-schedule-area {
             position: absolute !important;
             left: 0 !important;
@@ -619,7 +767,7 @@ export function ClientScheduleTab() {
           <div className="space-y-4">
             {/* Printable Container */}
             <div
-              id="printable-schedule-area"
+              id="printable-employee-schedule-area"
               className="bg-white text-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm space-y-4"
               dir={i18n.language === 'he' || i18n.language === 'ar' ? 'rtl' : 'ltr'}
             >
@@ -746,7 +894,7 @@ export function ClientScheduleTab() {
                 </button>
                 <button
                   type="button"
-                  onClick={triggerPrint}
+                  onClick={() => triggerPrint('printable-employee-schedule-area', `${t('admin.weeklyScheduleTitle')} — ${printingEmployee?.name || ''}`)}
                   className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-950 transition"
                 >
                   <Printer className="w-4 h-4" />
@@ -768,7 +916,7 @@ export function ClientScheduleTab() {
         >
           <div className="space-y-4">
             <div
-              id="printable-schedule-area"
+              id="printable-team-schedule-area"
               className="bg-white text-slate-900 p-6 rounded-xl border border-slate-200 shadow-sm space-y-4"
               dir={i18n.language === 'he' || i18n.language === 'ar' ? 'rtl' : 'ltr'}
             >
@@ -845,7 +993,7 @@ export function ClientScheduleTab() {
               </button>
               <button
                 type="button"
-                onClick={triggerPrint}
+                onClick={() => triggerPrint('printable-team-schedule-area', `${t('admin.printTeamSchedule')} (${weekRangeTitle})`)}
                 className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-950 transition"
               >
                 <Printer className="w-4 h-4" />
