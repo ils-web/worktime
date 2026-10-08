@@ -311,27 +311,91 @@ export function ClientScheduleTab() {
       {/* Print CSS Stylesheet */}
       <style>{`
         @media print {
+          @page {
+            size: auto;
+            margin: 10mm;
+          }
+
+          /* Force complete white page background */
+          html,
+          body {
+            background: #ffffff !important;
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            min-height: 100% !important;
+            overflow: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          #root {
+            background: transparent !important;
+            background-color: transparent !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          /* Reset modal wrappers and fixed overlays so they don't produce dark backdrops */
+          .fixed,
+          [role="dialog"] {
+            position: static !important;
+            background: transparent !important;
+            background-color: transparent !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+          }
+
+          /* Hide all default page content */
           body * {
             visibility: hidden !important;
           }
+
+          /* Make only the schedule print area and its children visible */
           #printable-schedule-area,
           #printable-schedule-area * {
             visibility: visible !important;
           }
+
           #printable-schedule-area {
-            position: fixed !important;
+            position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            height: auto !important;
             margin: 0 !important;
-            padding: 24px !important;
-            background: white !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            background-color: #ffffff !important;
             color: #0f172a !important;
             box-shadow: none !important;
             border: none !important;
+            border-radius: 0 !important;
             z-index: 99999 !important;
           }
+
+          /* Prevent unwanted table row breaks */
+          table {
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
+          }
+
           .no-print {
             display: none !important;
           }
@@ -571,7 +635,7 @@ export function ClientScheduleTab() {
                 </div>
                 <div className="text-right rtl:text-left text-xs font-mono text-slate-600">
                   <div>
-                    <strong>{t('admin.weekPeriod')}:</strong> {weekRangeTitle}
+                    <strong>{t('admin.weekPeriod')}:</strong> <span dir="ltr" className="inline-block">{weekRangeTitle}</span>
                   </div>
                   <div className="mt-0.5 text-[11px] text-slate-500">
                     {new Date().toLocaleDateString(i18n.language)}
@@ -629,7 +693,7 @@ export function ClientScheduleTab() {
                           <span>{shift.label}</span>
                         </td>
                         <td className="p-2 border-r border-slate-300 text-center font-mono font-semibold text-slate-800">
-                          {shift.hours}
+                          <span dir="ltr" className="inline-block">{shift.hours}</span>
                         </td>
                         <td className="p-2 text-center text-slate-300 border-b">
                           ________________
@@ -712,7 +776,7 @@ export function ClientScheduleTab() {
                 <div>
                   <h1 className="text-xl font-bold text-slate-950">{companyName}</h1>
                   <h2 className="text-sm font-semibold text-emerald-700 mt-0.5">
-                    {t('admin.scheduleTitle')} — {weekRangeTitle}
+                    {t('admin.scheduleTitle')} — <span dir="ltr" className="inline-block">{weekRangeTitle}</span>
                   </h2>
                 </div>
                 <div className="text-right rtl:text-left text-xs font-mono text-slate-500">
@@ -754,7 +818,7 @@ export function ClientScheduleTab() {
                             <div className="font-semibold">{shift.emoji} {shift.label}</div>
                             {!shift.isOff && (
                               <div className="text-[10px] font-mono text-slate-600 mt-0.5">
-                                {shift.hours}
+                                <span dir="ltr" className="inline-block">{shift.hours}</span>
                               </div>
                             )}
                           </td>
