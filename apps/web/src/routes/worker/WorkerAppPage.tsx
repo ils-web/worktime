@@ -18,7 +18,6 @@ import {
   Calendar,
   Smartphone,
   Share2,
-  LogOut,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { api } from '../../lib/api';
@@ -726,11 +725,6 @@ export function WorkerAppPage() {
     }
   }, [activeTab, loadMonthlyReport]);
 
-  const handleDownloadPdf = () => {
-    if (!empId) return;
-    window.open(`/api/worker/report/${empId}/pdf?month=${selectedMonth}`, '_blank');
-  };
-
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -797,21 +791,6 @@ export function WorkerAppPage() {
                 </button>
               ))}
             </div>
-
-            <button
-              onClick={() => {
-                if (window.confirm(t('worker.confirmSwitchWorker'))) {
-                  try {
-                    localStorage.removeItem('worktime_last_worker_empid');
-                  } catch {}
-                  window.location.href = '/';
-                }
-              }}
-              className="p-1.5 bg-slate-800 hover:bg-rose-950/50 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60 transition"
-              title={t('worker.switchWorker')}
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
 
@@ -1119,15 +1098,6 @@ export function WorkerAppPage() {
                 </div>
               </div>
             )}
-
-            {/* Direct PDF Download Button */}
-            <button
-              onClick={handleDownloadPdf}
-              className="w-full py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-emerald-400 font-bold text-xs rounded-2xl border border-slate-700/80 flex items-center justify-center gap-2 transition"
-            >
-              <Download className="w-4 h-4" />
-              <span>{t('worker.downloadPdf')}</span>
-            </button>
 
             {/* Days list */}
             <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">

@@ -98279,6 +98279,23 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
       res.status(400).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u0441 \u0442\u0430\u043A\u0438\u043C ID \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442" });
       return;
     }
+    let finalGeofence = data.geofence || null;
+    if (data.siteIds && data.siteIds.length > 0) {
+      const isDefaultTelAviv = !finalGeofence || Math.abs(Number(finalGeofence.lat) - 32.0853) < 1e-3 && Math.abs(Number(finalGeofence.lng) - 34.7818) < 1e-3;
+      if (isDefaultTelAviv) {
+        const primarySite = await prisma.workSite.findFirst({
+          where: { id: { in: data.siteIds }, clientId }
+        });
+        if (primarySite && primarySite.lat && primarySite.lng) {
+          finalGeofence = {
+            lat: primarySite.lat,
+            lng: primarySite.lng,
+            radius: primarySite.radius || 100,
+            address: primarySite.address || primarySite.name
+          };
+        }
+      }
+    }
     const employee = await prisma.employee.create({
       data: {
         clientId,
@@ -98287,7 +98304,7 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
         isMobile: data.isMobile,
         strictGps: data.strictGps,
         autoCloseShift: data.autoCloseShift,
-        geofence: data.geofence || null,
+        geofence: finalGeofence,
         shifts: data.shifts || null,
         foremanId: data.foremanId || null
       },
@@ -98335,6 +98352,23 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
       }
       finalEmpId = newEmpId;
     }
+    let finalGeofence = geofence;
+    if (siteIds !== void 0 && Array.isArray(siteIds) && siteIds.length > 0 && finalGeofence) {
+      const isDefaultTelAviv = Math.abs(Number(finalGeofence.lat) - 32.0853) < 1e-3 && Math.abs(Number(finalGeofence.lng) - 34.7818) < 1e-3;
+      if (isDefaultTelAviv) {
+        const primarySite = await prisma.workSite.findFirst({
+          where: { id: { in: siteIds }, clientId }
+        });
+        if (primarySite && primarySite.lat && primarySite.lng) {
+          finalGeofence = {
+            lat: primarySite.lat,
+            lng: primarySite.lng,
+            radius: primarySite.radius || 100,
+            address: primarySite.address || primarySite.name
+          };
+        }
+      }
+    }
     const updated = await prisma.employee.update({
       where: { id: employee.id },
       data: {
@@ -98343,7 +98377,7 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
         ...isMobile !== void 0 ? { isMobile } : {},
         ...strictGps !== void 0 ? { strictGps } : {},
         ...autoCloseShift !== void 0 ? { autoCloseShift } : {},
-        ...geofence !== void 0 ? { geofence } : {},
+        ...finalGeofence !== void 0 ? { geofence: finalGeofence } : {},
         ...shifts !== void 0 ? { shifts } : {},
         ...foremanId !== void 0 ? { foremanId: foremanId || null } : {}
       },
@@ -99304,6 +99338,36 @@ clientRouter.post("/sites/:id/employees", requireRole("client", "foreman"), asyn
   } catch (err) {
     console.error("Assign employees to site error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u043E\u0432 \u043D\u0430 \u043E\u0431\u044A\u0435\u043A\u0442" });
+  }
+});
+clientRouter.get("/geocode", requireRole("client", "foreman"), async (req, res) => {
+  try {
+    const q = req.query["q"];
+    if (!q || !q.trim()) {
+      res.json({ success: true, results: [] });
+      return;
+    }
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q.trim())}&limit=6&addressdetails=1`;
+    const resp = await fetch(url, {
+      headers: {
+        "User-Agent": "WorkTimeTracker/1.0 (contact@worktimetracker.local)",
+        "Accept-Language": "he,ru,en,ar"
+      }
+    });
+    if (!resp.ok) {
+      res.json({ success: true, results: [] });
+      return;
+    }
+    const data = await resp.json();
+    const results = (Array.isArray(data) ? data : []).map((item) => ({
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lon),
+      displayName: item.display_name
+    }));
+    res.json({ success: true, results });
+  } catch (err) {
+    console.error("Geocode search error:", err);
+    res.json({ success: true, results: [] });
   }
 });
 

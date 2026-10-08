@@ -20,6 +20,7 @@ import {
   Edit2,
   Building2,
   Clock,
+  RefreshCw,
 } from 'lucide-react';
 
 interface ClientEmployeesTabProps {
@@ -288,6 +289,29 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                               setEditingEmp(emp);
                               const assignedSiteIds =
                                 emp.sites?.map((es: any) => es.siteId || es.site?.id) || [];
+                              const primarySite = sites.find((s: any) => assignedSiteIds.includes(s.id));
+                              const isDefaultTelAviv =
+                                !emp.geofence ||
+                                (Math.abs((emp.geofence.lat || 0) - 32.0853) < 0.001 &&
+                                 Math.abs((emp.geofence.lng || 0) - 34.7818) < 0.001);
+
+                              const initialLat =
+                                primarySite && isDefaultTelAviv && primarySite.lat
+                                  ? primarySite.lat
+                                  : emp.geofence?.lat || primarySite?.lat || 32.0853;
+                              const initialLng =
+                                primarySite && isDefaultTelAviv && primarySite.lng
+                                  ? primarySite.lng
+                                  : emp.geofence?.lng || primarySite?.lng || 34.7818;
+                              const initialRadius =
+                                primarySite && isDefaultTelAviv && primarySite.radius
+                                  ? primarySite.radius
+                                  : emp.geofence?.radius || primarySite?.radius || 100;
+                              const initialAddress =
+                                primarySite && isDefaultTelAviv
+                                  ? primarySite.address || primarySite.name
+                                  : emp.geofence?.address || primarySite?.address || '';
+
                               setEditForm({
                                 name: emp.name,
                                 newEmpId: emp.empId,
@@ -296,10 +320,10 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                                 autoCloseShift: !!emp.autoCloseShift,
                                 foremanId: emp.foremanId || '',
                                 siteIds: assignedSiteIds,
-                                geofenceLat: emp.geofence?.lat || 32.0853,
-                                geofenceLng: emp.geofence?.lng || 34.7818,
-                                geofenceRadius: emp.geofence?.radius || 100,
-                                geofenceAddress: emp.geofence?.address || '',
+                                geofenceLat: initialLat,
+                                geofenceLng: initialLng,
+                                geofenceRadius: initialRadius,
+                                geofenceAddress: initialAddress,
                               });
                             }}
                             title={t('admin.editEmployee')}
@@ -501,11 +525,29 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                               setForm((prev) => ({
                                 ...prev,
                                 siteIds: [...prev.siteIds, s.id],
+                                ...(s.lat && s.lng
+                                  ? {
+                                      geofenceLat: s.lat,
+                                      geofenceLng: s.lng,
+                                      geofenceRadius: s.radius || prev.geofenceRadius,
+                                      geofenceAddress: s.address || s.name,
+                                    }
+                                  : {}),
                               }));
                             } else {
+                              const remaining = form.siteIds.filter((id) => id !== s.id);
+                              const fallbackSite = sites.find((x: any) => remaining.includes(x.id));
                               setForm((prev) => ({
                                 ...prev,
-                                siteIds: prev.siteIds.filter((id) => id !== s.id),
+                                siteIds: remaining,
+                                ...(fallbackSite && fallbackSite.lat && fallbackSite.lng
+                                  ? {
+                                      geofenceLat: fallbackSite.lat,
+                                      geofenceLng: fallbackSite.lng,
+                                      geofenceRadius: fallbackSite.radius || prev.geofenceRadius,
+                                      geofenceAddress: fallbackSite.address || fallbackSite.name,
+                                    }
+                                  : {}),
                               }));
                             }
                           }}
@@ -532,9 +574,33 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
           {!form.isMobile && (
             <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center">
-                <label className="block text-xs font-semibold text-slate-300">
-                  {form.siteIds.length > 0 ? t('admin.personalGeofence') : t('admin.geofenceMap')}
-                </label>
+                <div className="flex items-center gap-2">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    {form.siteIds.length > 0 ? t('admin.personalGeofence') : t('admin.geofenceMap')}
+                  </label>
+                  {form.siteIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetSite = sites.find((x: any) => form.siteIds.includes(x.id));
+                        if (targetSite && targetSite.lat && targetSite.lng) {
+                          setForm((prev) => ({
+                            ...prev,
+                            geofenceLat: targetSite.lat,
+                            geofenceLng: targetSite.lng,
+                            geofenceRadius: targetSite.radius || 100,
+                            geofenceAddress: targetSite.address || targetSite.name,
+                          }));
+                        }
+                      }}
+                      className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-medium transition flex items-center gap-1"
+                      title={t('admin.syncWithSiteHelp', 'Синхронизировать геозону с выбранным объектом')}
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      <span>{t('admin.syncWithSite', 'Синхронизировать с объектом')}</span>
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">{t('admin.radiusLabel')}</span>
                   <input
@@ -562,6 +628,12 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                     geofenceLat: lat,
                     geofenceLng: lng,
                     geofenceRadius: radius,
+                  }))
+                }
+                onAddressFound={(addr) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    geofenceAddress: addr,
                   }))
                 }
               />
@@ -747,11 +819,29 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                                 setEditForm((prev) => ({
                                   ...prev,
                                   siteIds: [...prev.siteIds, s.id],
+                                  ...(s.lat && s.lng
+                                    ? {
+                                        geofenceLat: s.lat,
+                                        geofenceLng: s.lng,
+                                        geofenceRadius: s.radius || prev.geofenceRadius,
+                                        geofenceAddress: s.address || s.name,
+                                      }
+                                    : {}),
                                 }));
                               } else {
+                                const remaining = editForm.siteIds.filter((id) => id !== s.id);
+                                const fallbackSite = sites.find((x: any) => remaining.includes(x.id));
                                 setEditForm((prev) => ({
                                   ...prev,
-                                  siteIds: prev.siteIds.filter((id) => id !== s.id),
+                                  siteIds: remaining,
+                                  ...(fallbackSite && fallbackSite.lat && fallbackSite.lng
+                                    ? {
+                                        geofenceLat: fallbackSite.lat,
+                                        geofenceLng: fallbackSite.lng,
+                                        geofenceRadius: fallbackSite.radius || prev.geofenceRadius,
+                                        geofenceAddress: fallbackSite.address || fallbackSite.name,
+                                      }
+                                    : {}),
                                 }));
                               }
                             }}
@@ -778,9 +868,33 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
             {!editForm.isMobile && (
               <div className="space-y-3 pt-2">
                 <div className="flex justify-between items-center">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    {editForm.siteIds.length > 0 ? t('admin.personalGeofence') : t('admin.geofenceMap')}
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      {editForm.siteIds.length > 0 ? t('admin.personalGeofence') : t('admin.geofenceMap')}
+                    </label>
+                    {editForm.siteIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetSite = sites.find((x: any) => editForm.siteIds.includes(x.id));
+                          if (targetSite && targetSite.lat && targetSite.lng) {
+                            setEditForm((prev) => ({
+                              ...prev,
+                              geofenceLat: targetSite.lat,
+                              geofenceLng: targetSite.lng,
+                              geofenceRadius: targetSite.radius || 100,
+                              geofenceAddress: targetSite.address || targetSite.name,
+                            }));
+                          }
+                        }}
+                        className="px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[11px] font-medium transition flex items-center gap-1"
+                        title={t('admin.syncWithSiteHelp', 'Синхронизировать геозону с выбранным объектом')}
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        <span>{t('admin.syncWithSite', 'Синхронизировать с объектом')}</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-400">{t('admin.radiusLabel')}</span>
                     <input
@@ -811,6 +925,12 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                       geofenceLat: lat,
                       geofenceLng: lng,
                       geofenceRadius: radius,
+                    }))
+                  }
+                  onAddressFound={(addr) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      geofenceAddress: addr,
                     }))
                   }
                 />

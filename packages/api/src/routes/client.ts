@@ -101,6 +101,27 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
       return;
     }
 
+    let finalGeofence = data.geofence || null;
+    if (data.siteIds && data.siteIds.length > 0) {
+      const isDefaultTelAviv = !finalGeofence || (
+        Math.abs(Number(finalGeofence.lat) - 32.0853) < 0.001 &&
+        Math.abs(Number(finalGeofence.lng) - 34.7818) < 0.001
+      );
+      if (isDefaultTelAviv) {
+        const primarySite = await prisma.workSite.findFirst({
+          where: { id: { in: data.siteIds }, clientId },
+        });
+        if (primarySite && primarySite.lat && primarySite.lng) {
+          finalGeofence = {
+            lat: primarySite.lat,
+            lng: primarySite.lng,
+            radius: primarySite.radius || 100,
+            address: primarySite.address || primarySite.name,
+          };
+        }
+      }
+    }
+
     const employee = await prisma.employee.create({
       data: {
         clientId,
@@ -109,7 +130,7 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
         isMobile: data.isMobile,
         strictGps: data.strictGps,
         autoCloseShift: data.autoCloseShift,
-        geofence: data.geofence || null,
+        geofence: finalGeofence,
         shifts: data.shifts || null,
         foremanId: data.foremanId || null,
       },
@@ -166,6 +187,26 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
       finalEmpId = newEmpId;
     }
 
+    let finalGeofence = geofence;
+    if (siteIds !== undefined && Array.isArray(siteIds) && siteIds.length > 0 && finalGeofence) {
+      const isDefaultTelAviv =
+        Math.abs(Number(finalGeofence.lat) - 32.0853) < 0.001 &&
+        Math.abs(Number(finalGeofence.lng) - 34.7818) < 0.001;
+      if (isDefaultTelAviv) {
+        const primarySite = await prisma.workSite.findFirst({
+          where: { id: { in: siteIds }, clientId },
+        });
+        if (primarySite && primarySite.lat && primarySite.lng) {
+          finalGeofence = {
+            lat: primarySite.lat,
+            lng: primarySite.lng,
+            radius: primarySite.radius || 100,
+            address: primarySite.address || primarySite.name,
+          };
+        }
+      }
+    }
+
     const updated = await prisma.employee.update({
       where: { id: employee.id },
       data: {
@@ -174,7 +215,7 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
         ...(isMobile !== undefined ? { isMobile } : {}),
         ...(strictGps !== undefined ? { strictGps } : {}),
         ...(autoCloseShift !== undefined ? { autoCloseShift } : {}),
-        ...(geofence !== undefined ? { geofence } : {}),
+        ...(finalGeofence !== undefined ? { geofence: finalGeofence } : {}),
         ...(shifts !== undefined ? { shifts } : {}),
         ...(foremanId !== undefined ? { foremanId: foremanId || null } : {}),
       },
@@ -1345,3 +1386,38 @@ clientRouter.post('/sites/:id/employees', requireRole('client', 'foreman'), asyn
     res.status(500).json({ error: 'Ошибка назначения сотрудников на объект' });
   }
 });
+
+/**
+ * Address Geocoding Search (OpenStreetMap Nominatim)
+ */
+clientRouter.get('/geocode', requireRole('client', 'foreman'), async (req: Request, res: Response) => {
+  try {
+    const q = req.query['q'] as string;
+    if (!q || !q.trim()) {
+      res.json({ success: true, results: [] });
+      return;
+    }
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q.trim())}&limit=6&addressdetails=1`;
+    const resp = await fetch(url, {
+      headers: {
+        'User-Agent': 'WorkTimeTracker/1.0 (contact@worktimetracker.local)',
+        'Accept-Language': 'he,ru,en,ar',
+      },
+    });
+    if (!resp.ok) {
+      res.json({ success: true, results: [] });
+      return;
+    }
+    const data: any = await resp.json();
+    const results = (Array.isArray(data) ? data : []).map((item: any) => ({
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lon),
+      displayName: item.display_name,
+    }));
+    res.json({ success: true, results });
+  } catch (err) {
+    console.error('Geocode search error:', err);
+    res.json({ success: true, results: [] });
+  }
+});
+

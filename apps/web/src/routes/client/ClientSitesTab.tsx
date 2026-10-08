@@ -347,6 +347,12 @@ export function ClientSitesTab() {
                   radius,
                 }));
               }}
+              onAddressFound={(address) => {
+                setForm((prev) => ({
+                  ...prev,
+                  address: prev.address || address,
+                }));
+              }}
             />
           </div>
 
@@ -435,6 +441,16 @@ export function ClientSitesTab() {
                           lat,
                           lng,
                           radius,
+                        }
+                      : null
+                  );
+                }}
+                onAddressFound={(address) => {
+                  setEditingSite((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          address: prev.address || address,
                         }
                       : null
                   );
