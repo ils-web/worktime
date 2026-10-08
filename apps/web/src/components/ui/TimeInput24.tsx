@@ -116,6 +116,7 @@ export function TimeInput24({
     <div className={`relative ${className}`} ref={containerRef}>
       <div className="relative flex items-center">
         <input
+          dir="ltr"
           type="text"
           inputMode="numeric"
           value={val}
@@ -151,7 +152,7 @@ export function TimeInput24({
             <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5 tracking-wider">
               {t('admin.quickSelect')}
             </span>
-            <div className="grid grid-cols-4 gap-1">
+            <div dir="ltr" className="grid grid-cols-4 gap-1">
               {presets.map((p) => (
                 <button
                   key={p}
@@ -172,7 +173,7 @@ export function TimeInput24({
           <div className="border-t border-slate-800 my-2" />
 
           {/* Hours and Minutes 2-column picker */}
-          <div className="grid grid-cols-2 gap-2 text-center">
+          <div dir="ltr" className="grid grid-cols-2 gap-2 text-center">
             {/* Hours column */}
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1 tracking-wider">

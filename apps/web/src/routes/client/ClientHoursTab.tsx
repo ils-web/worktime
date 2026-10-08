@@ -617,7 +617,7 @@ export function ClientHoursTab() {
             <label className="block text-xs font-semibold text-slate-400 mb-1.5">
               {t('admin.quickShiftPresets')}
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            <div dir="ltr" className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               <button
                 type="button"
                 onClick={() => {
@@ -687,7 +687,10 @@ export function ClientHoursTab() {
               <label className="block text-xs font-semibold text-slate-300 mb-1">
                 {t('admin.clockInTime')}
               </label>
-              <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-xl px-2 py-1.5 focus-within:ring-1 focus-within:ring-emerald-500">
+              <div
+                dir="ltr"
+                className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-xl px-2 py-1.5 focus-within:ring-1 focus-within:ring-emerald-500"
+              >
                 <select
                   value={manualStartTime.split(':')[0] || '08'}
                   onChange={(e) => {
@@ -702,7 +705,7 @@ export function ClientHoursTab() {
                     </option>
                   ))}
                 </select>
-                <span className="text-slate-500 font-bold">:</span>
+                <span className="text-slate-500 font-bold select-none">:</span>
                 <select
                   value={manualStartTime.split(':')[1] || '00'}
                   onChange={(e) => {
@@ -719,7 +722,7 @@ export function ClientHoursTab() {
                 </select>
               </div>
               {/* Quick minute snap buttons */}
-              <div className="flex items-center justify-center gap-1 mt-1.5">
+              <div dir="ltr" className="flex items-center justify-center gap-1 mt-1.5">
                 {['00', '15', '30', '45'].map((quickM) => (
                   <button
                     key={quickM}
@@ -744,7 +747,10 @@ export function ClientHoursTab() {
               <label className="block text-xs font-semibold text-slate-300 mb-1">
                 {t('admin.clockOutTime')}
               </label>
-              <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-xl px-2 py-1.5 focus-within:ring-1 focus-within:ring-emerald-500">
+              <div
+                dir="ltr"
+                className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-xl px-2 py-1.5 focus-within:ring-1 focus-within:ring-emerald-500"
+              >
                 <select
                   value={manualEndTime.split(':')[0] || '17'}
                   onChange={(e) => {
@@ -763,7 +769,7 @@ export function ClientHoursTab() {
                     </option>
                   ))}
                 </select>
-                <span className="text-slate-500 font-bold">:</span>
+                <span className="text-slate-500 font-bold select-none">:</span>
                 <select
                   value={manualEndTime.split(':')[1] || '00'}
                   onChange={(e) => {
@@ -780,7 +786,7 @@ export function ClientHoursTab() {
                 </select>
               </div>
               {/* Quick minute snap buttons */}
-              <div className="flex items-center justify-center gap-1 mt-1.5">
+              <div dir="ltr" className="flex items-center justify-center gap-1 mt-1.5">
                 {['00', '15', '30', '45'].map((quickM) => (
                   <button
                     key={quickM}
