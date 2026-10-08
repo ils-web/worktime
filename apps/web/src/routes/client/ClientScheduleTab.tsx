@@ -671,18 +671,18 @@ export function ClientScheduleTab() {
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/70 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  <th className="p-3.5 sticky left-0 bg-slate-950 z-10 min-w-[170px]">
+                  <th className="p-3 sticky left-0 rtl:left-auto rtl:right-0 bg-slate-950 z-10 w-[140px] min-w-[120px]">
                     {t('admin.thEmployee')}
                   </th>
                   {daysOfWeek.map((d) => (
-                    <th key={d.day} className="p-3.5 text-center min-w-[140px]">
+                    <th key={d.day} className="p-2.5 text-center min-w-[110px]">
                       <div>{d.label}</div>
                       <div className="text-[10px] font-mono font-normal text-emerald-400/80 mt-0.5">
                         {d.dateFormatted}
                       </div>
                     </th>
                   ))}
-                  <th className="p-3.5 text-center sticky right-0 bg-slate-950 z-10 min-w-[130px]">
+                  <th className="p-2.5 text-center sticky right-0 rtl:right-auto rtl:left-0 bg-slate-950 z-10 w-[105px] min-w-[95px]">
                     {t('admin.thActions')}
                   </th>
                 </tr>
@@ -690,7 +690,7 @@ export function ClientScheduleTab() {
               <tbody className="divide-y divide-slate-800/60">
                 {employees.map((emp) => (
                   <tr key={emp.id} className="hover:bg-slate-800/40 transition">
-                    <td className="p-3.5 font-semibold text-white sticky left-0 bg-slate-900 z-10 whitespace-nowrap">
+                    <td className="p-3 font-semibold text-white sticky left-0 rtl:left-auto rtl:right-0 bg-slate-900 z-10 whitespace-nowrap">
                       {emp.name}
                       <span className="block text-[11px] font-mono text-slate-400">{emp.empId}</span>
                     </td>
@@ -698,11 +698,11 @@ export function ClientScheduleTab() {
                       const val = scheduleMatrix[`${emp.id}_${d.day}`] || 'morning';
                       const details = getShiftDetails(val);
                       return (
-                        <td key={d.day} className="p-2.5 text-center">
+                        <td key={d.day} className="p-1.5 sm:p-2 text-center">
                           <select
                             value={val}
                             onChange={(e) => handleShiftChange(emp.id, d.day, e.target.value)}
-                            className={`w-full px-2 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${details.badgeClass}`}
+                            className={`w-full px-1.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer text-ellipsis overflow-hidden ${details.badgeClass}`}
                           >
                             <option value="morning" className="bg-slate-900 text-white">
                               🌅 {t('admin.shiftMorning')} ({shiftsConfig.morning.start}–{shiftsConfig.morning.end})
@@ -732,8 +732,8 @@ export function ClientScheduleTab() {
                         </td>
                       );
                     })}
-                    <td className="p-3 text-center sticky right-0 bg-slate-900 z-10 whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1.5">
+                    <td className="p-2 text-center sticky right-0 rtl:right-auto rtl:left-0 bg-slate-900 z-10 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
                         {/* Copy for Messenger */}
                         <button
                           type="button"
