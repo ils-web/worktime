@@ -5,7 +5,7 @@ import { LoginPage } from './routes/auth/LoginPage';
 import { OwnerDashboard } from './routes/owner/OwnerDashboard';
 import { ClientDashboard } from './routes/client/ClientDashboard';
 import { WorkerAppPage } from './routes/worker/WorkerAppPage';
-import { Smartphone, ArrowRight, QrCode } from 'lucide-react';
+import { Smartphone, ArrowRight, QrCode, Home, Lock } from 'lucide-react';
 
 function StandaloneWorkerEntry() {
   const [empIdInput, setEmpIdInput] = useState('');
@@ -32,7 +32,27 @@ function StandaloneWorkerEntry() {
 
   return (
     <div className="min-h-screen max-w-md mx-auto flex flex-col justify-between bg-slate-950 text-white p-6 antialiased select-none">
-      <div className="pt-8 flex flex-col items-center text-center">
+      {/* Top navigation bar */}
+      <div className="flex items-center justify-between w-full pt-2 pb-2">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition py-1.5 px-3 rounded-xl bg-slate-900 border border-slate-800"
+        >
+          <Home className="w-3.5 h-3.5 text-emerald-400" />
+          <span>На главную</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/login')}
+          className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 transition py-1.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 font-semibold"
+        >
+          <Lock className="w-3.5 h-3.5" />
+          <span>Вход руководителя</span>
+        </button>
+      </div>
+
+      <div className="pt-4 flex flex-col items-center text-center">
         <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-5 shadow-lg shadow-emerald-500/10">
           <Smartphone className="w-8 h-8" />
         </div>
@@ -84,13 +104,23 @@ function StandaloneWorkerEntry() {
         </div>
       </div>
 
-      <div className="pt-6 border-t border-slate-900 text-center">
-        <a
-          href="/login"
-          className="text-xs text-slate-500 hover:text-slate-300 transition"
+      <div className="pt-6 border-t border-slate-900 flex flex-col gap-3 text-center">
+        <button
+          type="button"
+          onClick={() => navigate('/login')}
+          className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 active:scale-98 text-slate-200 hover:text-white rounded-xl text-xs font-bold border border-slate-800 flex items-center justify-center gap-2 transition shadow-sm"
         >
-          Вход для руководителя компании →
-        </a>
+          <Lock className="w-4 h-4 text-emerald-400" />
+          <span>Вход для руководителя компании / бригадира →</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="text-xs text-slate-400 hover:text-emerald-400 transition py-1 flex items-center justify-center gap-1"
+        >
+          <Home className="w-3.5 h-3.5" />
+          <span>Вернуться на главную страницу сайта</span>
+        </button>
       </div>
     </div>
   );
@@ -103,20 +133,18 @@ function RootRedirect() {
       (window.navigator as any).standalone === true ||
       document.referrer.includes('android-app://'));
 
+  const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
+
   const savedWorkerEmpId =
     typeof window !== 'undefined' ? localStorage.getItem('worktime_last_worker_empid') : null;
 
-  // 1. If running as installed standalone PWA and worker ID is known:
-  if (isStandalone && savedWorkerEmpId) {
+  // 1. If running as installed standalone PWA on mobile and worker ID is known:
+  if (isStandalone && isMobileScreen && savedWorkerEmpId) {
     return <Navigate to={`/w/${savedWorkerEmpId}`} replace />;
   }
 
-  // 2. If running as installed standalone PWA but no worker ID saved yet:
-  if (isStandalone && !savedWorkerEmpId) {
-    return <StandaloneWorkerEntry />;
-  }
-
-  // 3. Regular browser on desktop or phone:
+  // 2. In all other cases (including desktop PWA, or when clicking "Вернуться на главную"):
+  // Always render the marketing home page so the user is never trapped:
   return <MarketingPage />;
 }
 
@@ -125,6 +153,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
+        <Route path="/worker" element={<StandaloneWorkerEntry />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/owner/*" element={<OwnerDashboard />} />
         <Route path="/app/*" element={<ClientDashboard />} />

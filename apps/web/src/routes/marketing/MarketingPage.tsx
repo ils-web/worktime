@@ -153,13 +153,21 @@ export function MarketingPage() {
           </nav>
 
           <div className="flex items-center gap-3">
-            {savedWorkerEmpId && (
+            {savedWorkerEmpId ? (
               <button
                 onClick={() => navigate(`/w/${savedWorkerEmpId}`)}
                 className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-xl font-bold text-xs hover:bg-emerald-500/30 transition flex items-center gap-1.5"
               >
                 <Smartphone className="w-3.5 h-3.5" />
                 <span>Моя смена</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/worker')}
+                className="hidden sm:flex px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-xl font-medium text-xs transition items-center gap-1.5"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Сотрудник</span>
               </button>
             )}
             <button

@@ -5,7 +5,7 @@ import { apiRequest } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { changeLanguage } from '../../lib/i18n';
 import { PasswordInput } from '../../components/ui/PasswordInput';
-import { Lock, User, AlertCircle, Loader2 } from 'lucide-react';
+import { Lock, User, AlertCircle, Loader2, Smartphone } from 'lucide-react';
 
 type AppLang = 'ru' | 'he' | 'en' | 'ar';
 
@@ -181,10 +181,30 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-slate-800/80 text-center flex flex-col gap-2">
-          <a href="/" className="text-xs text-slate-400 hover:text-emerald-400 transition">
+        <div className="mt-8 pt-6 border-t border-slate-800/80 text-center flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="text-xs text-slate-400 hover:text-emerald-400 transition"
+          >
             {labels.back}
-          </a>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/worker')}
+            className="text-xs text-slate-500 hover:text-slate-300 transition flex items-center justify-center gap-1.5"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+            <span>
+              {currentLang === 'he'
+                ? 'כניסת עובד (לפי ID / QR)'
+                : currentLang === 'en'
+                ? 'Worker Portal (via ID / QR)'
+                : currentLang === 'ar'
+                ? 'دخول الموظف (عبر ID / QR)'
+                : 'Вход для сотрудника (по ID / QR)'}
+            </span>
+          </button>
         </div>
       </div>
     </div>
