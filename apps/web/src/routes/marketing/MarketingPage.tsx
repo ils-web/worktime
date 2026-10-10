@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ShieldCheck,
   Smartphone,
@@ -17,13 +18,20 @@ import {
   Globe,
 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { changeLanguage } from '../../lib/i18n';
 import { Modal } from '../../components/ui/Modal';
 import { PasswordInput } from '../../components/ui/PasswordInput';
 import { useAuthStore } from '../../stores/authStore';
 
+type AppLang = 'ru' | 'he' | 'en' | 'ar';
+
 export function MarketingPage() {
   const navigate = useNavigate();
   const checkAuth = useAuthStore((state) => state.checkAuth);
+  const { t, i18n } = useTranslation();
+
+  const rawLang = i18n.language === 'iw' ? 'he' : (i18n.language || 'he');
+  const currentLang: AppLang = (rawLang === 'ru' || rawLang === 'he' || rawLang === 'en' || rawLang === 'ar') ? rawLang : 'he';
 
   // Lead contact form state
   const [contactName, setContactName] = useState('');
@@ -57,7 +65,7 @@ export function MarketingPage() {
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contactName || !contactPhone) {
-      setContactError('Пожалуйста, укажите имя и телефон для связи');
+      setContactError(t('marketing.contact.nameReq'));
       return;
     }
 
@@ -80,7 +88,7 @@ export function MarketingPage() {
       setContactEmail('');
       setContactMessage('');
     } catch (err: any) {
-      setContactError(err.message || 'Ошибка отправки заявки');
+      setContactError(err.message || t('marketing.contact.nameReq'));
     } finally {
       setIsSubmittingContact(false);
     }
@@ -89,7 +97,7 @@ export function MarketingPage() {
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regUsername || !regPassword || !regCompanyName) {
-      setRegError('Заполните обязательные поля');
+      setRegError(t('marketing.modal.reqFields'));
       return;
     }
 
@@ -114,7 +122,7 @@ export function MarketingPage() {
         navigate('/app');
       }
     } catch (err: any) {
-      setRegError(err.message || 'Ошибка регистрации');
+      setRegError(err.message || t('marketing.modal.regError'));
     } finally {
       setIsRegistering(false);
     }
@@ -123,9 +131,9 @@ export function MarketingPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-white">
       {/* 1. Navigation Header */}
-      <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur border-b border-slate-800/80 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur border-b border-slate-800/80 px-4 sm:px-6 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
+          <div className="flex items-center gap-3 shrink-0">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-emerald-400 flex items-center justify-center font-black text-slate-950 text-xl shadow-lg shadow-emerald-600/20">
               WT
             </div>
@@ -137,29 +145,47 @@ export function MarketingPage() {
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+          <nav className="hidden lg:flex items-center gap-6 xl:gap-8 text-sm font-medium text-slate-300">
             <a href="#features" className="hover:text-emerald-400 transition">
-              Возможности
+              {t('marketing.nav.features')}
             </a>
             <a href="#how-it-works" className="hover:text-emerald-400 transition">
-              Как это работает
+              {t('marketing.nav.howItWorks')}
             </a>
             <a href="#calculator" className="hover:text-emerald-400 transition">
-              Калькулятор выгоды
+              {t('marketing.nav.calculator')}
             </a>
             <a href="#contact" className="hover:text-emerald-400 transition">
-              Контакты
+              {t('marketing.nav.contact')}
             </a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Language Switcher */}
+            <div className="flex items-center gap-0.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+              {(['he', 'ru', 'en', 'ar'] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => changeLanguage(l)}
+                  className={`px-1.5 sm:px-2 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-semibold transition ${
+                    currentLang === l
+                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {l.toUpperCase()}
+                </button>
+              ))}
+            </div>
+
             {savedWorkerEmpId ? (
               <button
                 onClick={() => navigate(`/w/${savedWorkerEmpId}`)}
-                className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-xl font-bold text-xs hover:bg-emerald-500/30 transition flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-xl font-bold text-xs hover:bg-emerald-500/30 transition flex items-center gap-1.5"
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                <span>Моя смена</span>
+                <span className="hidden sm:inline">{t('marketing.nav.myShift')}</span>
               </button>
             ) : (
               <button
@@ -167,20 +193,20 @@ export function MarketingPage() {
                 className="hidden sm:flex px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-xl font-medium text-xs transition items-center gap-1.5"
               >
                 <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Сотрудник</span>
+                <span>{t('marketing.nav.worker')}</span>
               </button>
             )}
             <button
               onClick={() => navigate('/login')}
-              className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition"
+              className="px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition whitespace-nowrap"
             >
-              Войти
+              {t('marketing.nav.login')}
             </button>
             <button
               onClick={() => setIsRegisterModalOpen(true)}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/25 transition active:scale-95"
+              className="px-3 sm:px-5 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-emerald-600/25 transition active:scale-95 whitespace-nowrap"
             >
-              Начать бесплатно
+              {t('marketing.nav.startFree')}
             </button>
           </div>
         </div>
@@ -191,13 +217,13 @@ export function MarketingPage() {
         <div className="bg-emerald-950/80 border-b border-emerald-600/40 px-6 py-2.5 text-xs text-emerald-200 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2">
             <Smartphone className="w-4 h-4 text-emerald-400" />
-            <span>Вы сохранены как сотрудник на этом устройстве</span>
+            <span>{t('marketing.banner.savedWorker')}</span>
           </div>
           <button
             onClick={() => navigate(`/w/${savedWorkerEmpId}`)}
             className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-lg text-xs transition"
           >
-            Перейти к сменам →
+            {t('marketing.banner.goToShifts')}
           </button>
         </div>
       )}
@@ -211,15 +237,15 @@ export function MarketingPage() {
         <div className="max-w-5xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-8 shadow-sm">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Новое поколение учёта полевых сотрудников</span>
+            <span>{t('marketing.hero.badge')}</span>
           </div>
 
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-white leading-[1.1] mb-8">
-            Учёт рабочего времени по <span className="text-emerald-400">GPS-геозоне</span> без накруток
+            {t('marketing.hero.title')} <span className="text-emerald-400">{t('marketing.hero.titleHighlight')}</span> {t('marketing.hero.titleSuffix')}
           </h1>
 
           <p className="text-lg sm:text-xl text-slate-400 max-w-3xl mx-auto mb-10 leading-relaxed font-normal">
-            Идеально для стройки, клининга, монтажа и охраны. Сотрудники отмечаются в 1 клик со своего телефона без логинов и паролей. Система проверяет точные координаты объекта, учитывает ночные смены, обед и формирует готовые PDF-табели для бухгалтерии.
+            {t('marketing.hero.subtitle')}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
@@ -227,42 +253,42 @@ export function MarketingPage() {
               onClick={() => setIsRegisterModalOpen(true)}
               className="w-full sm:w-auto px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-base rounded-2xl shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 transition active:scale-95 group"
             >
-              <span>Попробовать 14 дней бесплатно</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition transform" />
+              <span>{t('marketing.hero.tryTrial')}</span>
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1 transition transform" />
             </button>
             <a
               href="#contact"
               className="w-full sm:w-auto px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-base rounded-2xl border border-slate-700/80 transition"
             >
-              Заказать презентацию
+              {t('marketing.hero.bookDemo')}
             </a>
           </div>
 
           {/* Key Advantages Badges */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 border-t border-slate-800/80 text-left">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 border-t border-slate-800/80 text-start">
             <div className="flex items-center gap-3 p-2">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center flex-shrink-0">
                 <Check className="w-4 h-4 stroke-[3]" />
               </div>
-              <span className="text-xs font-semibold text-slate-300">Точность геозоны до 10 метров</span>
+              <span className="text-xs font-semibold text-slate-300">{t('marketing.badges.gps')}</span>
             </div>
             <div className="flex items-center gap-3 p-2">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center flex-shrink-0">
                 <Check className="w-4 h-4 stroke-[3]" />
               </div>
-              <span className="text-xs font-semibold text-slate-300">Офлайн-режим на IndexedDB</span>
+              <span className="text-xs font-semibold text-slate-300">{t('marketing.badges.offline')}</span>
             </div>
             <div className="flex items-center gap-3 p-2">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center flex-shrink-0">
                 <Check className="w-4 h-4 stroke-[3]" />
               </div>
-              <span className="text-xs font-semibold text-slate-300">Вход по QR без паролей</span>
+              <span className="text-xs font-semibold text-slate-300">{t('marketing.badges.qr')}</span>
             </div>
             <div className="flex items-center gap-3 p-2">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center flex-shrink-0">
                 <Check className="w-4 h-4 stroke-[3]" />
               </div>
-              <span className="text-xs font-semibold text-slate-300">Табели в PDF/CSV за 1 клик</span>
+              <span className="text-xs font-semibold text-slate-300">{t('marketing.badges.reports')}</span>
             </div>
           </div>
         </div>
@@ -273,10 +299,10 @@ export function MarketingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">
-              Возможности системы
+              {t('marketing.features.tag')}
             </h2>
             <p className="text-3xl sm:text-4xl font-black tracking-tight text-white">
-              Всё, что нужно для полного контроля выездного персонала
+              {t('marketing.features.heading')}
             </p>
           </div>
 
@@ -286,18 +312,18 @@ export function MarketingPage() {
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-6">
                 <ShieldCheck className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">Защита от накруток по GPS</h3>
+              <h3 className="text-xl font-bold text-white mb-3">{t('marketing.features.f1Title')}</h3>
               <p className="text-sm text-slate-400 leading-relaxed mb-4">
-                Настройте объект на интерактивной карте и задайте радиус. Работник физически не сможет нажать «Вход», пока не окажется на объекте. Функция строгого контроля (strict GPS) отслеживает попытки покинуть зону во время смены.
+                {t('marketing.features.f1Desc')}
               </p>
               <ul className="space-y-2 text-xs text-slate-300">
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Формула Haversine высокой точности</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{t('marketing.features.f1Point1')}</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Выход разрешен из любой точки</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{t('marketing.features.f1Point2')}</span>
                 </li>
               </ul>
             </div>
@@ -307,18 +333,18 @@ export function MarketingPage() {
               <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-6">
                 <Smartphone className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">PWA-приложение без паролей</h3>
+              <h3 className="text-xl font-bold text-white mb-3">{t('marketing.features.f2Title')}</h3>
               <p className="text-sm text-slate-400 leading-relaxed mb-4">
-                Сотрудникам не нужно устанавливать тяжелые приложения из App Store или запоминать пароли. Достаточно отсканировать персональный QR-код или перейти по ссылке из мессенджера.
+                {t('marketing.features.f2Desc')}
               </p>
               <ul className="space-y-2 text-xs text-slate-300">
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400" />
-                  <span>Офлайн-накопление отметок в подвалах</span>
+                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>{t('marketing.features.f2Point1')}</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-indigo-400" />
-                  <span>4 языка (RU, עברית, العربية, EN) с RTL</span>
+                  <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>{t('marketing.features.f2Point2')}</span>
                 </li>
               </ul>
             </div>
@@ -328,18 +354,18 @@ export function MarketingPage() {
               <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mb-6">
                 <FileSpreadsheet className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">Автоматические табели и расчёт</h3>
+              <h3 className="text-xl font-bold text-white mb-3">{t('marketing.features.f3Title')}</h3>
               <p className="text-sm text-slate-400 leading-relaxed mb-4">
-                Автоматический поминутный расчет ночных часов (окно 22:00-06:00 с переходом через полночь), субботних часов, овертайма (свыше 9 часов в день) и автоматический вычет 30 мин на обед.
+                {t('marketing.features.f3Desc')}
               </p>
               <ul className="space-y-2 text-xs text-slate-300">
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-amber-400" />
-                  <span>Экспорт в PDF и Excel/CSV за секунду</span>
+                  <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{t('marketing.features.f3Point1')}</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-amber-400" />
-                  <span>Брендирование отчетов логотипом вашей фирмы</span>
+                  <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{t('marketing.features.f3Point2')}</span>
                 </li>
               </ul>
             </div>
@@ -352,10 +378,10 @@ export function MarketingPage() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2">
-              Простота внедрения
+              {t('marketing.howItWorks.tag')}
             </h2>
             <p className="text-3xl sm:text-4xl font-black tracking-tight text-white">
-              Запуск системы за 3 простых шага
+              {t('marketing.howItWorks.heading')}
             </p>
           </div>
 
@@ -364,9 +390,9 @@ export function MarketingPage() {
               <div className="w-10 h-10 rounded-xl bg-slate-800 font-mono font-bold text-emerald-400 flex items-center justify-center mb-4 text-lg">
                 01
               </div>
-              <h4 className="text-lg font-bold text-white mb-2">Создайте объект на карте</h4>
+              <h4 className="text-lg font-bold text-white mb-2">{t('marketing.howItWorks.step1Title')}</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Откройте интерактивную карту в личном кабинете, выберите адрес и установите радиус геозоны ползунком.
+                {t('marketing.howItWorks.step1Desc')}
               </p>
             </div>
 
@@ -374,9 +400,9 @@ export function MarketingPage() {
               <div className="w-10 h-10 rounded-xl bg-slate-800 font-mono font-bold text-emerald-400 flex items-center justify-center mb-4 text-lg">
                 02
               </div>
-              <h4 className="text-lg font-bold text-white mb-2">Отправьте QR работнику</h4>
+              <h4 className="text-lg font-bold text-white mb-2">{t('marketing.howItWorks.step2Title')}</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Сгенерируйте QR-код в карточке сотрудника и отправьте ссылку в WhatsApp или распечатайте на объекте.
+                {t('marketing.howItWorks.step2Desc')}
               </p>
             </div>
 
@@ -384,9 +410,9 @@ export function MarketingPage() {
               <div className="w-10 h-10 rounded-xl bg-slate-800 font-mono font-bold text-emerald-400 flex items-center justify-center mb-4 text-lg">
                 03
               </div>
-              <h4 className="text-lg font-bold text-white mb-2">Получайте готовые отчёты</h4>
+              <h4 className="text-lg font-bold text-white mb-2">{t('marketing.howItWorks.step3Title')}</h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Работники нажимают Вход/Выход, а система формирует сводки, выявляет опоздания и готовит документы к выплате зарплаты.
+                {t('marketing.howItWorks.step3Desc')}
               </p>
             </div>
           </div>
@@ -399,13 +425,13 @@ export function MarketingPage() {
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold mb-3">
               <Calculator className="w-3.5 h-3.5" />
-              <span>Калькулятор окупаемости</span>
+              <span>{t('marketing.calc.tag')}</span>
             </div>
             <h3 className="text-2xl sm:text-3xl font-black text-white">
-              Сколько денег сохранит ваша компания?
+              {t('marketing.calc.heading')}
             </h3>
             <p className="text-xs sm:text-sm text-slate-400 mt-2">
-              По статистике, бумажные табели и «приписки» времени обходятся работодателю минимум в 3.5 часа на человека в неделю.
+              {t('marketing.calc.subtitle')}
             </p>
           </div>
 
@@ -413,8 +439,8 @@ export function MarketingPage() {
             <div className="space-y-6">
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-2">
-                  <span className="text-slate-300">Количество сотрудников:</span>
-                  <span className="text-emerald-400 font-bold font-mono text-sm">{workerCount} чел.</span>
+                  <span className="text-slate-300">{t('marketing.calc.workersLabel')}</span>
+                  <span className="text-emerald-400 font-bold font-mono text-sm">{workerCount} {t('marketing.calc.workersUnit')}</span>
                 </div>
                 <input
                   type="range"
@@ -428,8 +454,8 @@ export function MarketingPage() {
 
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-2">
-                  <span className="text-slate-300">Средняя ставка за час:</span>
-                  <span className="text-emerald-400 font-bold font-mono text-sm">{hourlyRate} ₪ / час</span>
+                  <span className="text-slate-300">{t('marketing.calc.rateLabel')}</span>
+                  <span className="text-emerald-400 font-bold font-mono text-sm">{hourlyRate} {t('marketing.calc.rateUnit')}</span>
                 </div>
                 <input
                   type="range"
@@ -445,13 +471,13 @@ export function MarketingPage() {
 
             <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-center flex flex-col justify-center items-center">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Ориентировочная экономия в месяц
+                {t('marketing.calc.savingsLabel')}
               </span>
-              <div className="text-4xl sm:text-5xl font-black text-emerald-400 font-mono mt-2 mb-2">
+              <div className="text-4xl sm:text-5xl font-black text-emerald-400 font-mono mt-2 mb-2" dir="ltr">
                 ~ {monthlySavings.toLocaleString()} ₪
               </div>
               <span className="text-[11px] text-slate-400">
-                Окупает стоимость подписки на TimeTracker в десятки раз уже в первый месяц.
+                {t('marketing.calc.savingsNote')}
               </span>
             </div>
           </div>
@@ -465,27 +491,27 @@ export function MarketingPage() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold mb-4">
                 <Mail className="w-3.5 h-3.5" />
-                <span>Свяжитесь с нами</span>
+                <span>{t('marketing.contact.tag')}</span>
               </div>
               <h2 className="text-3xl font-black text-white tracking-tight mb-4">
-                Готовы навести порядок в учёте часов?
+                {t('marketing.contact.heading')}
               </h2>
               <p className="text-sm text-slate-400 leading-relaxed mb-6">
-                Оставьте заявку, и наш специалист свяжется с вами, чтобы провести демонстрацию системы на ваших реальных объектах и помочь с подключением.
+                {t('marketing.contact.desc')}
               </p>
 
               <div className="space-y-4 text-xs text-slate-300">
                 <div className="flex items-center gap-3">
-                  <Building2 className="w-4 h-4 text-emerald-400" />
-                  <span>Быстрый запуск за 1 день без интеграторов</span>
+                  <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{t('marketing.contact.benefit1')}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>14 дней бесплатного пробного периода с полным функционалом</span>
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{t('marketing.contact.benefit2')}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Globe className="w-4 h-4 text-emerald-400" />
-                  <span>Поддержка компаний в Израиле и по всему миру</span>
+                  <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{t('marketing.contact.benefit3')}</span>
                 </div>
               </div>
             </div>
@@ -497,20 +523,20 @@ export function MarketingPage() {
                   <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-8 h-8" />
                   </div>
-                  <h3 className="text-lg font-bold text-white">Заявка успешно отправлена!</h3>
+                  <h3 className="text-lg font-bold text-white">{t('marketing.contact.successTitle')}</h3>
                   <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                    Спасибо за обращение. Мы перезвоним вам в течение рабочего дня.
+                    {t('marketing.contact.successDesc')}
                   </p>
                   <button
                     onClick={() => setContactSuccess(false)}
                     className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300"
                   >
-                    Отправить ещё одну заявку
+                    {t('marketing.contact.sendAnother')}
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleContactSubmit} className="space-y-4">
-                  <h3 className="text-lg font-bold text-white mb-2">Заказать консультацию</h3>
+                  <h3 className="text-lg font-bold text-white mb-2">{t('marketing.contact.formTitle')}</h3>
 
                   {contactError && (
                     <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
@@ -520,33 +546,33 @@ export function MarketingPage() {
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                      Ваше имя *
+                      {t('marketing.contact.nameLabel')}
                     </label>
                     <div className="relative">
-                      <User className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                      <User className="w-4 h-4 absolute ltr:left-3 rtl:right-3 top-2.5 text-slate-500" />
                       <input
                         type="text"
                         required
                         value={contactName}
                         onChange={(e) => setContactName(e.target.value)}
-                        placeholder="Алексей"
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                        placeholder={t('marketing.contact.namePlaceholder')}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 ltr:pl-9 rtl:pr-9 ltr:pr-3 rtl:pl-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                       />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                      Компания / Сфера деятельности
+                      {t('marketing.contact.companyLabel')}
                     </label>
                     <div className="relative">
-                      <Building2 className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                      <Building2 className="w-4 h-4 absolute ltr:left-3 rtl:right-3 top-2.5 text-slate-500" />
                       <input
                         type="text"
                         value={contactCompany}
                         onChange={(e) => setContactCompany(e.target.value)}
-                        placeholder="Строительная компания 'Олимп'"
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                        placeholder={t('marketing.contact.companyPlaceholder')}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 ltr:pl-9 rtl:pr-9 ltr:pr-3 rtl:pl-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                       />
                     </div>
                   </div>
@@ -554,33 +580,35 @@ export function MarketingPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                        Телефон *
+                        {t('marketing.contact.phoneLabel')}
                       </label>
                       <div className="relative">
-                        <Phone className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                        <Phone className="w-4 h-4 absolute ltr:left-3 rtl:right-3 top-2.5 text-slate-500" />
                         <input
                           type="tel"
                           required
                           value={contactPhone}
                           onChange={(e) => setContactPhone(e.target.value)}
-                          placeholder="+972 / +7"
-                          className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                          placeholder="+972..."
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 ltr:pl-9 rtl:pr-9 ltr:pr-3 rtl:pl-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition text-start"
+                          dir="ltr"
                         />
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                        Email
+                        {t('marketing.contact.emailLabel')}
                       </label>
                       <div className="relative">
-                        <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                        <Mail className="w-4 h-4 absolute ltr:left-3 rtl:right-3 top-2.5 text-slate-500" />
                         <input
                           type="email"
                           value={contactEmail}
                           onChange={(e) => setContactEmail(e.target.value)}
                           placeholder="info@company.com"
-                          className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                          className="w-full bg-slate-950 border border-slate-700 rounded-xl py-2 ltr:pl-9 rtl:pr-9 ltr:pr-3 rtl:pl-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition text-start"
+                          dir="ltr"
                         />
                       </div>
                     </div>
@@ -588,13 +616,13 @@ export function MarketingPage() {
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                      Комментарий
+                      {t('marketing.contact.commentLabel')}
                     </label>
                     <textarea
                       rows={2}
                       value={contactMessage}
                       onChange={(e) => setContactMessage(e.target.value)}
-                      placeholder="Сколько у вас объектов и сотрудников?"
+                      placeholder={t('marketing.contact.commentPlaceholder')}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                     />
                   </div>
@@ -604,8 +632,8 @@ export function MarketingPage() {
                     disabled={isSubmittingContact}
                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>{isSubmittingContact ? 'Отправка...' : 'Отправить заявку'}</span>
+                    <Send className="w-3.5 h-3.5 rtl:rotate-180" />
+                    <span>{isSubmittingContact ? t('marketing.contact.submittingBtn') : t('marketing.contact.submitBtn')}</span>
                   </button>
                 </form>
               )}
@@ -618,17 +646,17 @@ export function MarketingPage() {
       <footer className="mt-auto border-t border-slate-800/80 bg-slate-950 px-6 py-8 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2 font-bold text-slate-400">
-            <span>TimeTracker SaaS v2.0</span>
+            <span>{t('marketing.footer.tagline')}</span>
             <span>•</span>
-            <span>Все права защищены © {new Date().getFullYear()}</span>
+            <span>{t('marketing.footer.rights')} {new Date().getFullYear()}</span>
           </div>
 
           <div className="flex items-center gap-6">
             <button onClick={() => navigate('/login')} className="hover:text-slate-300 transition">
-              Вход для клиентов
+              {t('marketing.footer.clientLogin')}
             </button>
             <button onClick={() => setIsRegisterModalOpen(true)} className="hover:text-slate-300 transition">
-              Регистрация триала
+              {t('marketing.footer.trialReg')}
             </button>
           </div>
         </div>
@@ -638,11 +666,11 @@ export function MarketingPage() {
       <Modal
         isOpen={isRegisterModalOpen}
         onClose={() => setIsRegisterModalOpen(false)}
-        title="Начать 14 дней бесплатно"
+        title={t('marketing.modal.title')}
       >
         <form onSubmit={handleRegisterSubmit} className="space-y-4">
           <p className="text-xs text-slate-400">
-            Заполните данные для создания аккаунта компании. Кредитная карта не требуется.
+            {t('marketing.modal.subtitle')}
           </p>
 
           {regError && (
@@ -653,35 +681,35 @@ export function MarketingPage() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Название компании / ИП *
+              {t('marketing.modal.companyLabel')}
             </label>
             <input
               type="text"
               required
               value={regCompanyName}
               onChange={(e) => setRegCompanyName(e.target.value)}
-              placeholder="OOO СтройМонтаж"
+              placeholder={t('marketing.modal.companyPlaceholder')}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Логин для входа в панель *
+              {t('marketing.modal.loginLabel')}
             </label>
             <input
               type="text"
               required
               value={regUsername}
               onChange={(e) => setRegUsername(e.target.value)}
-              placeholder="company_admin"
+              placeholder={t('marketing.modal.loginPlaceholder')}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Пароль (от 6 символов) *
+              {t('marketing.modal.passLabel')}
             </label>
             <PasswordInput
               required
@@ -695,14 +723,15 @@ export function MarketingPage() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Контактный телефон
+              {t('marketing.modal.phoneLabel')}
             </label>
             <input
               type="tel"
               value={regPhone}
               onChange={(e) => setRegPhone(e.target.value)}
               placeholder="+972..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 text-start"
+              dir="ltr"
             />
           </div>
 
@@ -712,14 +741,14 @@ export function MarketingPage() {
               onClick={() => setIsRegisterModalOpen(false)}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300"
             >
-              Отмена
+              {t('marketing.modal.cancel')}
             </button>
             <button
               type="submit"
               disabled={isRegistering}
               className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95 disabled:opacity-50"
             >
-              {isRegistering ? 'Создание...' : 'Создать аккаунт'}
+              {isRegistering ? t('marketing.modal.creatingBtn') : t('marketing.modal.createBtn')}
             </button>
           </div>
         </form>
