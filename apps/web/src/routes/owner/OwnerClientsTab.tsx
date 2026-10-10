@@ -4,7 +4,7 @@ import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { PasswordInput } from '../../components/ui/PasswordInput';
-import { Plus, Key, ToggleLeft, ToggleRight, DollarSign, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Key, ToggleLeft, ToggleRight, DollarSign, Trash2, Loader2, AlertTriangle, Building2 } from 'lucide-react';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { formatIsoToDisplayDate } from '@timetracker/shared';
 
@@ -15,6 +15,7 @@ export function OwnerClientsTab() {
   const [tariffClientId, setTariffClientId] = useState<any | null>(null);
   const [deleteClient, setDeleteClient] = useState<{ id: string; name: string; username: string; empCount: number } | null>(null);
   const [isCleanupOpen, setIsCleanupOpen] = useState(false);
+  const [billingDetailsClient, setBillingDetailsClient] = useState<any | null>(null);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -33,6 +34,15 @@ export function OwnerClientsTab() {
     pricePerUser: 0,
     pricePerHour: 0,
     trialEndsAt: '',
+  });
+
+  const [billingDetailsForm, setBillingDetailsForm] = useState({
+    legalName: '',
+    taxId: '',
+    billingAddress: '',
+    billingEmail: '',
+    billingPhone: '',
+    externalCustId: '',
   });
 
   // Queries
@@ -87,6 +97,18 @@ export function OwnerClientsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['owner-clients'] });
       setTariffClientId(null);
+    },
+  });
+
+  const updateBillingDetailsMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: any }) =>
+      apiRequest(`/api/owner/clients/${id}/billing-details`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['owner-clients'] });
+      setBillingDetailsClient(null);
     },
   });
 
@@ -176,7 +198,17 @@ export function OwnerClientsTab() {
                     const isTrialActive = c.trialEndsAt && new Date(c.trialEndsAt) > new Date();
                     return (
                       <tr key={c.id} className="hover:bg-slate-800/40 transition">
-                        <td className="p-4 font-semibold text-white">{c.name}</td>
+                        <td className="p-4">
+                          <div className="font-semibold text-white">{c.name}</div>
+                          {c.legalName && c.legalName !== c.name && (
+                            <div className="text-[11px] text-slate-400">{c.legalName}</div>
+                          )}
+                          {c.taxId ? (
+                            <div className="text-[11px] font-mono text-emerald-400 mt-0.5">ח.פ: {c.taxId}</div>
+                          ) : (
+                            <div className="text-[10px] text-amber-500/80 mt-0.5">Реквизиты не указаны</div>
+                          )}
+                        </td>
                         <td className="p-4 text-slate-300 font-mono text-xs">{c.username}</td>
                         <td className="p-4 text-slate-300">
                           <span className="font-semibold text-emerald-400">
@@ -209,6 +241,23 @@ export function OwnerClientsTab() {
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setBillingDetailsClient(c);
+                                setBillingDetailsForm({
+                                  legalName: c.legalName || c.name || '',
+                                  taxId: c.taxId || '',
+                                  billingAddress: c.billingAddress || '',
+                                  billingEmail: c.billingEmail || '',
+                                  billingPhone: c.billingPhone || '',
+                                  externalCustId: c.externalCustId || '',
+                                });
+                              }}
+                              title="Реквизиты и Налоги (ח.פ / חשבוניות)"
+                              className="p-1.5 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-slate-800 transition"
+                            >
+                              <Building2 className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => {
                                 setTariffClientId(c.id);
@@ -591,6 +640,132 @@ export function OwnerClientsTab() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Modal: Client Tax & Billing Details (ח.פ / פרטי עסק לחשבוניות) */}
+      <Modal
+        isOpen={!!billingDetailsClient}
+        onClose={() => setBillingDetailsClient(null)}
+        title={`Реквизиты и Налоги: ${billingDetailsClient?.name || ''}`}
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (billingDetailsClient) {
+              updateBillingDetailsMutation.mutate({
+                id: billingDetailsClient.id,
+                body: billingDetailsForm,
+              });
+            }
+          }}
+          className="space-y-4"
+        >
+          <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-xs text-slate-300 leading-relaxed">
+            Данные используются для автоматической выписки счетов и квитанций (<strong className="text-emerald-400">חשבונית מס קבלה</strong>) через сервисы электронных счетов в Израиле (Morning / Green Invoice / iCount).
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Юридическое название для счёта (שם העסק לחשבונית)
+            </label>
+            <input
+              type="text"
+              value={billingDetailsForm.legalName}
+              onChange={(e) => setBillingDetailsForm({ ...billingDetailsForm, legalName: e.target.value })}
+              placeholder="например, א.ב. בנייה והנדסה בע״מ"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Налоговый номер компании (ח.פ / עוסק מורשה / ת.ז)
+            </label>
+            <input
+              type="text"
+              value={billingDetailsForm.taxId}
+              onChange={(e) => setBillingDetailsForm({ ...billingDetailsForm, taxId: e.target.value })}
+              placeholder="9 цифр, например 516123456"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 text-start"
+              dir="ltr"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Email бухгалтерии (אימייל הנה״ח)
+              </label>
+              <input
+                type="email"
+                value={billingDetailsForm.billingEmail}
+                onChange={(e) => setBillingDetailsForm({ ...billingDetailsForm, billingEmail: e.target.value })}
+                placeholder="accounting@company.co.il"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 text-start"
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Телефон бухгалтерии
+              </label>
+              <input
+                type="tel"
+                value={billingDetailsForm.billingPhone}
+                onChange={(e) => setBillingDetailsForm({ ...billingDetailsForm, billingPhone: e.target.value })}
+                placeholder="050-1234567"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 text-start"
+                dir="ltr"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Юридический адрес для счетов (כתובת מלאה)
+            </label>
+            <input
+              type="text"
+              value={billingDetailsForm.billingAddress}
+              onChange={(e) => setBillingDetailsForm({ ...billingDetailsForm, billingAddress: e.target.value })}
+              placeholder="ул. Жаботински 7, Рамат-Ган, 5252007"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              ID клиента в Morning / iCount (External Customer ID)
+            </label>
+            <input
+              type="text"
+              value={billingDetailsForm.externalCustId}
+              onChange={(e) => setBillingDetailsForm({ ...billingDetailsForm, externalCustId: e.target.value })}
+              placeholder="Опционально (привязка к контрагенту в платёжной системе)"
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 text-start"
+              dir="ltr"
+            />
+          </div>
+
+          <div className="pt-2 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setBillingDetailsClient(null)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-xl text-slate-300 transition"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={updateBillingDetailsMutation.isPending}
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg transition active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {updateBillingDetailsMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>Сохранить реквизиты</span>
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

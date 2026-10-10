@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
-import { Calculator, FileText, CheckCircle, Clock, Trash2, Plus, Loader2 } from 'lucide-react';
+import { Calculator, FileText, CheckCircle, Clock, Trash2, Plus, Loader2, Receipt, ExternalLink } from 'lucide-react';
 import { DatePicker } from '../../components/ui/DatePicker';
 import { formatIsoToDisplayDate } from '@timetracker/shared';
 
@@ -38,6 +38,12 @@ export function OwnerBillingTab() {
   // Mutations
   const toggleInvoiceMutation = useMutation({
     mutationFn: (id: string) => apiRequest(`/api/owner/invoices/${id}/toggle`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['owner-invoices'] }),
+  });
+
+  const issueReceiptMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/owner/invoices/${id}/issue-receipt`, { method: 'POST' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['owner-invoices'] }),
   });
 
@@ -210,17 +216,40 @@ export function OwnerBillingTab() {
                         <td className="p-4 text-slate-300 font-mono text-xs">{inv.periodMonth}</td>
                         <td className="p-4 font-bold text-white">₪{inv.amount.toLocaleString()}</td>
                         <td className="p-4">
-                          {inv.status === 'paid' ? (
-                            <Badge variant="emerald" dot>Оплачен</Badge>
-                          ) : (
-                            <Badge variant="amber">Ожидает оплаты</Badge>
-                          )}
+                          <div>
+                            {inv.status === 'paid' ? (
+                              <Badge variant="emerald" dot>Оплачен</Badge>
+                            ) : (
+                              <Badge variant="amber">Ожидает оплаты</Badge>
+                            )}
+                            {inv.receiptNumber && (
+                              <a
+                                href={inv.receiptUrl || '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 hover:underline mt-1"
+                                title="Открыть חשבונית מס קבלה"
+                              >
+                                <Receipt className="w-3 h-3 shrink-0" />
+                                <span>חשבונית #{inv.receiptNumber}</span>
+                                <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                              </a>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4 text-xs text-slate-400">
                           {formatIsoToDisplayDate(inv.createdAt.slice(0, 10))}
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => issueReceiptMutation.mutate(inv.id)}
+                              disabled={issueReceiptMutation.isPending}
+                              title="Выписать / обновить חשבונית מס קבלה"
+                              className="p-1.5 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-slate-800 transition"
+                            >
+                              <Receipt className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => toggleInvoiceMutation.mutate(inv.id)}
                               title={inv.status === 'paid' ? 'Отметить как неоплачен' : 'Отметить как оплачен'}

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@timetracker/db';
 import { calculateClientBilling } from '@timetracker/shared';
 import { authRequired, requireRole } from '../middleware/auth';
+import { IsraeliInvoiceService } from '../services/israeliInvoiceService';
 
 export const ownerRouter = Router();
 
@@ -163,6 +164,33 @@ ownerRouter.post('/clients/:id/tariff', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Owner update tariff error:', err);
     res.status(500).json({ error: 'Ошибка обновления тарифа' });
+  }
+});
+
+/**
+ * Update client Israeli tax and billing details (פרטי עסק וחשבוניות מס)
+ */
+ownerRouter.post('/clients/:id/billing-details', async (req: Request, res: Response) => {
+  try {
+    const id = req.params['id'] as string;
+    const { legalName, taxId, billingAddress, billingEmail, billingPhone, externalCustId } = req.body;
+
+    const updated = await prisma.client.update({
+      where: { id },
+      data: {
+        legalName: legalName !== undefined ? (legalName?.trim() || null) : undefined,
+        taxId: taxId !== undefined ? (taxId?.trim() || null) : undefined,
+        billingAddress: billingAddress !== undefined ? (billingAddress?.trim() || null) : undefined,
+        billingEmail: billingEmail !== undefined ? (billingEmail?.trim() || null) : undefined,
+        billingPhone: billingPhone !== undefined ? (billingPhone?.trim() || null) : undefined,
+        externalCustId: externalCustId !== undefined ? (externalCustId?.trim() || null) : undefined,
+      },
+    });
+
+    res.json({ success: true, client: updated });
+  } catch (err) {
+    console.error('Owner update billing details error:', err);
+    res.status(500).json({ error: 'Ошибка сохранения реквизитов клиента' });
   }
 });
 
@@ -341,6 +369,22 @@ ownerRouter.post('/invoices/:id/toggle', async (req: Request, res: Response) => 
   }
 });
 
+ownerRouter.post('/invoices/:id/issue-receipt', async (req: Request, res: Response) => {
+  try {
+    const id = req.params['id'] as string;
+    const { method } = req.body || {};
+
+    const result = await IsraeliInvoiceService.generateTaxInvoiceReceipt(id, {
+      method: method || 'manual',
+    });
+
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('Owner issue receipt error:', err);
+    res.status(500).json({ error: err.message || 'Ошибка выписки חשבונית מס קבלה' });
+  }
+});
+
 ownerRouter.delete('/invoices/:id', async (req: Request, res: Response) => {
   try {
     const id = req.params['id'] as string;
@@ -428,5 +472,91 @@ ownerRouter.post('/password', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Owner change password error:', err);
     res.status(500).json({ error: 'Ошибка смены пароля' });
+  }
+});
+
+/**
+ * SaaS Provider Business Settings & Israeli Invoicing configuration
+ */
+ownerRouter.get('/settings', async (_req: Request, res: Response) => {
+  try {
+    const settings = await prisma.saaSSettings.findFirst();
+    res.json({
+      success: true,
+      settings: settings
+        ? {
+            companyName: settings.companyName || '',
+            taxId: settings.taxId || '',
+            address: settings.address || '',
+            phone: settings.phone || '',
+            email: settings.email || '',
+            vatRate: settings.vatRate ?? 17.0,
+            invoiceProvider: settings.invoiceProvider || 'morning',
+            invoiceApiKey: settings.invoiceApiKey ? '••••••••' + settings.invoiceApiKey.slice(-4) : '',
+            hasApiKey: !!settings.invoiceApiKey,
+            hasApiSecret: !!settings.invoiceApiSecret,
+            invoiceSandbox: settings.invoiceSandbox,
+          }
+        : null,
+    });
+  } catch (err) {
+    console.error('Get owner settings error:', err);
+    res.status(500).json({ error: 'Ошибка получения настроек бизнеса' });
+  }
+});
+
+ownerRouter.post('/settings', async (req: Request, res: Response) => {
+  try {
+    const {
+      companyName,
+      taxId,
+      address,
+      phone,
+      email,
+      vatRate,
+      invoiceProvider,
+      invoiceApiKey,
+      invoiceApiSecret,
+      invoiceSandbox,
+    } = req.body;
+
+    const first = await prisma.saaSSettings.findFirst();
+    const dataToUpdate: any = {
+      ...(companyName !== undefined ? { companyName: companyName.trim() } : {}),
+      ...(taxId !== undefined ? { taxId: taxId.trim() } : {}),
+      ...(address !== undefined ? { address: address.trim() } : {}),
+      ...(phone !== undefined ? { phone: phone.trim() } : {}),
+      ...(email !== undefined ? { email: email.trim() } : {}),
+      ...(typeof vatRate === 'number' ? { vatRate } : {}),
+      ...(invoiceProvider !== undefined ? { invoiceProvider } : {}),
+      ...(typeof invoiceSandbox === 'boolean' ? { invoiceSandbox } : {}),
+    };
+
+    if (invoiceApiKey && invoiceApiKey.trim() && !invoiceApiKey.startsWith('•••')) {
+      dataToUpdate.invoiceApiKey = invoiceApiKey.trim();
+    }
+    if (invoiceApiSecret && invoiceApiSecret.trim() && !invoiceApiSecret.startsWith('•••')) {
+      dataToUpdate.invoiceApiSecret = invoiceApiSecret.trim();
+    }
+
+    let updated;
+    if (first) {
+      updated = await prisma.saaSSettings.update({
+        where: { id: first.id },
+        data: dataToUpdate,
+      });
+    } else {
+      updated = await prisma.saaSSettings.create({
+        data: {
+          ownerPasswordHash: '',
+          ...dataToUpdate,
+        },
+      });
+    }
+
+    res.json({ success: true, settings: updated });
+  } catch (err) {
+    console.error('Update owner settings error:', err);
+    res.status(500).json({ error: 'Ошибка сохранения настроек бизнеса' });
   }
 });

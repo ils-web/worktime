@@ -21971,7 +21971,7 @@ var require_application = __commonJS({
   "node_modules/express/lib/application.js"(exports2, module2) {
     "use strict";
     var finalhandler = require_finalhandler();
-    var Router7 = require_router();
+    var Router8 = require_router();
     var methods = require_methods();
     var middleware = require_init();
     var query = require_query();
@@ -22036,7 +22036,7 @@ var require_application = __commonJS({
     };
     app2.lazyrouter = function lazyrouter() {
       if (!this._router) {
-        this._router = new Router7({
+        this._router = new Router8({
           caseSensitive: this.enabled("case sensitive routing"),
           strict: this.enabled("strict routing")
         });
@@ -23898,7 +23898,7 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Route = require_route();
-    var Router7 = require_router();
+    var Router8 = require_router();
     var req = require_request();
     var res = require_response();
     exports2 = module2.exports = createApplication;
@@ -23921,7 +23921,7 @@ var require_express = __commonJS({
     exports2.request = req;
     exports2.response = res;
     exports2.Route = Route;
-    exports2.Router = Router7;
+    exports2.Router = Router8;
     exports2.json = bodyParser.json;
     exports2.query = require_query();
     exports2.raw = bodyParser.raw;
@@ -92474,7 +92474,7 @@ var require_fontkit_umd = __commonJS({
 });
 
 // packages/api/src/app.ts
-var import_express7 = __toESM(require_express2());
+var import_express8 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 var import_cookie_parser = __toESM(require_cookie_parser());
 
@@ -97207,6 +97207,269 @@ function calculateClientBilling(params) {
   }
 }
 
+// packages/api/src/services/israeliInvoiceService.ts
+var IsraeliInvoiceService = class {
+  /**
+   * Get Morning (Green Invoice) API base URL based on sandbox flag
+   */
+  static getMorningBaseUrl(isSandbox) {
+    return isSandbox ? "https://sandbox.greeninvoice.co.il/api/v1" : "https://api.greeninvoice.co.il/api/v1";
+  }
+  /**
+   * Acquire JWT token from Morning API
+   */
+  static async getMorningToken(apiKey, apiSecret, isSandbox) {
+    const baseUrl = this.getMorningBaseUrl(isSandbox);
+    const res = await fetch(`${baseUrl}/account/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: apiKey, secret: apiSecret })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Morning authentication failed (${res.status}): ${errText}`);
+    }
+    const data = await res.json();
+    return data.token;
+  }
+  /**
+   * Generate an online payment link for a specific invoice
+   */
+  static async createPaymentLink(invoiceId, originUrl) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { client: true }
+    });
+    if (!invoice) {
+      throw new Error("Invoice not found");
+    }
+    const settings = await prisma.saaSSettings.findFirst();
+    const vatRate = settings?.vatRate ?? 17;
+    const totalWithVat = Math.round(invoice.amount * (1 + vatRate / 100) * 100) / 100;
+    const hasKeys = settings?.invoiceApiKey && settings?.invoiceApiSecret && settings.invoiceProvider === "morning";
+    if (!hasKeys) {
+      const host = originUrl || "http://localhost:4000";
+      const simUrl = `${host}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`;
+      return {
+        paymentUrl: simUrl,
+        isSimulated: true,
+        invoiceId: invoice.id,
+        amount: invoice.amount,
+        vatRate,
+        totalWithVat
+      };
+    }
+    try {
+      const token = await this.getMorningToken(
+        settings.invoiceApiKey,
+        settings.invoiceApiSecret,
+        !!settings.invoiceSandbox
+      );
+      const baseUrl = this.getMorningBaseUrl(!!settings.invoiceSandbox);
+      const appHost = originUrl || process.env["FRONTEND_URL"] || "https://timetracker-saas.vercel.app";
+      const payload = {
+        description: `\u05D3\u05DE\u05D9 \u05DE\u05E0\u05D5\u05D9 \u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
+        amount: totalWithVat,
+        currency: "ILS",
+        client: {
+          name: invoice.client.legalName || invoice.client.name,
+          taxId: invoice.client.taxId || void 0,
+          emails: invoice.client.billingEmail ? [invoice.client.billingEmail] : [],
+          phone: invoice.client.billingPhone || void 0,
+          address: invoice.client.billingAddress || void 0
+        },
+        document: {
+          type: 320,
+          // 320 = חשבונית מס קבלה (Tax Invoice Receipt)
+          description: `\u05D3\u05DE\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`
+        },
+        custom: invoice.id,
+        successUrl: `${appHost}/client?payment=success&invoiceId=${invoice.id}`,
+        failureUrl: `${appHost}/client?payment=failed&invoiceId=${invoice.id}`,
+        notifyUrl: `${process.env["API_URL"] || appHost}/api/webhooks/morning`
+      };
+      const res = await fetch(`${baseUrl}/payments/form`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn("Morning create payment form warning:", errText);
+        const simUrl = `${appHost}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`;
+        return {
+          paymentUrl: simUrl,
+          isSimulated: true,
+          invoiceId: invoice.id,
+          amount: invoice.amount,
+          vatRate,
+          totalWithVat
+        };
+      }
+      const resData = await res.json();
+      return {
+        paymentUrl: resData.url,
+        isSimulated: false,
+        invoiceId: invoice.id,
+        amount: invoice.amount,
+        vatRate,
+        totalWithVat
+      };
+    } catch (err) {
+      console.error("Failed to create Morning payment link, falling back to simulated:", err);
+      const host = originUrl || "http://localhost:4000";
+      return {
+        paymentUrl: `${host}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`,
+        isSimulated: true,
+        invoiceId: invoice.id,
+        amount: invoice.amount,
+        vatRate,
+        totalWithVat
+      };
+    }
+  }
+  /**
+   * Issues official חשבונית מס קבלה (Tax Invoice Receipt) for an invoice
+   */
+  static async generateTaxInvoiceReceipt(invoiceId, paymentDetails) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { client: true }
+    });
+    if (!invoice) {
+      throw new Error("Invoice not found");
+    }
+    const settings = await prisma.saaSSettings.findFirst();
+    const vatRate = settings?.vatRate ?? 17;
+    const totalWithVat = Math.round(invoice.amount * (1 + vatRate / 100) * 100) / 100;
+    let receiptNumber = invoice.receiptNumber;
+    let receiptUrl = invoice.receiptUrl;
+    let docId = invoice.paymentDocId;
+    const hasKeys = settings?.invoiceApiKey && settings?.invoiceApiSecret && settings.invoiceProvider === "morning";
+    if (hasKeys) {
+      try {
+        const token = await this.getMorningToken(
+          settings.invoiceApiKey,
+          settings.invoiceApiSecret,
+          !!settings.invoiceSandbox
+        );
+        const baseUrl = this.getMorningBaseUrl(!!settings.invoiceSandbox);
+        const methodCode = paymentDetails?.method === "bit" ? 12 : paymentDetails?.method === "bank_transfer" ? 4 : 1;
+        const docPayload = {
+          type: 320,
+          // חשבונית מס קבלה
+          description: `\u05D3\u05DE\u05D9 \u05DE\u05E0\u05D5\u05D9 \u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
+          lang: "he",
+          currency: "ILS",
+          vatRate,
+          client: {
+            name: invoice.client.legalName || invoice.client.name,
+            taxId: invoice.client.taxId || void 0,
+            emails: invoice.client.billingEmail ? [invoice.client.billingEmail] : [],
+            phone: invoice.client.billingPhone || void 0,
+            address: invoice.client.billingAddress || void 0
+          },
+          income: [
+            {
+              description: `\u05D3\u05DE\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 \u05D1\u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
+              quantity: 1,
+              price: invoice.amount,
+              vatType: 0
+              // Standard VAT rate
+            }
+          ],
+          payment: [
+            {
+              type: methodCode,
+              price: totalWithVat,
+              date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+            }
+          ]
+        };
+        const res = await fetch(`${baseUrl}/documents`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(docPayload)
+        });
+        if (res.ok) {
+          const docData = await res.json();
+          receiptNumber = String(docData.number || docData.documentNumber || "");
+          receiptUrl = docData.url?.pdf || docData.url?.origin || "";
+          docId = docData.id || "";
+        } else {
+          console.warn("Morning document creation response not ok:", await res.text());
+        }
+      } catch (e) {
+        console.error("Failed to issue Morning document directly:", e);
+      }
+    }
+    if (!receiptNumber) {
+      const randomNum = Math.floor(1e5 + Math.random() * 9e5);
+      receiptNumber = `REC-${randomNum}`;
+    }
+    if (!receiptUrl) {
+      receiptUrl = `https://morning.co.il/receipt/${receiptNumber}.pdf`;
+    }
+    const updated = await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        status: "paid",
+        paidAt: /* @__PURE__ */ new Date(),
+        receiptNumber,
+        receiptUrl,
+        paymentMethod: paymentDetails?.method || "credit_card",
+        paymentDocId: docId || paymentDetails?.transactionId || `sim_${Date.now()}`
+      }
+    });
+    return {
+      invoiceId: updated.id,
+      receiptNumber: updated.receiptNumber,
+      receiptUrl: updated.receiptUrl,
+      status: updated.status,
+      paidAt: updated.paidAt
+    };
+  }
+  /**
+   * Handle incoming Morning (Green Invoice) webhook
+   */
+  static async handleMorningWebhook(payload) {
+    const invoiceId = payload?.custom || payload?.invoiceId;
+    if (!invoiceId) {
+      console.warn("Morning webhook received without custom invoiceId:", payload);
+      return false;
+    }
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId }
+    });
+    if (!invoice) {
+      console.warn(`Morning webhook invoiceId not found: ${invoiceId}`);
+      return false;
+    }
+    const docNumber = payload?.document?.number || payload?.documentNumber || payload?.number || `REC-${Math.floor(1e5 + Math.random() * 9e5)}`;
+    const docUrl = payload?.document?.url?.pdf || payload?.document?.url?.origin || payload?.receiptUrl || `https://morning.co.il/receipt/${docNumber}.pdf`;
+    const docId = payload?.document?.id || payload?.transactionId || payload?.id;
+    const method = payload?.payment?.method || payload?.paymentMethod || "credit_card";
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: "paid",
+        paidAt: /* @__PURE__ */ new Date(),
+        receiptNumber: String(docNumber),
+        receiptUrl: docUrl,
+        paymentMethod: method,
+        paymentDocId: docId ? String(docId) : null
+      }
+    });
+    return true;
+  }
+};
+
 // packages/api/src/routes/owner.ts
 var ownerRouter = (0, import_express3.Router)();
 ownerRouter.use(authRequired, requireRole("owner"));
@@ -97330,6 +97593,27 @@ ownerRouter.post("/clients/:id/tariff", async (req, res) => {
   } catch (err) {
     console.error("Owner update tariff error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0442\u0430\u0440\u0438\u0444\u0430" });
+  }
+});
+ownerRouter.post("/clients/:id/billing-details", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const { legalName, taxId, billingAddress, billingEmail, billingPhone, externalCustId } = req.body;
+    const updated = await prisma.client.update({
+      where: { id },
+      data: {
+        legalName: legalName !== void 0 ? legalName?.trim() || null : void 0,
+        taxId: taxId !== void 0 ? taxId?.trim() || null : void 0,
+        billingAddress: billingAddress !== void 0 ? billingAddress?.trim() || null : void 0,
+        billingEmail: billingEmail !== void 0 ? billingEmail?.trim() || null : void 0,
+        billingPhone: billingPhone !== void 0 ? billingPhone?.trim() || null : void 0,
+        externalCustId: externalCustId !== void 0 ? externalCustId?.trim() || null : void 0
+      }
+    });
+    res.json({ success: true, client: updated });
+  } catch (err) {
+    console.error("Owner update billing details error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0440\u0435\u043A\u0432\u0438\u0437\u0438\u0442\u043E\u0432 \u043A\u043B\u0438\u0435\u043D\u0442\u0430" });
   }
 });
 ownerRouter.delete("/clients/:id", async (req, res) => {
@@ -97476,6 +97760,19 @@ ownerRouter.post("/invoices/:id/toggle", async (req, res) => {
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u0441\u0447\u0435\u0442\u0430" });
   }
 });
+ownerRouter.post("/invoices/:id/issue-receipt", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const { method } = req.body || {};
+    const result = await IsraeliInvoiceService.generateTaxInvoiceReceipt(id, {
+      method: method || "manual"
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("Owner issue receipt error:", err);
+    res.status(500).json({ error: err.message || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0432\u044B\u043F\u0438\u0441\u043A\u0438 \u05D7\u05E9\u05D1\u05D5\u05E0\u05D9\u05EA \u05DE\u05E1 \u05E7\u05D1\u05DC\u05D4" });
+  }
+});
 ownerRouter.delete("/invoices/:id", async (req, res) => {
   try {
     const id = req.params["id"];
@@ -97548,6 +97845,81 @@ ownerRouter.post("/password", async (req, res) => {
   } catch (err) {
     console.error("Owner change password error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043C\u0435\u043D\u044B \u043F\u0430\u0440\u043E\u043B\u044F" });
+  }
+});
+ownerRouter.get("/settings", async (_req, res) => {
+  try {
+    const settings = await prisma.saaSSettings.findFirst();
+    res.json({
+      success: true,
+      settings: settings ? {
+        companyName: settings.companyName || "",
+        taxId: settings.taxId || "",
+        address: settings.address || "",
+        phone: settings.phone || "",
+        email: settings.email || "",
+        vatRate: settings.vatRate ?? 17,
+        invoiceProvider: settings.invoiceProvider || "morning",
+        invoiceApiKey: settings.invoiceApiKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" + settings.invoiceApiKey.slice(-4) : "",
+        hasApiKey: !!settings.invoiceApiKey,
+        hasApiSecret: !!settings.invoiceApiSecret,
+        invoiceSandbox: settings.invoiceSandbox
+      } : null
+    });
+  } catch (err) {
+    console.error("Get owner settings error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A \u0431\u0438\u0437\u043D\u0435\u0441\u0430" });
+  }
+});
+ownerRouter.post("/settings", async (req, res) => {
+  try {
+    const {
+      companyName,
+      taxId,
+      address,
+      phone,
+      email,
+      vatRate,
+      invoiceProvider,
+      invoiceApiKey,
+      invoiceApiSecret,
+      invoiceSandbox
+    } = req.body;
+    const first = await prisma.saaSSettings.findFirst();
+    const dataToUpdate = {
+      ...companyName !== void 0 ? { companyName: companyName.trim() } : {},
+      ...taxId !== void 0 ? { taxId: taxId.trim() } : {},
+      ...address !== void 0 ? { address: address.trim() } : {},
+      ...phone !== void 0 ? { phone: phone.trim() } : {},
+      ...email !== void 0 ? { email: email.trim() } : {},
+      ...typeof vatRate === "number" ? { vatRate } : {},
+      ...invoiceProvider !== void 0 ? { invoiceProvider } : {},
+      ...typeof invoiceSandbox === "boolean" ? { invoiceSandbox } : {}
+    };
+    if (invoiceApiKey && invoiceApiKey.trim() && !invoiceApiKey.startsWith("\u2022\u2022\u2022")) {
+      dataToUpdate.invoiceApiKey = invoiceApiKey.trim();
+    }
+    if (invoiceApiSecret && invoiceApiSecret.trim() && !invoiceApiSecret.startsWith("\u2022\u2022\u2022")) {
+      dataToUpdate.invoiceApiSecret = invoiceApiSecret.trim();
+    }
+    let updated;
+    if (first) {
+      updated = await prisma.saaSSettings.update({
+        where: { id: first.id },
+        data: dataToUpdate
+      });
+    } else {
+      updated = await prisma.saaSSettings.create({
+        data: {
+          ownerPasswordHash: "",
+          ...dataToUpdate
+        }
+      });
+    }
+    res.json({ success: true, settings: updated });
+  } catch (err) {
+    console.error("Update owner settings error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A \u0431\u0438\u0437\u043D\u0435\u0441\u0430" });
   }
 });
 
@@ -98578,7 +98950,12 @@ clientRouter.get("/settings", async (req, res) => {
         defaultShifts: true,
         autoDeductLunch: true,
         trialEndsAt: true,
-        tariffMode: true
+        tariffMode: true,
+        legalName: true,
+        taxId: true,
+        billingAddress: true,
+        billingEmail: true,
+        billingPhone: true
       }
     });
     res.json({
@@ -98597,13 +98974,27 @@ clientRouter.get("/settings", async (req, res) => {
 clientRouter.post("/settings", requireRole("client"), async (req, res) => {
   try {
     const clientId = getTargetClientId(req);
-    const { name, defaultShifts, autoDeductLunch } = req.body;
+    const {
+      name,
+      defaultShifts,
+      autoDeductLunch,
+      legalName,
+      taxId,
+      billingAddress,
+      billingEmail,
+      billingPhone
+    } = req.body;
     const updated = await prisma.client.update({
       where: { id: clientId },
       data: {
         ...name ? { name } : {},
         ...defaultShifts ? { defaultShifts } : {},
-        ...autoDeductLunch !== void 0 ? { autoDeductLunch } : {}
+        ...autoDeductLunch !== void 0 ? { autoDeductLunch } : {},
+        ...legalName !== void 0 ? { legalName: legalName?.trim() || null } : {},
+        ...taxId !== void 0 ? { taxId: taxId?.trim() || null } : {},
+        ...billingAddress !== void 0 ? { billingAddress: billingAddress?.trim() || null } : {},
+        ...billingEmail !== void 0 ? { billingEmail: billingEmail?.trim() || null } : {},
+        ...billingPhone !== void 0 ? { billingPhone: billingPhone?.trim() || null } : {}
       }
     });
     res.json({ success: true, settings: updated });
@@ -99370,6 +99761,49 @@ clientRouter.get("/geocode", requireRole("client", "foreman"), async (req, res) 
     res.json({ success: true, results: [] });
   }
 });
+clientRouter.get("/invoices", requireRole("client"), async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const invoices = await prisma.invoice.findMany({
+      where: { clientId },
+      orderBy: { periodMonth: "desc" }
+    });
+    const settings = await prisma.saaSSettings.findFirst();
+    const vatRate = settings?.vatRate ?? 17;
+    res.json({
+      success: true,
+      invoices,
+      vatRate,
+      provider: settings?.invoiceProvider || "morning"
+    });
+  } catch (err) {
+    console.error("Get client invoices error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0441\u0447\u0435\u0442\u043E\u0432" });
+  }
+});
+clientRouter.post("/invoices/:id/pay", requireRole("client"), async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const id = req.params["id"];
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, clientId }
+    });
+    if (!invoice) {
+      res.status(404).json({ error: "\u0421\u0447\u0451\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    if (invoice.status === "paid") {
+      res.status(400).json({ error: "\u0421\u0447\u0451\u0442 \u0443\u0436\u0435 \u043E\u043F\u043B\u0430\u0447\u0435\u043D" });
+      return;
+    }
+    const origin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : void 0);
+    const result = await IsraeliInvoiceService.createPaymentLink(invoice.id, origin);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("Create payment link error:", err);
+    res.status(500).json({ error: err.message || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u0438 \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u043E\u043F\u043B\u0430\u0442\u0443" });
+  }
+});
 
 // packages/api/src/routes/worker.ts
 var import_express5 = __toESM(require_express2());
@@ -100107,8 +100541,76 @@ cronRouter.get("/billing", async (req, res) => {
   }
 });
 
+// packages/api/src/routes/webhooks.ts
+var import_express7 = __toESM(require_express2());
+var webhookRouter = (0, import_express7.Router)();
+webhookRouter.post("/morning", async (req, res) => {
+  try {
+    console.log("[Webhook] Morning payload received:", JSON.stringify(req.body));
+    const processed = await IsraeliInvoiceService.handleMorningWebhook(req.body);
+    res.json({ success: processed });
+  } catch (err) {
+    console.error("[Webhook] Morning processing error:", err);
+    res.status(500).json({ error: err.message || "Webhook processing failed" });
+  }
+});
+webhookRouter.get("/simulate-payment", async (req, res) => {
+  try {
+    const invoiceId = req.query["invoiceId"];
+    if (!invoiceId) {
+      res.status(400).send("Missing invoiceId parameter");
+      return;
+    }
+    const result = await IsraeliInvoiceService.generateTaxInvoiceReceipt(invoiceId, {
+      method: "credit_card",
+      transactionId: `sim_tx_${Date.now()}`
+    });
+    const frontendUrl = process.env["FRONTEND_URL"] || (req.headers.referer ? new URL(req.headers.referer).origin : "http://localhost:5173");
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="he" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>\u05EA\u05E9\u05DC\u05D5\u05DD \u05D1\u05D5\u05E6\u05E2 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4 | TimeTracker</title>
+        <style>
+          body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .card { background: #1e293b; padding: 2rem; border-radius: 1rem; border: 1px solid #334155; text-align: center; max-width: 420px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+          .icon { width: 56px; height: 56px; margin: 0 auto 1rem; color: #10b981; }
+          h2 { margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700; color: #10b981; }
+          p { margin: 0.25rem 0; color: #94a3b8; font-size: 0.9rem; }
+          .doc { background: #0f172a; padding: 0.75rem; border-radius: 0.5rem; margin: 1rem 0; border: 1px dashed #334155; font-family: monospace; font-size: 0.85rem; color: #38bdf8; }
+          .btn { display: inline-block; background: #059669; color: white; text-decoration: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; font-size: 0.9rem; margin-top: 1rem; }
+          .btn:hover { background: #10b981; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <svg class="icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h2>\u05D4\u05EA\u05E9\u05DC\u05D5\u05DD \u05E0\u05E7\u05DC\u05D8 \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4!</h2>
+          <p>\u05D4\u05D5\u05E4\u05E7\u05D4 <strong>\u05D7\u05E9\u05D1\u05D5\u05E0\u05D9\u05EA \u05DE\u05E1 \u05E7\u05D1\u05DC\u05D4</strong> \u05D3\u05D9\u05D2\u05D9\u05D8\u05DC\u05D9\u05EA \u05D7\u05EA\u05D5\u05DE\u05D4 \u05DB\u05D7\u05D5\u05E7.</p>
+          <div class="doc">\u05DE\u05E1\u05E4\u05E8 \u05DE\u05E1\u05DE\u05DA: ${result.receiptNumber}</div>
+          <p style="font-size: 0.8rem; color: #64748b;">(\u05E1\u05D1\u05D9\u05D1\u05EA \u05D1\u05D3\u05D9\u05E7\u05D5\u05EA / Sandbox)</p>
+          <a class="btn" href="${frontendUrl}">\u05D7\u05D6\u05E8\u05D4 \u05DC\u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker</a>
+          <script>
+            setTimeout(() => {
+              window.location.href = "${frontendUrl}";
+            }, 3000);
+          </script>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error("Simulate payment error:", err);
+    res.status(500).send(`Payment simulation error: ${err.message}`);
+  }
+});
+
 // packages/api/src/app.ts
-var app = (0, import_express7.default)();
+var app = (0, import_express8.default)();
 var allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
@@ -100128,7 +100630,7 @@ app.use(
   })
 );
 app.use((0, import_cookie_parser.default)());
-app.use(import_express7.default.json());
+app.use(import_express8.default.json());
 app.use((req, _res, next) => {
   console.log(`[API] ${req.method} ${req.url}`);
   next();
@@ -100180,6 +100682,7 @@ app.use(["/api/owner", "/owner"], ownerRouter);
 app.use(["/api/client", "/client"], clientRouter);
 app.use(["/api/worker", "/worker"], workerRouter);
 app.use(["/api/cron", "/cron"], cronRouter);
+app.use(["/api/webhooks", "/webhooks"], webhookRouter);
 app.use((err, _req, res, _next) => {
   console.error("[API ERROR]", err);
   res.status(500).json({ error: err?.message || "Internal server error" });

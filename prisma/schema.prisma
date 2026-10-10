@@ -13,6 +13,16 @@ generator client {
 model SaaSSettings {
   id                Int      @id @default(autoincrement())
   ownerPasswordHash String
+  companyName       String?  // Legal name of SaaS provider (e.g. TimeTracker Solutions)
+  taxId             String?  // ח.פ / עוסק מורשה (9 digits)
+  address           String?  // Business address
+  phone             String?  // Business contact phone
+  email             String?  // Official billing email
+  vatRate           Float?   @default(17.0) // מע"מ %
+  invoiceProvider   String?  @default("morning") // "morning" | "icount" | "manual"
+  invoiceApiKey     String?  // API token for Morning (Green Invoice)
+  invoiceApiSecret  String?  // API secret / key
+  invoiceSandbox    Boolean  @default(true) // Sandbox vs Production mode
   updatedAt         DateTime @updatedAt
 }
 
@@ -25,6 +35,14 @@ model Client {
   isActive        Boolean    @default(true)
   createdAt       DateTime   @default(now())
   trialEndsAt     DateTime?
+
+  // Israeli Tax & Billing Details (פרטי עסק וחשבוניות מס)
+  legalName       String?    // שם העסק הרשמי לחשבונית מס
+  taxId           String?    // ח.פ / עוסק מורשה / ת.ז (9 ספרות)
+  billingAddress  String?    // כתובת מלאה לחשבוניות
+  billingEmail    String?    // אימייל הנהלת חשבונות
+  billingPhone    String?    // טלפון איש קשר לחשבונות
+  externalCustId  String?    // Morning/iCount Customer ID
 
   defaultShifts   Json       // { morning: {start,end}, evening: {...}, night: {...} }
 
@@ -39,6 +57,7 @@ model Client {
   logs            TimeLog[]
   invoices        Invoice[]
   dailyNotes      DailyNote[]
+  sites           WorkSite[]
 
   @@index([username])
 }
@@ -67,6 +86,7 @@ model Employee {
   logs      TimeLog[]
   schedules Schedule[]
   dailyNotes DailyNote[]
+  sites     EmployeeSite[]
 
   @@index([clientId])
   @@index([empId])
@@ -131,16 +151,20 @@ model DailyNote {
 }
 
 model Invoice {
-  id          String    @id @default(uuid())
-  clientId    String
-  periodMonth String    // YYYY-MM
-  amount      Float
-  status      String    @default("pending") // "pending" | "paid"
-  details     Json?     // Snapshot of billing calculations
-  createdAt   DateTime  @default(now())
-  paidAt      DateTime?
+  id            String    @id @default(uuid())
+  clientId      String
+  periodMonth   String    // YYYY-MM
+  amount        Float
+  status        String    @default("pending") // "pending" | "paid"
+  details       Json?     // Snapshot of billing calculations
+  receiptUrl    String?   // URL to official signed PDF (חשבונית מס קבלה)
+  receiptNumber String?   // Official invoice number (מספר מסמך)
+  paymentMethod String?   // "credit_card" | "bit" | "bank_transfer" | "manual"
+  paymentDocId  String?   // External transaction/document ID in Morning
+  createdAt     DateTime  @default(now())
+  paidAt        DateTime?
 
-  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, periodMonth])
   @@index([clientId])
@@ -184,4 +208,33 @@ model ContactRequest {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+model WorkSite {
+  id        String         @id @default(uuid())
+  clientId  String
+  name      String
+  address   String?
+  lat       Float
+  lng       Float
+  radius    Int            @default(100) // in meters
+  createdAt DateTime       @default(now())
+
+  client    Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employees EmployeeSite[]
+
+  @@index([clientId])
+}
+
+model EmployeeSite {
+  id         Int       @id @default(autoincrement())
+  employeeId Int
+  siteId     String
+
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  site       WorkSite  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, siteId])
+  @@index([employeeId])
+  @@index([siteId])
 }

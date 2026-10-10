@@ -7,6 +7,7 @@ import { ownerRouter } from './routes/owner';
 import { clientRouter } from './routes/client';
 import { workerRouter } from './routes/worker';
 import { cronRouter } from './routes/cron';
+import { webhookRouter } from './routes/webhooks';
 
 export const app = express();
 
@@ -93,6 +94,7 @@ app.use(['/api/owner', '/owner'], ownerRouter);
 app.use(['/api/client', '/client'], clientRouter);
 app.use(['/api/worker', '/worker'], workerRouter);
 app.use(['/api/cron', '/cron'], cronRouter);
+app.use(['/api/webhooks', '/webhooks'], webhookRouter);
 
 // Global Error Handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

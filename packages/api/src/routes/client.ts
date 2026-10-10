@@ -16,6 +16,7 @@ import {
 import { authRequired, requireRole } from '../middleware/auth';
 import { generateCsvReport, ReportRow } from '../services/csvReportService';
 import { generatePdfReport } from '../services/pdfReportService';
+import { IsraeliInvoiceService } from '../services/israeliInvoiceService';
 
 export const clientRouter = Router();
 
@@ -463,6 +464,11 @@ clientRouter.get('/settings', async (req: Request, res: Response) => {
         autoDeductLunch: true,
         trialEndsAt: true,
         tariffMode: true,
+        legalName: true,
+        taxId: true,
+        billingAddress: true,
+        billingEmail: true,
+        billingPhone: true,
       },
     });
 
@@ -483,7 +489,16 @@ clientRouter.get('/settings', async (req: Request, res: Response) => {
 clientRouter.post('/settings', requireRole('client'), async (req: Request, res: Response) => {
   try {
     const clientId = getTargetClientId(req);
-    const { name, defaultShifts, autoDeductLunch } = req.body;
+    const {
+      name,
+      defaultShifts,
+      autoDeductLunch,
+      legalName,
+      taxId,
+      billingAddress,
+      billingEmail,
+      billingPhone,
+    } = req.body;
 
     const updated = await prisma.client.update({
       where: { id: clientId },
@@ -491,6 +506,11 @@ clientRouter.post('/settings', requireRole('client'), async (req: Request, res: 
         ...(name ? { name } : {}),
         ...(defaultShifts ? { defaultShifts } : {}),
         ...(autoDeductLunch !== undefined ? { autoDeductLunch } : {}),
+        ...(legalName !== undefined ? { legalName: legalName?.trim() || null } : {}),
+        ...(taxId !== undefined ? { taxId: taxId?.trim() || null } : {}),
+        ...(billingAddress !== undefined ? { billingAddress: billingAddress?.trim() || null } : {}),
+        ...(billingEmail !== undefined ? { billingEmail: billingEmail?.trim() || null } : {}),
+        ...(billingPhone !== undefined ? { billingPhone: billingPhone?.trim() || null } : {}),
       },
     });
 
@@ -1420,4 +1440,60 @@ clientRouter.get('/geocode', requireRole('client', 'foreman'), async (req: Reque
     res.json({ success: true, results: [] });
   }
 });
+
+/**
+ * 15. Invoices & Israeli Tax Documents (Client Self-Service)
+ */
+clientRouter.get('/invoices', requireRole('client'), async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const invoices = await prisma.invoice.findMany({
+      where: { clientId },
+      orderBy: { periodMonth: 'desc' },
+    });
+
+    const settings = await prisma.saaSSettings.findFirst();
+    const vatRate = settings?.vatRate ?? 17.0;
+
+    res.json({
+      success: true,
+      invoices,
+      vatRate,
+      provider: settings?.invoiceProvider || 'morning',
+    });
+  } catch (err) {
+    console.error('Get client invoices error:', err);
+    res.status(500).json({ error: 'Ошибка загрузки счетов' });
+  }
+});
+
+clientRouter.post('/invoices/:id/pay', requireRole('client'), async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const id = req.params['id'] as string;
+
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, clientId },
+    });
+
+    if (!invoice) {
+      res.status(404).json({ error: 'Счёт не найден' });
+      return;
+    }
+
+    if (invoice.status === 'paid') {
+      res.status(400).json({ error: 'Счёт уже оплачен' });
+      return;
+    }
+
+    const origin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
+    const result = await IsraeliInvoiceService.createPaymentLink(invoice.id, origin);
+
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('Create payment link error:', err);
+    res.status(500).json({ error: err.message || 'Ошибка генерации ссылки на оплату' });
+  }
+});
+
 
