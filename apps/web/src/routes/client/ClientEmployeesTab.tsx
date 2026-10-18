@@ -21,6 +21,8 @@ import {
   Building2,
   Clock,
   RefreshCw,
+  AlertTriangle,
+  CalendarCheck,
 } from 'lucide-react';
 
 interface ClientEmployeesTabProps {
@@ -43,6 +45,8 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     isMobile: false,
     strictGps: false,
     autoCloseShift: false,
+    isGlobal: false,
+    contractMonthlyHours: 182,
     foremanId: '',
     siteIds: [] as string[],
     geofenceLat: 32.0853,
@@ -58,6 +62,8 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     isMobile: false,
     strictGps: false,
     autoCloseShift: false,
+    isGlobal: false,
+    contractMonthlyHours: 182,
     foremanId: '',
     siteIds: [] as string[],
     geofenceLat: 32.0853,
@@ -99,6 +105,8 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
         isMobile: false,
         strictGps: false,
         autoCloseShift: false,
+        isGlobal: false,
+        contractMonthlyHours: 182,
         foremanId: '',
         siteIds: [],
         geofenceLat: 32.0853,
@@ -223,7 +231,61 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 ) : (
                   filteredEmployees.map((emp) => (
                     <tr key={emp.id} className="hover:bg-slate-800/40 transition">
-                      <td className="p-4 font-semibold text-white">{emp.name}</td>
+                      <td className="p-4">
+                        <div className="font-semibold text-white">{emp.name}</div>
+                        {emp.isGlobal && emp.contractMonthlyHours > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                              <CalendarCheck className="w-3 h-3 text-indigo-400" />
+                              <span>
+                                {emp.globalMonthlyStatus
+                                  ? t('admin.globalWorkedOf', {
+                                      worked: emp.globalMonthlyStatus.workedHours,
+                                      target: emp.contractMonthlyHours,
+                                    })
+                                  : t('admin.globalBadge', { target: emp.contractMonthlyHours })}
+                              </span>
+                            </span>
+                            {emp.globalMonthlyStatus?.shouldAlert &&
+                              emp.globalMonthlyStatus.status === 'underworked' && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                  title={t('admin.globalAlertUnderworkedDesc', {
+                                    hours: emp.globalMonthlyStatus.remainingHours,
+                                    worked: emp.globalMonthlyStatus.workedHours,
+                                    target: emp.contractMonthlyHours,
+                                    days: emp.globalMonthlyStatus.remainingWorkingDays,
+                                  })}
+                                >
+                                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                  <span>
+                                    {t('admin.globalUnderworkedBadge', {
+                                      hours: emp.globalMonthlyStatus.remainingHours,
+                                    })}
+                                  </span>
+                                </span>
+                              )}
+                            {emp.globalMonthlyStatus?.shouldAlert &&
+                              emp.globalMonthlyStatus.status === 'overworked' && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                  title={t('admin.globalAlertOverworkedDesc', {
+                                    hours: emp.globalMonthlyStatus.overtimeMonthlyHours,
+                                    worked: emp.globalMonthlyStatus.workedHours,
+                                    target: emp.contractMonthlyHours,
+                                  })}
+                                >
+                                  <AlertTriangle className="w-3 h-3 text-rose-400" />
+                                  <span>
+                                    {t('admin.globalOverworkedBadge', {
+                                      hours: emp.globalMonthlyStatus.overtimeMonthlyHours,
+                                    })}
+                                  </span>
+                                </span>
+                              )}
+                          </div>
+                        )}
+                      </td>
                       <td className="p-4">
                         <code className="px-2 py-0.5 bg-slate-950 border border-slate-800 rounded text-xs text-emerald-400 font-mono">
                           {emp.empId}
@@ -318,6 +380,8 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                                 isMobile: !!emp.isMobile,
                                 strictGps: !!emp.strictGps,
                                 autoCloseShift: !!emp.autoCloseShift,
+                                isGlobal: !!emp.isGlobal,
+                                contractMonthlyHours: emp.contractMonthlyHours || 182,
                                 foremanId: emp.foremanId || '',
                                 siteIds: assignedSiteIds,
                                 geofenceLat: initialLat,
@@ -394,6 +458,8 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
               isMobile: form.isMobile,
               strictGps: form.strictGps,
               autoCloseShift: form.autoCloseShift,
+              isGlobal: form.isGlobal,
+              contractMonthlyHours: form.isGlobal ? Number(form.contractMonthlyHours) || 182 : null,
               foremanId: form.foremanId || null,
               siteIds: form.siteIds,
               geofence: form.isMobile
@@ -477,6 +543,51 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
               </span>
             </div>
           </label>
+
+          {/* Global Worker Option (Monthly Contract Norm) */}
+          <div className="p-3 bg-indigo-950/20 border border-indigo-500/25 rounded-xl space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.isGlobal}
+                onChange={(e) => setForm({ ...form, isGlobal: e.target.checked })}
+                className="rounded border-slate-700 text-indigo-500 focus:ring-indigo-500 mt-0.5"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs text-white font-semibold flex items-center gap-1.5">
+                  <CalendarCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  {t('admin.empGlobalWorker')}
+                </span>
+                <span className="text-[11px] text-slate-400 mt-0.5">
+                  {t('admin.empGlobalWorkerDesc')}
+                </span>
+              </div>
+            </label>
+
+            {form.isGlobal && (
+              <div className="pt-1 pl-6">
+                <label className="block text-xs font-semibold text-indigo-300 mb-1">
+                  {t('admin.empContractMonthlyHours')}
+                </label>
+                <div className="flex items-center gap-2 max-w-[220px]">
+                  <input
+                    type="number"
+                    min="1"
+                    max="744"
+                    step="0.5"
+                    required={form.isGlobal}
+                    value={form.contractMonthlyHours}
+                    onChange={(e) =>
+                      setForm({ ...form, contractMonthlyHours: parseFloat(e.target.value) || 0 })
+                    }
+                    placeholder={t('admin.empContractHoursPlaceholder')}
+                    className="w-full px-3 py-1.5 bg-slate-950 border border-indigo-500/40 rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <span className="text-xs text-slate-400 shrink-0">{t('admin.hourUnit')}</span>
+                </div>
+              </div>
+            )}
+          </div>
 
           {userRole === 'client' && foremen.length > 0 && (
             <div>
@@ -689,6 +800,10 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                   isMobile: editForm.isMobile,
                   strictGps: editForm.strictGps,
                   autoCloseShift: editForm.autoCloseShift,
+                  isGlobal: editForm.isGlobal,
+                  contractMonthlyHours: editForm.isGlobal
+                    ? Number(editForm.contractMonthlyHours) || 182
+                    : null,
                   foremanId: editForm.foremanId || null,
                   siteIds: editForm.siteIds,
                   geofence: editForm.isMobile
@@ -771,6 +886,54 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 </span>
               </div>
             </label>
+
+            {/* Global Worker Option (Monthly Contract Norm) */}
+            <div className="p-3 bg-indigo-950/20 border border-indigo-500/25 rounded-xl space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.isGlobal}
+                  onChange={(e) => setEditForm({ ...editForm, isGlobal: e.target.checked })}
+                  className="rounded border-slate-700 text-indigo-500 focus:ring-indigo-500 mt-0.5"
+                />
+                <div className="flex flex-col">
+                  <span className="text-xs text-white font-semibold flex items-center gap-1.5">
+                    <CalendarCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    {t('admin.empGlobalWorker')}
+                  </span>
+                  <span className="text-[11px] text-slate-400 mt-0.5">
+                    {t('admin.empGlobalWorkerDesc')}
+                  </span>
+                </div>
+              </label>
+
+              {editForm.isGlobal && (
+                <div className="pt-1 pl-6">
+                  <label className="block text-xs font-semibold text-indigo-300 mb-1">
+                    {t('admin.empContractMonthlyHours')}
+                  </label>
+                  <div className="flex items-center gap-2 max-w-[220px]">
+                    <input
+                      type="number"
+                      min="1"
+                      max="744"
+                      step="0.5"
+                      required={editForm.isGlobal}
+                      value={editForm.contractMonthlyHours}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          contractMonthlyHours: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder={t('admin.empContractHoursPlaceholder')}
+                      className="w-full px-3 py-1.5 bg-slate-950 border border-indigo-500/40 rounded-lg text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <span className="text-xs text-slate-400 shrink-0">{t('admin.hourUnit')}</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {userRole === 'client' && foremen.length > 0 && (
               <div>

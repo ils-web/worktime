@@ -4,7 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
 import { DatePicker } from '../../components/ui/DatePicker';
-import { formatIsoToDisplayDate, addDays, getDayOfWeek } from '@timetracker/shared';
+import {
+  formatIsoToDisplayDate,
+  addDays,
+  getDayOfWeek,
+  getJerusalemParts,
+} from '@timetracker/shared';
 import {
   Download,
   FileSpreadsheet,
@@ -16,6 +21,8 @@ import {
   Edit2,
   Trash2,
   User,
+  CalendarCheck,
+  AlertTriangle,
 } from 'lucide-react';
 
 const HOUR_OPTIONS = Array.from({ length: 24 }).map((_, i) => String(i).padStart(2, '0'));
@@ -25,11 +32,10 @@ export function ClientHoursTab() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(1); // 1st of month
-    return d.toISOString().slice(0, 10);
+    const parts = getJerusalemParts(new Date());
+    return `${parts.dateStr.slice(0, 7)}-01`;
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() => getJerusalemParts(new Date()).dateStr);
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
 
   const [isQuickOpen, setIsQuickOpen] = useState(false);
@@ -40,7 +46,9 @@ export function ClientHoursTab() {
   // Forms
   const [quickForm, setQuickForm] = useState({ empId: '', action: 'CLOCK_IN' });
   const [manualEmpId, setManualEmpId] = useState('');
-  const [manualShiftDate, setManualShiftDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualShiftDate, setManualShiftDate] = useState(
+    () => getJerusalemParts(new Date()).dateStr
+  );
   const [manualStartTime, setManualStartTime] = useState('08:00');
   const [manualEndTime, setManualEndTime] = useState('17:00');
   const [manualNotes, setManualNotes] = useState('');
@@ -50,7 +58,7 @@ export function ClientHoursTab() {
   const { data, isLoading } = useQuery({
     queryKey: ['client-hours', startDate, endDate, selectedEmpId],
     queryFn: () =>
-      apiRequest<{ hours: any[]; clientName: string }>(
+      apiRequest<{ hours: any[]; clientName: string; globalSummaries?: any[] }>(
         `/api/client/hours?startDate=${startDate}&endDate=${endDate}${selectedEmpId ? `&empId=${encodeURIComponent(selectedEmpId)}` : ''}`
       ),
   });
@@ -108,6 +116,7 @@ export function ClientHoursTab() {
   });
 
   const hoursList = data?.hours || [];
+  const globalSummaries = data?.globalSummaries || [];
   const employees = empData?.employees || [];
 
   // Summary statistics
@@ -116,25 +125,27 @@ export function ClientHoursTab() {
   const totalSaturday = hoursList.reduce((acc, h) => acc + (h.saturdayHours || 0), 0);
   const totalOvertime = hoursList.reduce((acc, h) => acc + (h.overtimeHours || 0), 0);
 
-  // Quick date presets
+  // Quick date presets (in Asia/Jerusalem calendar)
   const handleThisMonth = () => {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    setStartDate(firstDay.toISOString().slice(0, 10));
-    setEndDate(lastDay.toISOString().slice(0, 10));
+    const parts = getJerusalemParts(new Date());
+    const ym = parts.dateStr.slice(0, 7);
+    const daysInMonth = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
+    setStartDate(`${ym}-01`);
+    setEndDate(`${ym}-${String(daysInMonth).padStart(2, '0')}`);
   };
 
   const handleLastMonth = () => {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-    setStartDate(firstDay.toISOString().slice(0, 10));
-    setEndDate(lastDay.toISOString().slice(0, 10));
+    const parts = getJerusalemParts(new Date());
+    const prevYear = parts.month === 1 ? parts.year - 1 : parts.year;
+    const prevMonth = parts.month === 1 ? 12 : parts.month - 1;
+    const ym = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+    const daysInMonth = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+    setStartDate(`${ym}-01`);
+    setEndDate(`${ym}-${String(daysInMonth).padStart(2, '0')}`);
   };
 
   const handleToday = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getJerusalemParts(new Date()).dateStr;
     setStartDate(today);
     setEndDate(today);
   };
@@ -353,6 +364,80 @@ export function ClientHoursTab() {
           </div>
         </div>
       </div>
+
+      {/* Global Employees Monthly Norm Progress */}
+      {globalSummaries.length > 0 && (
+        <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-4 shadow-md space-y-3">
+          <div className="flex items-center gap-2 text-indigo-300 font-bold text-xs uppercase tracking-wider">
+            <CalendarCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>{t('admin.empGlobalWorker')}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {globalSummaries.map((gs: any) => {
+              const isOver = gs.status === 'overworked';
+              const isUnderAlert = gs.shouldAlert && gs.status === 'underworked';
+              const barPct = Math.min(100, Math.max(0, gs.progressPercent || 0));
+              return (
+                <div
+                  key={gs.empId}
+                  className={`p-3.5 rounded-xl border space-y-2 ${
+                    isOver
+                      ? 'bg-rose-950/25 border-rose-500/40'
+                      : isUnderAlert
+                      ? 'bg-amber-950/25 border-amber-500/40'
+                      : 'bg-slate-950/60 border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-white text-xs truncate">{gs.name}</span>
+                    <span className="text-xs font-mono font-bold text-indigo-300 shrink-0">
+                      {t('admin.globalWorkedOf', {
+                        worked: gs.workedHours,
+                        target: gs.contractMonthlyHours,
+                      })}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all rounded-full ${
+                        isOver
+                          ? 'bg-rose-500'
+                          : isUnderAlert
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${barPct}%` }}
+                    />
+                  </div>
+                  {gs.shouldAlert && (
+                    <div className="flex items-start gap-1.5 text-[11px] leading-snug pt-0.5">
+                      <AlertTriangle
+                        className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
+                          isOver ? 'text-rose-400' : 'text-amber-400'
+                        }`}
+                      />
+                      <span className={isOver ? 'text-rose-200' : 'text-amber-200'}>
+                        {isOver
+                          ? t('admin.globalAlertOverworkedDesc', {
+                              hours: gs.overtimeMonthlyHours,
+                              worked: gs.workedHours,
+                              target: gs.contractMonthlyHours,
+                            })
+                          : t('admin.globalAlertUnderworkedDesc', {
+                              hours: gs.remainingHours,
+                              worked: gs.workedHours,
+                              target: gs.contractMonthlyHours,
+                              days: gs.remainingWorkingDays,
+                            })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 3. Detailed Hours Table */}
       {isLoading ? (

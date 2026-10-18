@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Search,
   FileEdit,
+  CalendarCheck,
 } from 'lucide-react';
 
 export function ClientDashboardTab() {
@@ -75,7 +76,14 @@ export function ClientDashboardTab() {
 
   // 2. Manual logs today
   const manualLogsToday = todayStats?.manualLogsToday || [];
-  const totalAlertsCount = longShiftAlerts.length + manualLogsToday.length;
+
+  // 3. Global Employee Monthly Contract Alerts (3 working days before month-end or overworked)
+  const globalAlerts = employees.filter(
+    (e) => e.isGlobal && e.globalMonthlyStatus?.shouldAlert
+  );
+
+  const totalAlertsCount =
+    longShiftAlerts.length + manualLogsToday.length + globalAlerts.length;
 
   const [panelTab, setPanelTab] = useState<'alerts' | 'summary' | 'feed'>(
     totalAlertsCount > 0 ? 'alerts' : 'summary'
@@ -174,6 +182,67 @@ export function ClientDashboardTab() {
           </div>
         </div>
       </div>
+
+      {/* Global Employee Month-End Alert Banner (3 working days before month-end or overworked) */}
+      {globalAlerts.length > 0 && (
+        <div className="bg-indigo-950/30 border border-indigo-500/40 rounded-2xl p-4 shadow-lg space-y-3">
+          <div className="flex items-center gap-2 text-indigo-300 font-bold text-sm">
+            <CalendarCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+            <span>{t('admin.globalAlertTitle')}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {globalAlerts.map((emp) => {
+              const st = emp.globalMonthlyStatus;
+              const isOver = st.status === 'overworked';
+              return (
+                <div
+                  key={emp.id}
+                  className={`p-3 rounded-xl border flex items-start justify-between gap-3 ${
+                    isOver
+                      ? 'bg-rose-950/30 border-rose-500/40'
+                      : 'bg-amber-950/30 border-amber-500/40'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="font-bold text-white text-xs flex items-center gap-1.5">
+                      <AlertTriangle
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isOver ? 'text-rose-400' : 'text-amber-400'
+                        }`}
+                      />
+                      <span>{emp.name}</span>
+                      <code className="text-[10px] text-slate-400 font-mono">({emp.empId})</code>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-snug">
+                      {isOver
+                        ? t('admin.globalAlertOverworkedDesc', {
+                            hours: st.overtimeMonthlyHours,
+                            worked: st.workedHours,
+                            target: st.contractMonthlyHours,
+                          })
+                        : t('admin.globalAlertUnderworkedDesc', {
+                            hours: st.remainingHours,
+                            worked: st.workedHours,
+                            target: st.contractMonthlyHours,
+                            days: st.remainingWorkingDays,
+                          })}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-lg ${
+                      isOver
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    {isOver ? `+${st.overtimeMonthlyHours}` : `-${st.remainingHours}`} {t('admin.hourUnit')}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 2. Real-Time Active Workers on Shift */}
@@ -346,6 +415,62 @@ export function ClientDashboardTab() {
                   </div>
                 ) : (
                   <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                    {/* Global Employee Month-End Alerts */}
+                    {globalAlerts.map((emp) => {
+                      const st = emp.globalMonthlyStatus;
+                      const isOver = st.status === 'overworked';
+                      return (
+                        <div
+                          key={`global-${emp.id}`}
+                          className={`p-3.5 rounded-xl space-y-1.5 shadow-sm border ${
+                            isOver
+                              ? 'bg-rose-950/30 border-rose-500/40'
+                              : 'bg-amber-950/30 border-amber-500/40'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <CalendarCheck
+                                className={`w-4 h-4 shrink-0 ${
+                                  isOver ? 'text-rose-400' : 'text-amber-400'
+                                }`}
+                              />
+                              <span className="font-bold text-white text-xs">{emp.name}</span>
+                            </div>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                isOver
+                                  ? 'bg-rose-500/20 text-rose-300'
+                                  : 'bg-amber-500/20 text-amber-300'
+                              }`}
+                            >
+                              {isOver
+                                ? t('admin.globalOverworkedBadge', {
+                                    hours: st.overtimeMonthlyHours,
+                                  })
+                                : t('admin.globalUnderworkedBadge', {
+                                    hours: st.remainingHours,
+                                  })}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 leading-snug">
+                            {isOver
+                              ? t('admin.globalAlertOverworkedDesc', {
+                                  hours: st.overtimeMonthlyHours,
+                                  worked: st.workedHours,
+                                  target: st.contractMonthlyHours,
+                                })
+                              : t('admin.globalAlertUnderworkedDesc', {
+                                  hours: st.remainingHours,
+                                  worked: st.workedHours,
+                                  target: st.contractMonthlyHours,
+                                  days: st.remainingWorkingDays,
+                                })}
+                          </p>
+                        </div>
+                      );
+                    })}
+
                     {/* Long Shift Alerts */}
                     {longShiftAlerts.map((a) => (
                       <div

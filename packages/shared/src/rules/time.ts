@@ -1,5 +1,17 @@
 export const JERUSALEM_TIMEZONE = 'Asia/Jerusalem';
 
+const JERUSALEM_DTF = new Intl.DateTimeFormat('en-US', {
+  timeZone: JERUSALEM_TIMEZONE,
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  weekday: 'short',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+  hourCycle: 'h23',
+});
+
 export interface JerusalemDateTimeParts {
   year: number;
   month: number; // 1-12
@@ -13,22 +25,10 @@ export interface JerusalemDateTimeParts {
 }
 
 /**
- * Returns date and time breakdown in the Asia/Jerusalem timezone.
- */
+  * Returns date and time breakdown in the Asia/Jerusalem timezone.
+  */
 export function getJerusalemParts(date: Date): JerusalemDateTimeParts {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: JERUSALEM_TIMEZONE,
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    weekday: 'short',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hourCycle: 'h23',
-  });
-
-  const parts = dtf.formatToParts(date);
+  const parts = JERUSALEM_DTF.formatToParts(date);
   const partMap: Record<string, string> = {};
   for (const p of parts) {
     partMap[p.type] = p.value;
@@ -277,21 +277,13 @@ export function calculateDailyHours(
 export function jerusalemDateTimeToDate(dateStr: string, timeStr: string): Date {
   const [year, month, day] = dateStr.split('-').map(Number);
   const [hour, minute] = timeStr.split(':').map(Number);
-  const utcGuess = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour ?? 0, minute ?? 0));
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: JERUSALEM_TIMEZONE,
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hourCycle: 'h23',
-  });
-  const parts = dtf.formatToParts(utcGuess);
+  const utcGuess = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, (day ?? 1), hour ?? 0, minute ?? 0));
+  const parts = JERUSALEM_DTF.formatToParts(utcGuess);
   const p: Record<string, number> = {};
   for (const part of parts) {
-    p[part.type] = Number(part.value);
+    if (part.type !== 'weekday') {
+      p[part.type] = Number(part.value);
+    }
   }
   const guessJerusalemAsUtc = Date.UTC(p['year']!, p['month']! - 1, p['day']!, p['hour']!, p['minute']!);
   const offsetMs = guessJerusalemAsUtc - utcGuess.getTime();
@@ -395,5 +387,116 @@ export function getScheduledShiftEndTime(clockInDate: Date, shiftEndStr: string)
 
   const targetDateStr = endMinutes <= inMinutes ? addDays(inParts.dateStr, 1) : inParts.dateStr;
   return jerusalemDateTimeToDate(targetDateStr, shiftEndStr);
+}
+
+export interface EvaluateGlobalMonthlyParams {
+  workedHours: number;
+  contractMonthlyHours: number;
+  periodMonth?: string; // YYYY-MM (defaults to current Jerusalem month)
+  now?: Date;
+  workingDaysOfWeek?: number[]; // Defaults to [0, 1, 2, 3, 4] (Sun-Thu in Israel)
+}
+
+export interface GlobalMonthlyEvaluation {
+  isGlobal: boolean;
+  contractMonthlyHours: number;
+  workedHours: number;
+  diffHours: number;
+  remainingHours: number;
+  overtimeMonthlyHours: number;
+  progressPercent: number;
+  periodMonth: string;
+  totalWorkingDaysInMonth: number;
+  remainingWorkingDays: number;
+  isAlertWindow: boolean;
+  status: 'underworked' | 'overworked' | 'completed' | 'in_progress';
+  shouldAlert: boolean;
+}
+
+/**
+ * Evaluates a Global Employee's monthly hours against their contract norm
+ * and determines whether to trigger the "3 working days before month-end" alert
+ * for underwork or overwork.
+ */
+export function evaluateGlobalMonthlyStatus(params: EvaluateGlobalMonthlyParams): GlobalMonthlyEvaluation {
+  const nowDate = params.now ?? new Date();
+  const nowParts = getJerusalemParts(nowDate);
+  const currentMonthStr = nowParts.dateStr.slice(0, 7);
+  const periodMonth = params.periodMonth && /^\d{4}-\d{2}$/.test(params.periodMonth)
+    ? params.periodMonth
+    : currentMonthStr;
+
+  const workingDaysSet = new Set(
+    params.workingDaysOfWeek && params.workingDaysOfWeek.length > 0
+      ? params.workingDaysOfWeek
+      : [0, 1, 2, 3, 4] // Standard Israeli workweek: Sunday (0) - Thursday (4)
+  );
+
+  const [yStr, mStr] = periodMonth.split('-');
+  const year = parseInt(yStr ?? String(nowParts.year), 10);
+  const month = parseInt(mStr ?? String(nowParts.month), 10);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  let totalWorkingDaysInMonth = 0;
+  let remainingWorkingDays = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(Date.UTC(year, month - 1, d, 12, 0, 0)).getUTCDay();
+    if (workingDaysSet.has(dow)) {
+      totalWorkingDaysInMonth++;
+      if (periodMonth === currentMonthStr && d >= nowParts.day) {
+        remainingWorkingDays++;
+      }
+    }
+  }
+
+  if (periodMonth < currentMonthStr) {
+    remainingWorkingDays = 0;
+  } else if (periodMonth > currentMonthStr) {
+    remainingWorkingDays = totalWorkingDaysInMonth;
+  }
+
+  const workedHours = Math.round((params.workedHours || 0) * 100) / 100;
+  const contractMonthlyHours = Math.round((params.contractMonthlyHours || 0) * 100) / 100;
+  const diffHours = Math.round((workedHours - contractMonthlyHours) * 100) / 100;
+  const remainingHours = Math.max(0, Math.round((contractMonthlyHours - workedHours) * 100) / 100);
+  const overtimeMonthlyHours = Math.max(0, Math.round((workedHours - contractMonthlyHours) * 100) / 100);
+  const progressPercent = contractMonthlyHours > 0
+    ? Math.round((workedHours / contractMonthlyHours) * 100)
+    : 0;
+
+  // Alert window is active during the last 3 working days of the month (remainingWorkingDays <= 3)
+  const isAlertWindow = remainingWorkingDays <= 3;
+
+  let status: 'underworked' | 'overworked' | 'completed' | 'in_progress';
+  if (diffHours > 0) {
+    status = 'overworked';
+  } else if (diffHours === 0 && contractMonthlyHours > 0) {
+    status = 'completed';
+  } else if (isAlertWindow) {
+    status = 'underworked';
+  } else {
+    status = 'in_progress';
+  }
+
+  const shouldAlert =
+    contractMonthlyHours > 0 &&
+    ((isAlertWindow && (status === 'underworked' || status === 'overworked')) || status === 'overworked');
+
+  return {
+    isGlobal: true,
+    contractMonthlyHours,
+    workedHours,
+    diffHours,
+    remainingHours,
+    overtimeMonthlyHours,
+    progressPercent,
+    periodMonth,
+    totalWorkingDaysInMonth,
+    remainingWorkingDays,
+    isAlertWindow,
+    status,
+    shouldAlert,
+  };
 }
 

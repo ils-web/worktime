@@ -44,12 +44,31 @@ export interface AuthUserSession {
   clientId?: string;
 }
 
+export interface GlobalMonthlyStatus {
+  isGlobal: boolean;
+  contractMonthlyHours: number;
+  workedHours: number;
+  diffHours: number; // workedHours - contractMonthlyHours
+  remainingHours: number; // max(0, contractMonthlyHours - workedHours)
+  overtimeMonthlyHours: number; // max(0, workedHours - contractMonthlyHours)
+  progressPercent: number;
+  periodMonth: string; // YYYY-MM
+  totalWorkingDaysInMonth: number;
+  remainingWorkingDays: number;
+  isAlertWindow: boolean; // true when remainingWorkingDays <= 3
+  status: 'underworked' | 'overworked' | 'completed' | 'in_progress';
+  shouldAlert: boolean;
+}
+
 export interface WorkerSessionState {
   empId: string;
   name: string;
   isMobile: boolean;
   strictGps: boolean;
   autoCloseShift?: boolean;
+  isGlobal?: boolean;
+  contractMonthlyHours?: number | null;
+  globalMonthlyStatus?: GlobalMonthlyStatus | null;
   geofence: GeofenceConfig | null;
   currentShift: ShiftType | null;
   activeSession: {

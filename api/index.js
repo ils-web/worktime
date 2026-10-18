@@ -96920,19 +96920,19 @@ function checkGeofence(workerLat, workerLng, fenceLat, fenceLng, radiusMeters) {
 
 // packages/shared/src/rules/time.ts
 var JERUSALEM_TIMEZONE = "Asia/Jerusalem";
+var JERUSALEM_DTF = new Intl.DateTimeFormat("en-US", {
+  timeZone: JERUSALEM_TIMEZONE,
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  weekday: "short",
+  hour: "numeric",
+  minute: "numeric",
+  second: "numeric",
+  hourCycle: "h23"
+});
 function getJerusalemParts(date) {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: JERUSALEM_TIMEZONE,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    weekday: "short",
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-    hourCycle: "h23"
-  });
-  const parts = dtf.formatToParts(date);
+  const parts = JERUSALEM_DTF.formatToParts(date);
   const partMap = {};
   for (const p of parts) {
     partMap[p.type] = p.value;
@@ -97088,20 +97088,12 @@ function jerusalemDateTimeToDate(dateStr, timeStr) {
   const [year, month, day] = dateStr.split("-").map(Number);
   const [hour, minute] = timeStr.split(":").map(Number);
   const utcGuess = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, hour ?? 0, minute ?? 0));
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: JERUSALEM_TIMEZONE,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    second: "numeric",
-    hourCycle: "h23"
-  });
-  const parts = dtf.formatToParts(utcGuess);
+  const parts = JERUSALEM_DTF.formatToParts(utcGuess);
   const p = {};
   for (const part of parts) {
-    p[part.type] = Number(part.value);
+    if (part.type !== "weekday") {
+      p[part.type] = Number(part.value);
+    }
   }
   const guessJerusalemAsUtc = Date.UTC(p["year"], p["month"] - 1, p["day"], p["hour"], p["minute"]);
   const offsetMs = guessJerusalemAsUtc - utcGuess.getTime();
@@ -97157,6 +97149,69 @@ function getScheduledShiftEndTime(clockInDate, shiftEndStr) {
   const endMinutes = parseTimeToMinutes(shiftEndStr);
   const targetDateStr = endMinutes <= inMinutes ? addDays(inParts.dateStr, 1) : inParts.dateStr;
   return jerusalemDateTimeToDate(targetDateStr, shiftEndStr);
+}
+function evaluateGlobalMonthlyStatus(params) {
+  const nowDate = params.now ?? /* @__PURE__ */ new Date();
+  const nowParts = getJerusalemParts(nowDate);
+  const currentMonthStr = nowParts.dateStr.slice(0, 7);
+  const periodMonth = params.periodMonth && /^\d{4}-\d{2}$/.test(params.periodMonth) ? params.periodMonth : currentMonthStr;
+  const workingDaysSet = new Set(
+    params.workingDaysOfWeek && params.workingDaysOfWeek.length > 0 ? params.workingDaysOfWeek : [0, 1, 2, 3, 4]
+    // Standard Israeli workweek: Sunday (0) - Thursday (4)
+  );
+  const [yStr, mStr] = periodMonth.split("-");
+  const year = parseInt(yStr ?? String(nowParts.year), 10);
+  const month = parseInt(mStr ?? String(nowParts.month), 10);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  let totalWorkingDaysInMonth = 0;
+  let remainingWorkingDays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(Date.UTC(year, month - 1, d, 12, 0, 0)).getUTCDay();
+    if (workingDaysSet.has(dow)) {
+      totalWorkingDaysInMonth++;
+      if (periodMonth === currentMonthStr && d >= nowParts.day) {
+        remainingWorkingDays++;
+      }
+    }
+  }
+  if (periodMonth < currentMonthStr) {
+    remainingWorkingDays = 0;
+  } else if (periodMonth > currentMonthStr) {
+    remainingWorkingDays = totalWorkingDaysInMonth;
+  }
+  const workedHours = Math.round((params.workedHours || 0) * 100) / 100;
+  const contractMonthlyHours = Math.round((params.contractMonthlyHours || 0) * 100) / 100;
+  const diffHours = Math.round((workedHours - contractMonthlyHours) * 100) / 100;
+  const remainingHours = Math.max(0, Math.round((contractMonthlyHours - workedHours) * 100) / 100);
+  const overtimeMonthlyHours = Math.max(0, Math.round((workedHours - contractMonthlyHours) * 100) / 100);
+  const progressPercent = contractMonthlyHours > 0 ? Math.round(workedHours / contractMonthlyHours * 100) : 0;
+  const isAlertWindow = remainingWorkingDays <= 3;
+  let status;
+  if (diffHours > 0) {
+    status = "overworked";
+  } else if (diffHours === 0 && contractMonthlyHours > 0) {
+    status = "completed";
+  } else if (isAlertWindow) {
+    status = "underworked";
+  } else {
+    status = "in_progress";
+  }
+  const shouldAlert = contractMonthlyHours > 0 && (isAlertWindow && (status === "underworked" || status === "overworked") || status === "overworked");
+  return {
+    isGlobal: true,
+    contractMonthlyHours,
+    workedHours,
+    diffHours,
+    remainingHours,
+    overtimeMonthlyHours,
+    progressPercent,
+    periodMonth,
+    totalWorkingDaysInMonth,
+    remainingWorkingDays,
+    isAlertWindow,
+    status,
+    shouldAlert
+  };
 }
 
 // packages/shared/src/rules/billing.ts
@@ -97669,17 +97724,18 @@ ownerRouter.get("/billing", async (req, res) => {
     });
     const billingData = clients.map((client) => {
       let totalHours = 0;
-      let lastInTime = null;
+      const lastInByEmp = /* @__PURE__ */ new Map();
       for (const log of client.logs) {
         if (log.action === "CLOCK_IN") {
-          lastInTime = log.dateTime;
+          lastInByEmp.set(log.empId, log.dateTime);
         } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
+          const lastInTime = lastInByEmp.get(log.empId);
           if (lastInTime) {
             const diff = (log.dateTime.getTime() - lastInTime.getTime()) / 36e5;
             if (diff > 0 && diff < 24) {
               totalHours += diff;
             }
-            lastInTime = null;
+            lastInByEmp.delete(log.empId);
           }
         }
       }
@@ -98606,6 +98662,7 @@ clientRouter.get("/employees", async (req, res) => {
       include: {
         foreman: { select: { id: true, name: true } },
         sites: { include: { site: true } },
+        schedules: true,
         logs: {
           take: 1,
           orderBy: { dateTime: "desc" }
@@ -98613,14 +98670,53 @@ clientRouter.get("/employees", async (req, res) => {
       },
       orderBy: { createdAt: "desc" }
     });
+    const hasGlobalEmployees = employees.some(
+      (emp) => emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0
+    );
+    const workedHoursByEmpId = /* @__PURE__ */ new Map();
+    const now = /* @__PURE__ */ new Date();
+    const currentMonthStr = getJerusalemParts(now).dateStr.slice(0, 7);
+    if (hasGlobalEmployees) {
+      try {
+        const monthStart = jerusalemDateTimeToDate(`${currentMonthStr}-01`, "00:00");
+        const { rows } = await computeClientReportRows(
+          clientId,
+          monthStart,
+          now,
+          isForeman ? req.user?.id : void 0
+        );
+        for (const r of rows) {
+          if (r.date.startsWith(currentMonthStr)) {
+            workedHoursByEmpId.set(
+              r.empId,
+              (workedHoursByEmpId.get(r.empId) ?? 0) + r.netHours
+            );
+          }
+        }
+      } catch (calcErr) {
+        console.error("Error computing global employee monthly hours:", calcErr);
+      }
+    }
     const enriched = employees.map((emp) => {
       const lastLog = emp.logs[0];
       const isOnShift = lastLog ? lastLog.action === "CLOCK_IN" || lastLog.action === "AUTO_RESUME" : false;
+      let globalMonthlyStatus = null;
+      if (emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0) {
+        const scheduledDays = emp.schedules?.filter((s) => s.shiftType !== "off").map((s) => s.dayOfWeek);
+        globalMonthlyStatus = evaluateGlobalMonthlyStatus({
+          workedHours: workedHoursByEmpId.get(emp.empId) ?? 0,
+          contractMonthlyHours: emp.contractMonthlyHours,
+          periodMonth: currentMonthStr,
+          now,
+          workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : void 0
+        });
+      }
       return {
         ...emp,
         isOnShift,
         lastLogAction: lastLog?.action ?? null,
-        lastLogTime: lastLog?.dateTime ?? null
+        lastLogTime: lastLog?.dateTime ?? null,
+        globalMonthlyStatus
       };
     });
     res.json({ success: true, employees: enriched });
@@ -98635,6 +98731,11 @@ var createEmployeeSchema = external_exports.object({
   isMobile: external_exports.boolean().default(false),
   strictGps: external_exports.boolean().default(false),
   autoCloseShift: external_exports.boolean().default(false),
+  isGlobal: external_exports.boolean().default(false),
+  contractMonthlyHours: external_exports.preprocess(
+    (v) => v === "" || v === null || v === void 0 ? null : Number(v),
+    external_exports.number().min(0).max(744).nullable().optional()
+  ),
   geofence: external_exports.any().optional(),
   shifts: external_exports.any().optional(),
   foremanId: external_exports.string().optional().nullable(),
@@ -98668,7 +98769,7 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
         }
       }
     }
-    const employee = await prisma.employee.create({
+    const created = await prisma.employee.create({
       data: {
         clientId,
         empId: data.empId,
@@ -98676,24 +98777,23 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
         isMobile: data.isMobile,
         strictGps: data.strictGps,
         autoCloseShift: data.autoCloseShift,
+        isGlobal: data.isGlobal,
+        contractMonthlyHours: data.isGlobal ? data.contractMonthlyHours ?? null : null,
         geofence: finalGeofence,
         shifts: data.shifts || null,
-        foremanId: data.foremanId || null
+        foremanId: data.foremanId || null,
+        ...data.siteIds && data.siteIds.length > 0 ? {
+          sites: {
+            create: data.siteIds.map((siteId) => ({ siteId }))
+          }
+        } : {}
       },
       include: {
         sites: { include: { site: true } },
         foreman: { select: { id: true, name: true } }
       }
     });
-    if (data.siteIds && data.siteIds.length > 0) {
-      await prisma.employeeSite.createMany({
-        data: data.siteIds.map((siteId) => ({
-          employeeId: employee.id,
-          siteId
-        }))
-      });
-    }
-    res.json({ success: true, employee });
+    res.json({ success: true, employee: created });
   } catch (err) {
     if (err instanceof external_exports.ZodError) {
       res.status(400).json({ error: "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043F\u043E\u043B\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u043E" });
@@ -98707,7 +98807,19 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
   try {
     const clientId = getTargetClientId(req);
     const currentEmpId = req.params["empId"];
-    const { name, newEmpId, isMobile, strictGps, autoCloseShift, geofence, shifts, foremanId, siteIds } = req.body;
+    const {
+      name,
+      newEmpId,
+      isMobile,
+      strictGps,
+      autoCloseShift,
+      isGlobal,
+      contractMonthlyHours,
+      geofence,
+      shifts,
+      foremanId,
+      siteIds
+    } = req.body;
     const employee = await prisma.employee.findFirst({
       where: { empId: currentEmpId, clientId }
     });
@@ -98741,23 +98853,6 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
         }
       }
     }
-    const updated = await prisma.employee.update({
-      where: { id: employee.id },
-      data: {
-        empId: finalEmpId,
-        ...name ? { name } : {},
-        ...isMobile !== void 0 ? { isMobile } : {},
-        ...strictGps !== void 0 ? { strictGps } : {},
-        ...autoCloseShift !== void 0 ? { autoCloseShift } : {},
-        ...finalGeofence !== void 0 ? { geofence: finalGeofence } : {},
-        ...shifts !== void 0 ? { shifts } : {},
-        ...foremanId !== void 0 ? { foremanId: foremanId || null } : {}
-      },
-      include: {
-        sites: { include: { site: true } },
-        foreman: { select: { id: true, name: true } }
-      }
-    });
     if (siteIds !== void 0 && Array.isArray(siteIds)) {
       await prisma.employeeSite.deleteMany({ where: { employeeId: employee.id } });
       if (siteIds.length > 0) {
@@ -98769,6 +98864,28 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
         });
       }
     }
+    const parsedContractHours = contractMonthlyHours === "" || contractMonthlyHours === null || contractMonthlyHours === void 0 ? null : Number(contractMonthlyHours);
+    const updated = await prisma.employee.update({
+      where: { id: employee.id },
+      data: {
+        empId: finalEmpId,
+        ...name ? { name } : {},
+        ...isMobile !== void 0 ? { isMobile } : {},
+        ...strictGps !== void 0 ? { strictGps } : {},
+        ...autoCloseShift !== void 0 ? { autoCloseShift } : {},
+        ...isGlobal !== void 0 ? { isGlobal: Boolean(isGlobal) } : {},
+        ...contractMonthlyHours !== void 0 ? {
+          contractMonthlyHours: (isGlobal !== void 0 ? Boolean(isGlobal) : employee.isGlobal) && parsedContractHours !== null && !isNaN(parsedContractHours) ? parsedContractHours : null
+        } : {},
+        ...finalGeofence !== void 0 ? { geofence: finalGeofence } : {},
+        ...shifts !== void 0 ? { shifts } : {},
+        ...foremanId !== void 0 ? { foremanId: foremanId || null } : {}
+      },
+      include: {
+        sites: { include: { site: true } },
+        foreman: { select: { id: true, name: true } }
+      }
+    });
     res.json({ success: true, employee: updated });
   } catch (err) {
     console.error("Update employee error:", err);
@@ -99461,12 +99578,39 @@ clientRouter.get("/hours", async (req, res) => {
       foremanId,
       empId
     );
+    const globalEmployees = await prisma.employee.findMany({
+      where: {
+        clientId,
+        isGlobal: true,
+        contractMonthlyHours: { gt: 0 },
+        ...foremanId ? { foremanId } : {},
+        ...empId ? { empId } : {}
+      },
+      include: { schedules: true }
+    });
+    const periodMonth = getJerusalemParts(endDate).dateStr.slice(0, 7);
+    const globalSummaries = globalEmployees.map((emp) => {
+      const workedInPeriod = rows.filter((r) => r.empId === emp.empId && r.date.startsWith(periodMonth)).reduce((acc, r) => acc + r.netHours, 0);
+      const scheduledDays = emp.schedules?.filter((s) => s.shiftType !== "off").map((s) => s.dayOfWeek);
+      const status = evaluateGlobalMonthlyStatus({
+        workedHours: workedInPeriod,
+        contractMonthlyHours: emp.contractMonthlyHours,
+        periodMonth,
+        workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : void 0
+      });
+      return {
+        empId: emp.empId,
+        name: emp.name,
+        ...status
+      };
+    });
     res.json({
       success: true,
       clientName,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      hours: rows
+      hours: rows,
+      globalSummaries
     });
   } catch (err) {
     console.error("Hours report error:", err);
@@ -99808,6 +99952,82 @@ clientRouter.post("/invoices/:id/pay", requireRole("client"), async (req, res) =
 // packages/api/src/routes/worker.ts
 var import_express5 = __toESM(require_express2());
 var workerRouter = (0, import_express5.Router)();
+async function computeWorkerMonthData(empId, month, shiftsConfig, autoDeductLunch) {
+  const [yearStr, mStr] = month.split("-");
+  const year = parseInt(yearStr || "2026", 10);
+  const m = parseInt(mStr || "10", 10);
+  const daysInMonth = new Date(Date.UTC(year, m, 0)).getUTCDate();
+  const monthStartStr = `${month}-01`;
+  const monthEndStr = `${month}-${String(daysInMonth).padStart(2, "0")}`;
+  const qStart = jerusalemDateTimeToDate(monthStartStr, "00:00");
+  const qEnd = jerusalemDateTimeToDate(addDays(monthEndStr, 1), "23:59");
+  const logs = await prisma.timeLog.findMany({
+    where: {
+      empId,
+      dateTime: { gte: qStart, lte: qEnd }
+    },
+    orderBy: { dateTime: "asc" }
+  });
+  const sessions = [];
+  let currentInLog = null;
+  for (const log of logs) {
+    if (log.action === "CLOCK_IN") {
+      if (!currentInLog || log.isManual && !currentInLog.isManual) {
+        currentInLog = log;
+      }
+    } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
+      if (currentInLog) {
+        sessions.push({
+          clockIn: currentInLog.dateTime,
+          clockOut: log.dateTime,
+          isManual: Boolean(currentInLog.isManual || log.isManual)
+        });
+        currentInLog = null;
+      }
+    }
+  }
+  const sessionsByDate = {};
+  for (const s of sessions) {
+    const d = getJerusalemParts(s.clockIn).dateStr;
+    if (!d.startsWith(month)) continue;
+    if (!sessionsByDate[d]) sessionsByDate[d] = [];
+    sessionsByDate[d].push(s);
+  }
+  const nightStart = shiftsConfig?.night?.start || "22:00";
+  const nightEnd = shiftsConfig?.night?.end || "06:00";
+  let totalNet = 0;
+  let totalNight = 0;
+  let totalSat = 0;
+  let totalOt = 0;
+  const days = [];
+  for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
+    const daily = calculateDailyHours(daySessions, autoDeductLunch, nightStart, nightEnd);
+    totalNet += daily.netHours;
+    totalNight += daily.nightHours;
+    totalSat += daily.saturdayHours;
+    totalOt += daily.overtimeHours;
+    days.push({
+      date: dateStr,
+      dayOfWeek: getDayOfWeek(dateStr, "he"),
+      firstIn: getJerusalemParts(daySessions[0].clockIn).timeStr,
+      lastOut: getJerusalemParts(daySessions[daySessions.length - 1].clockOut).timeStr,
+      grossHours: daily.grossHours,
+      lunchDeducted: daily.lunchDeductedHours,
+      netHours: daily.netHours,
+      nightHours: daily.nightHours,
+      saturdayHours: daily.saturdayHours,
+      overtimeHours: daily.overtimeHours,
+      isManual: daySessions.some((s) => s.isManual)
+    });
+  }
+  return {
+    totalNet: Math.round(totalNet * 100) / 100,
+    totalNight: Math.round(totalNight * 100) / 100,
+    totalSaturday: Math.round(totalSat * 100) / 100,
+    totalOvertime: Math.round(totalOt * 100) / 100,
+    days
+  };
+}
 workerRouter.get("/profile/:empId", async (req, res) => {
   try {
     const empId = req.params["empId"];
@@ -99819,7 +100039,8 @@ workerRouter.get("/profile/:empId", async (req, res) => {
             id: true,
             name: true,
             isActive: true,
-            defaultShifts: true
+            defaultShifts: true,
+            autoDeductLunch: true
           }
         },
         schedules: true,
@@ -99906,6 +100127,27 @@ workerRouter.get("/profile/:empId", async (req, res) => {
       }
     }
     const sitesList = employee.sites.map((es) => es.site);
+    let globalMonthlyStatus = null;
+    if (employee.isGlobal && (employee.contractMonthlyHours ?? 0) > 0) {
+      try {
+        const currentMonth = getJerusalemParts(/* @__PURE__ */ new Date()).dateStr.slice(0, 7);
+        const monthData = await computeWorkerMonthData(
+          employee.empId,
+          currentMonth,
+          effectiveShifts,
+          employee.client.autoDeductLunch ?? false
+        );
+        const scheduledDays = employee.schedules?.filter((s) => s.shiftType !== "off").map((s) => s.dayOfWeek);
+        globalMonthlyStatus = evaluateGlobalMonthlyStatus({
+          workedHours: monthData.totalNet,
+          contractMonthlyHours: employee.contractMonthlyHours,
+          periodMonth: currentMonth,
+          workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : void 0
+        });
+      } catch (gErr) {
+        console.error("Worker globalMonthlyStatus error:", gErr);
+      }
+    }
     res.json({
       success: true,
       employee: {
@@ -99916,6 +100158,9 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,
         autoCloseShift: employee.autoCloseShift ?? false,
+        isGlobal: employee.isGlobal ?? false,
+        contractMonthlyHours: employee.contractMonthlyHours ?? null,
+        globalMonthlyStatus,
         geofence: employee.geofence,
         sites: sitesList,
         shifts: effectiveShifts
@@ -100225,76 +100470,28 @@ workerRouter.get("/report/:empId", async (req, res) => {
       where: { empId },
       include: {
         client: true,
-        dailyNotes: {
-          where: { date: { startsWith: month } }
-        }
+        schedules: true
       }
     });
     if (!employee) {
       res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
       return;
     }
-    const [yearStr, mStr] = month.split("-");
-    const year = parseInt(yearStr || "2026", 10);
-    const m = parseInt(mStr || "10", 10);
-    const startDate = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
-    const endDate = new Date(Date.UTC(year, m, 0, 23, 59, 59));
-    const fetchEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1e3);
-    const logs = await prisma.timeLog.findMany({
-      where: {
-        empId,
-        dateTime: { gte: startDate, lte: fetchEndDate }
-      },
-      orderBy: { dateTime: "asc" }
-    });
-    const sessions = [];
-    let currentInLog = null;
-    for (const log of logs) {
-      if (log.action === "CLOCK_IN") {
-        currentInLog = log;
-      } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
-        if (currentInLog) {
-          sessions.push({
-            clockIn: currentInLog.dateTime,
-            clockOut: log.dateTime,
-            isManual: Boolean(currentInLog.isManual || log.isManual)
-          });
-          currentInLog = null;
-        }
-      }
-    }
-    const filteredSessions = sessions.filter((s) => s.clockIn >= startDate && s.clockIn <= endDate);
-    const sessionsByDate = {};
-    for (const s of filteredSessions) {
-      const d = getJerusalemParts(s.clockIn).dateStr;
-      if (!sessionsByDate[d]) sessionsByDate[d] = [];
-      sessionsByDate[d].push(s);
-    }
     const shiftsConfig = employee.shifts || employee.client.defaultShifts;
-    const nightStart = shiftsConfig?.night?.start || "22:00";
-    const nightEnd = shiftsConfig?.night?.end || "06:00";
-    const autoDeductLunch = employee.client.autoDeductLunch;
-    const days = [];
-    let totalNet = 0;
-    let totalNight = 0;
-    let totalSat = 0;
-    let totalOt = 0;
-    for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
-      const daily = calculateDailyHours(daySessions, autoDeductLunch, nightStart, nightEnd);
-      totalNet += daily.netHours;
-      totalNight += daily.nightHours;
-      totalSat += daily.saturdayHours;
-      totalOt += daily.overtimeHours;
-      days.push({
-        date: dateStr,
-        dayOfWeek: getDayOfWeek(dateStr, "he"),
-        grossHours: daily.grossHours,
-        lunchDeducted: daily.lunchDeductedHours,
-        netHours: daily.netHours,
-        nightHours: daily.nightHours,
-        saturdayHours: daily.saturdayHours,
-        overtimeHours: daily.overtimeHours,
-        isManual: daySessions.some((s) => s.isManual)
+    const monthData = await computeWorkerMonthData(
+      empId,
+      month,
+      shiftsConfig,
+      employee.client.autoDeductLunch ?? false
+    );
+    let globalMonthlyStatus = null;
+    if (employee.isGlobal && (employee.contractMonthlyHours ?? 0) > 0) {
+      const scheduledDays = employee.schedules?.filter((s) => s.shiftType !== "off").map((s) => s.dayOfWeek);
+      globalMonthlyStatus = evaluateGlobalMonthlyStatus({
+        workedHours: monthData.totalNet,
+        contractMonthlyHours: employee.contractMonthlyHours,
+        periodMonth: month,
+        workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : void 0
       });
     }
     res.json({
@@ -100302,12 +100499,13 @@ workerRouter.get("/report/:empId", async (req, res) => {
       employeeName: employee.name,
       month,
       summary: {
-        totalNet: Math.round(totalNet * 100) / 100,
-        totalNight: Math.round(totalNight * 100) / 100,
-        totalSaturday: Math.round(totalSat * 100) / 100,
-        totalOvertime: Math.round(totalOt * 100) / 100
+        totalNet: monthData.totalNet,
+        totalNight: monthData.totalNight,
+        totalSaturday: monthData.totalSaturday,
+        totalOvertime: monthData.totalOvertime
       },
-      days
+      globalMonthlyStatus,
+      days: monthData.days
     });
   } catch (err) {
     console.error("Worker report error:", err);
@@ -100326,67 +100524,29 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
       res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
       return;
     }
-    const [yearStr, mStr] = month.split("-");
-    const year = parseInt(yearStr || "2026", 10);
-    const m = parseInt(mStr || "10", 10);
-    const startDate = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
-    const endDate = new Date(Date.UTC(year, m, 0, 23, 59, 59));
-    const fetchEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1e3);
-    const logs = await prisma.timeLog.findMany({
-      where: {
-        empId,
-        dateTime: { gte: startDate, lte: fetchEndDate }
-      },
-      orderBy: { dateTime: "asc" }
-    });
-    const sessions = [];
-    let currentInLog = null;
-    for (const log of logs) {
-      if (log.action === "CLOCK_IN") {
-        currentInLog = log;
-      } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
-        if (currentInLog) {
-          sessions.push({
-            clockIn: currentInLog.dateTime,
-            clockOut: log.dateTime,
-            isManual: Boolean(currentInLog.isManual || log.isManual)
-          });
-          currentInLog = null;
-        }
-      }
-    }
-    const filteredSessions = sessions.filter((s) => s.clockIn >= startDate && s.clockIn <= endDate);
-    const sessionsByDate = {};
-    for (const s of filteredSessions) {
-      const d = getJerusalemParts(s.clockIn).dateStr;
-      if (!sessionsByDate[d]) sessionsByDate[d] = [];
-      sessionsByDate[d].push(s);
-    }
     const shiftsConfig = employee.shifts || employee.client.defaultShifts;
-    const nightStart = shiftsConfig?.night?.start || "22:00";
-    const nightEnd = shiftsConfig?.night?.end || "06:00";
-    const rows = [];
-    for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
-      const daily = calculateDailyHours(daySessions, employee.client.autoDeductLunch, nightStart, nightEnd);
-      const firstIn = getJerusalemParts(daySessions[0].clockIn).timeStr;
-      const lastOut = getJerusalemParts(daySessions[daySessions.length - 1].clockOut).timeStr;
-      rows.push({
-        empId: employee.empId,
-        name: employee.name,
-        date: dateStr,
-        dayOfWeek: getDayOfWeek(dateStr, "he"),
-        firstIn,
-        lastOut,
-        grossHours: daily.grossHours,
-        lunchDeducted: daily.lunchDeductedHours,
-        netHours: daily.netHours,
-        nightHours: daily.nightHours,
-        saturdayHours: daily.saturdayHours,
-        overtimeHours: daily.overtimeHours,
-        isManual: daySessions.some((s) => s.isManual),
-        notes: ""
-      });
-    }
+    const monthData = await computeWorkerMonthData(
+      empId,
+      month,
+      shiftsConfig,
+      employee.client.autoDeductLunch ?? false
+    );
+    const rows = monthData.days.map((d) => ({
+      empId: employee.empId,
+      name: employee.name,
+      date: d.date,
+      dayOfWeek: d.dayOfWeek,
+      firstIn: d.firstIn,
+      lastOut: d.lastOut,
+      grossHours: d.grossHours,
+      lunchDeducted: d.lunchDeducted,
+      netHours: d.netHours,
+      nightHours: d.nightHours,
+      saturdayHours: d.saturdayHours,
+      overtimeHours: d.overtimeHours,
+      isManual: d.isManual,
+      notes: ""
+    }));
     const pdfBytes = await generatePdfReport(
       rows,
       employee.client.name,
@@ -100487,15 +100647,16 @@ cronRouter.get("/billing", async (req, res) => {
         continue;
       }
       let totalHours = 0;
-      let lastIn = null;
+      const lastInByEmp = /* @__PURE__ */ new Map();
       for (const log of client.logs) {
         if (log.action === "CLOCK_IN") {
-          lastIn = log.dateTime;
+          lastInByEmp.set(log.empId, log.dateTime);
         } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
+          const lastIn = lastInByEmp.get(log.empId);
           if (lastIn) {
             const diff = (log.dateTime.getTime() - lastIn.getTime()) / 36e5;
             if (diff > 0 && diff < 24) totalHours += diff;
-            lastIn = null;
+            lastInByEmp.delete(log.empId);
           }
         }
       }

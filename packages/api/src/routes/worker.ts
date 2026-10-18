@@ -10,6 +10,10 @@ import {
   ClientShiftsConfig,
   getDayOfWeek,
   getScheduledShiftEndTime,
+  jerusalemDateTimeToDate,
+  addDays,
+  evaluateGlobalMonthlyStatus,
+  GlobalMonthlyEvaluation,
 } from '@timetracker/shared';
 import { generatePdfReport } from '../services/pdfReportService';
 import { ReportRow } from '../services/csvReportService';
@@ -19,6 +23,100 @@ interface TrackedSession extends WorkSession {
 }
 
 export const workerRouter = Router();
+
+/**
+ * Helper to compute a worker's monthly sessions and daily breakdown in Asia/Jerusalem timezone.
+ */
+async function computeWorkerMonthData(
+  empId: string,
+  month: string,
+  shiftsConfig: ClientShiftsConfig | undefined,
+  autoDeductLunch: boolean
+) {
+  const [yearStr, mStr] = month.split('-');
+  const year = parseInt(yearStr || '2026', 10);
+  const m = parseInt(mStr || '10', 10);
+  const daysInMonth = new Date(Date.UTC(year, m, 0)).getUTCDate();
+  const monthStartStr = `${month}-01`;
+  const monthEndStr = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+
+  const qStart = jerusalemDateTimeToDate(monthStartStr, '00:00');
+  const qEnd = jerusalemDateTimeToDate(addDays(monthEndStr, 1), '23:59');
+
+  const logs = await prisma.timeLog.findMany({
+    where: {
+      empId,
+      dateTime: { gte: qStart, lte: qEnd },
+    },
+    orderBy: { dateTime: 'asc' },
+  });
+
+  const sessions: TrackedSession[] = [];
+  let currentInLog: (typeof logs)[0] | null = null;
+  for (const log of logs) {
+    if (log.action === 'CLOCK_IN') {
+      if (!currentInLog || (log.isManual && !currentInLog.isManual)) {
+        currentInLog = log;
+      }
+    } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
+      if (currentInLog) {
+        sessions.push({
+          clockIn: currentInLog.dateTime,
+          clockOut: log.dateTime,
+          isManual: Boolean(currentInLog.isManual || log.isManual),
+        });
+        currentInLog = null;
+      }
+    }
+  }
+
+  const sessionsByDate: Record<string, TrackedSession[]> = {};
+  for (const s of sessions) {
+    const d = getJerusalemParts(s.clockIn).dateStr;
+    if (!d.startsWith(month)) continue;
+    if (!sessionsByDate[d]) sessionsByDate[d] = [];
+    sessionsByDate[d].push(s);
+  }
+
+  const nightStart = shiftsConfig?.night?.start || '22:00';
+  const nightEnd = shiftsConfig?.night?.end || '06:00';
+
+  let totalNet = 0;
+  let totalNight = 0;
+  let totalSat = 0;
+  let totalOt = 0;
+  const days: any[] = [];
+
+  for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
+    const daily = calculateDailyHours(daySessions, autoDeductLunch, nightStart, nightEnd);
+    totalNet += daily.netHours;
+    totalNight += daily.nightHours;
+    totalSat += daily.saturdayHours;
+    totalOt += daily.overtimeHours;
+
+    days.push({
+      date: dateStr,
+      dayOfWeek: getDayOfWeek(dateStr, 'he'),
+      firstIn: getJerusalemParts(daySessions[0]!.clockIn).timeStr,
+      lastOut: getJerusalemParts(daySessions[daySessions.length - 1]!.clockOut).timeStr,
+      grossHours: daily.grossHours,
+      lunchDeducted: daily.lunchDeductedHours,
+      netHours: daily.netHours,
+      nightHours: daily.nightHours,
+      saturdayHours: daily.saturdayHours,
+      overtimeHours: daily.overtimeHours,
+      isManual: daySessions.some((s) => s.isManual),
+    });
+  }
+
+  return {
+    totalNet: Math.round(totalNet * 100) / 100,
+    totalNight: Math.round(totalNight * 100) / 100,
+    totalSaturday: Math.round(totalSat * 100) / 100,
+    totalOvertime: Math.round(totalOt * 100) / 100,
+    days,
+  };
+}
 
 /**
  * 1. Worker Profile
@@ -36,6 +134,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
             name: true,
             isActive: true,
             defaultShifts: true,
+            autoDeductLunch: true,
           },
         },
         schedules: true,
@@ -134,6 +233,30 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
 
     const sitesList = employee.sites.map((es) => es.site);
 
+    let globalMonthlyStatus: GlobalMonthlyEvaluation | null = null;
+    if (employee.isGlobal && (employee.contractMonthlyHours ?? 0) > 0) {
+      try {
+        const currentMonth = getJerusalemParts(new Date()).dateStr.slice(0, 7);
+        const monthData = await computeWorkerMonthData(
+          employee.empId,
+          currentMonth,
+          effectiveShifts,
+          employee.client.autoDeductLunch ?? false
+        );
+        const scheduledDays = employee.schedules
+          ?.filter((s) => s.shiftType !== 'off')
+          .map((s) => s.dayOfWeek);
+        globalMonthlyStatus = evaluateGlobalMonthlyStatus({
+          workedHours: monthData.totalNet,
+          contractMonthlyHours: employee.contractMonthlyHours!,
+          periodMonth: currentMonth,
+          workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : undefined,
+        });
+      } catch (gErr) {
+        console.error('Worker globalMonthlyStatus error:', gErr);
+      }
+    }
+
     res.json({
       success: true,
       employee: {
@@ -144,6 +267,9 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,
         autoCloseShift: employee.autoCloseShift ?? false,
+        isGlobal: employee.isGlobal ?? false,
+        contractMonthlyHours: employee.contractMonthlyHours ?? null,
+        globalMonthlyStatus,
         geofence: employee.geofence,
         sites: sitesList,
         shifts: effectiveShifts,
@@ -519,9 +645,7 @@ workerRouter.get('/report/:empId', async (req: Request, res: Response) => {
       where: { empId },
       include: {
         client: true,
-        dailyNotes: {
-          where: { date: { startsWith: month } },
-        },
+        schedules: true,
       },
     });
 
@@ -530,78 +654,24 @@ workerRouter.get('/report/:empId', async (req: Request, res: Response) => {
       return;
     }
 
-    // Determine start and end of requested month
-    const [yearStr, mStr] = month.split('-');
-    const year = parseInt(yearStr || '2026', 10);
-    const m = parseInt(mStr || '10', 10);
-    const startDate = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
-    const endDate = new Date(Date.UTC(year, m, 0, 23, 59, 59));
-    const fetchEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
-
-    const logs = await prisma.timeLog.findMany({
-      where: {
-        empId,
-        dateTime: { gte: startDate, lte: fetchEndDate },
-      },
-      orderBy: { dateTime: 'asc' },
-    });
-
-    // Group into sessions
-    const sessions: TrackedSession[] = [];
-    let currentInLog: (typeof logs)[0] | null = null;
-    for (const log of logs) {
-      if (log.action === 'CLOCK_IN') {
-        currentInLog = log;
-      } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
-        if (currentInLog) {
-          sessions.push({
-            clockIn: currentInLog.dateTime,
-            clockOut: log.dateTime,
-            isManual: Boolean(currentInLog.isManual || log.isManual),
-          });
-          currentInLog = null;
-        }
-      }
-    }
-
-    const filteredSessions = sessions.filter((s) => s.clockIn >= startDate && s.clockIn <= endDate);
-
-    // Group sessions by date
-    const sessionsByDate: Record<string, TrackedSession[]> = {};
-    for (const s of filteredSessions) {
-      const d = getJerusalemParts(s.clockIn).dateStr;
-      if (!sessionsByDate[d]) sessionsByDate[d] = [];
-      sessionsByDate[d].push(s);
-    }
-
     const shiftsConfig = (employee.shifts || employee.client.defaultShifts) as unknown as ClientShiftsConfig;
-    const nightStart = shiftsConfig?.night?.start || '22:00';
-    const nightEnd = shiftsConfig?.night?.end || '06:00';
-    const autoDeductLunch = employee.client.autoDeductLunch;
+    const monthData = await computeWorkerMonthData(
+      empId,
+      month,
+      shiftsConfig,
+      employee.client.autoDeductLunch ?? false
+    );
 
-    const days: any[] = [];
-    let totalNet = 0;
-    let totalNight = 0;
-    let totalSat = 0;
-    let totalOt = 0;
-
-    for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
-      const daily = calculateDailyHours(daySessions, autoDeductLunch, nightStart, nightEnd);
-      totalNet += daily.netHours;
-      totalNight += daily.nightHours;
-      totalSat += daily.saturdayHours;
-      totalOt += daily.overtimeHours;
-
-      days.push({
-        date: dateStr,
-        dayOfWeek: getDayOfWeek(dateStr, 'he'),
-        grossHours: daily.grossHours,
-        lunchDeducted: daily.lunchDeductedHours,
-        netHours: daily.netHours,
-        nightHours: daily.nightHours,
-        saturdayHours: daily.saturdayHours,
-        overtimeHours: daily.overtimeHours,
-        isManual: daySessions.some((s) => s.isManual),
+    let globalMonthlyStatus: GlobalMonthlyEvaluation | null = null;
+    if (employee.isGlobal && (employee.contractMonthlyHours ?? 0) > 0) {
+      const scheduledDays = employee.schedules
+        ?.filter((s) => s.shiftType !== 'off')
+        .map((s) => s.dayOfWeek);
+      globalMonthlyStatus = evaluateGlobalMonthlyStatus({
+        workedHours: monthData.totalNet,
+        contractMonthlyHours: employee.contractMonthlyHours!,
+        periodMonth: month,
+        workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : undefined,
       });
     }
 
@@ -610,12 +680,13 @@ workerRouter.get('/report/:empId', async (req: Request, res: Response) => {
       employeeName: employee.name,
       month,
       summary: {
-        totalNet: Math.round(totalNet * 100) / 100,
-        totalNight: Math.round(totalNight * 100) / 100,
-        totalSaturday: Math.round(totalSat * 100) / 100,
-        totalOvertime: Math.round(totalOt * 100) / 100,
+        totalNet: monthData.totalNet,
+        totalNight: monthData.totalNight,
+        totalSaturday: monthData.totalSaturday,
+        totalOvertime: monthData.totalOvertime,
       },
-      days,
+      globalMonthlyStatus,
+      days: monthData.days,
     });
   } catch (err) {
     console.error('Worker report error:', err);
@@ -641,74 +712,30 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
       return;
     }
 
-    const [yearStr, mStr] = month.split('-');
-    const year = parseInt(yearStr || '2026', 10);
-    const m = parseInt(mStr || '10', 10);
-    const startDate = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
-    const endDate = new Date(Date.UTC(year, m, 0, 23, 59, 59));
-    const fetchEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
-
-    const logs = await prisma.timeLog.findMany({
-      where: {
-        empId,
-        dateTime: { gte: startDate, lte: fetchEndDate },
-      },
-      orderBy: { dateTime: 'asc' },
-    });
-
-    const sessions: TrackedSession[] = [];
-    let currentInLog: (typeof logs)[0] | null = null;
-    for (const log of logs) {
-      if (log.action === 'CLOCK_IN') {
-        currentInLog = log;
-      } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
-        if (currentInLog) {
-          sessions.push({
-            clockIn: currentInLog.dateTime,
-            clockOut: log.dateTime,
-            isManual: Boolean(currentInLog.isManual || log.isManual),
-          });
-          currentInLog = null;
-        }
-      }
-    }
-
-    const filteredSessions = sessions.filter((s) => s.clockIn >= startDate && s.clockIn <= endDate);
-
-    const sessionsByDate: Record<string, TrackedSession[]> = {};
-    for (const s of filteredSessions) {
-      const d = getJerusalemParts(s.clockIn).dateStr;
-      if (!sessionsByDate[d]) sessionsByDate[d] = [];
-      sessionsByDate[d].push(s);
-    }
-
     const shiftsConfig = (employee.shifts || employee.client.defaultShifts) as unknown as ClientShiftsConfig;
-    const nightStart = shiftsConfig?.night?.start || '22:00';
-    const nightEnd = shiftsConfig?.night?.end || '06:00';
+    const monthData = await computeWorkerMonthData(
+      empId,
+      month,
+      shiftsConfig,
+      employee.client.autoDeductLunch ?? false
+    );
 
-    const rows: ReportRow[] = [];
-    for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
-      const daily = calculateDailyHours(daySessions, employee.client.autoDeductLunch, nightStart, nightEnd);
-      const firstIn = getJerusalemParts(daySessions[0]!.clockIn).timeStr;
-      const lastOut = getJerusalemParts(daySessions[daySessions.length - 1]!.clockOut).timeStr;
-
-      rows.push({
-        empId: employee.empId,
-        name: employee.name,
-        date: dateStr,
-        dayOfWeek: getDayOfWeek(dateStr, 'he'),
-        firstIn,
-        lastOut,
-        grossHours: daily.grossHours,
-        lunchDeducted: daily.lunchDeductedHours,
-        netHours: daily.netHours,
-        nightHours: daily.nightHours,
-        saturdayHours: daily.saturdayHours,
-        overtimeHours: daily.overtimeHours,
-        isManual: daySessions.some((s) => s.isManual),
-        notes: '',
-      });
-    }
+    const rows: ReportRow[] = monthData.days.map((d: any) => ({
+      empId: employee.empId,
+      name: employee.name,
+      date: d.date,
+      dayOfWeek: d.dayOfWeek,
+      firstIn: d.firstIn,
+      lastOut: d.lastOut,
+      grossHours: d.grossHours,
+      lunchDeducted: d.lunchDeducted,
+      netHours: d.netHours,
+      nightHours: d.nightHours,
+      saturdayHours: d.saturdayHours,
+      overtimeHours: d.overtimeHours,
+      isManual: d.isManual,
+      notes: '',
+    }));
 
     const pdfBytes = await generatePdfReport(
       rows,

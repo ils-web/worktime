@@ -34,29 +34,48 @@ export function getCurrentCoordinates(timeout = 10000): Promise<GeoLocationResul
       return;
     }
 
+    const handleSuccess = (pos: GeolocationPosition) => {
+      resolve({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        timestamp: pos.timestamp,
+      });
+    };
+
+    const handleFinalError = (err: GeolocationPositionError) => {
+      let msg = 'Failed to obtain GPS coordinates';
+      if (err.code === err.PERMISSION_DENIED) {
+        msg = 'Permission to access location was denied';
+      } else if (err.code === err.POSITION_UNAVAILABLE) {
+        msg = 'Location information is unavailable';
+      } else if (err.code === err.TIMEOUT) {
+        msg = 'The request to get user location timed out';
+      }
+      reject(new GeoLocationError(msg, err.code));
+    };
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          timestamp: pos.timestamp,
-        });
-      },
+      handleSuccess,
       (err) => {
-        let msg = 'Failed to obtain GPS coordinates';
         if (err.code === err.PERMISSION_DENIED) {
-          msg = 'Permission to access location was denied';
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          msg = 'Location information is unavailable';
-        } else if (err.code === err.TIMEOUT) {
-          msg = 'The request to get user location timed out';
+          handleFinalError(err);
+          return;
         }
-        reject(new GeoLocationError(msg, err.code));
+        // Fallback to network/coarse location if high-accuracy GPS timed out or is unavailable indoors
+        navigator.geolocation.getCurrentPosition(
+          handleSuccess,
+          handleFinalError,
+          {
+            enableHighAccuracy: false,
+            timeout: Math.max(5000, timeout),
+            maximumAge: 60000,
+          }
+        );
       },
       {
         enableHighAccuracy: true,
-        timeout,
+        timeout: Math.min(timeout, 7000),
         maximumAge: 10000,
       }
     );

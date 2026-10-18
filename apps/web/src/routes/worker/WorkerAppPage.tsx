@@ -30,7 +30,12 @@ import {
   onQueueChange,
   OfflineLogItem,
 } from '../../lib/offlineQueue';
-import { formatIsoToDisplayDate, getDayOfWeek } from '@timetracker/shared';
+import {
+  formatIsoToDisplayDate,
+  getDayOfWeek,
+  getJerusalemParts,
+  GlobalMonthlyEvaluation,
+} from '@timetracker/shared';
 
 export interface WorkerSite {
   id: string;
@@ -49,6 +54,9 @@ interface WorkerProfile {
   isMobile: boolean;
   strictGps: boolean;
   autoCloseShift?: boolean;
+  isGlobal?: boolean;
+  contractMonthlyHours?: number | null;
+  globalMonthlyStatus?: GlobalMonthlyEvaluation | null;
   geofence?: {
     lat: number;
     lng: number;
@@ -126,10 +134,11 @@ export function WorkerAppPage() {
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
 
   // History tab state
-  const currentMonthStr = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const currentMonthStr = useMemo(() => getJerusalemParts(new Date()).dateStr.slice(0, 7), []);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
   const [monthlySummary, setMonthlySummary] = useState<MonthlyReportSummary | null>(null);
   const [monthlyDays, setMonthlyDays] = useState<DailyReportRow[]>([]);
+  const [reportGlobalStatus, setReportGlobalStatus] = useState<GlobalMonthlyEvaluation | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
 
   // PWA Install State
@@ -539,12 +548,14 @@ export function WorkerAppPage() {
           setCompletedShiftSummary({ hours: h, minutes: m, text: msg });
           setShowClockOutConfirm(false);
           setShowShiftCompleteModal(true);
+          fetchProfile();
         } else if (action === 'AUTO_EXIT') {
           const h = res.todaySummary?.hours ?? fallbackH;
           const m = res.todaySummary?.minutes ?? fallbackM;
           const msg = formatWorkedMessage(h, m, i18n.language);
           setCompletedShiftSummary({ hours: h, minutes: m, text: msg });
           setShowAutoCloseAlert(true);
+          fetchProfile();
         }
       }
     } catch (err: any) {
@@ -708,10 +719,12 @@ export function WorkerAppPage() {
         success: boolean;
         summary: MonthlyReportSummary;
         days: DailyReportRow[];
+        globalMonthlyStatus?: GlobalMonthlyEvaluation | null;
       }>(`/api/worker/report/${empId}?month=${selectedMonth}`);
 
       setMonthlySummary(res.summary);
       setMonthlyDays(res.days);
+      setReportGlobalStatus(res.globalMonthlyStatus || null);
     } catch (err) {
       // Failed to load report
     } finally {
@@ -960,6 +973,83 @@ export function WorkerAppPage() {
               </div>
             </div>
 
+            {/* Global Employee Contract Progress & 3-Day Alert Card */}
+            {profile.isGlobal && profile.globalMonthlyStatus && (
+              <div
+                className={`rounded-2xl p-3.5 border shadow-md mb-4 ${
+                  profile.globalMonthlyStatus.status === 'underworked'
+                    ? 'bg-amber-950/50 border-amber-500/40'
+                    : profile.globalMonthlyStatus.status === 'overworked'
+                    ? 'bg-purple-950/50 border-purple-500/40'
+                    : 'bg-slate-900/80 border-slate-800/80'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                    {t('worker.globalContractCardTitle')}
+                  </span>
+                  <span className="font-mono font-bold text-indigo-300">
+                    {t('worker.globalProgressLabel', {
+                      worked: profile.globalMonthlyStatus.workedHours,
+                      target: profile.globalMonthlyStatus.contractMonthlyHours,
+                    })}
+                  </span>
+                </div>
+
+                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-2">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      profile.globalMonthlyStatus.status === 'underworked'
+                        ? 'bg-amber-400'
+                        : profile.globalMonthlyStatus.overtimeMonthlyHours > 0
+                        ? 'bg-purple-400'
+                        : 'bg-emerald-400'
+                    }`}
+                    style={{
+                      width: `${Math.min(100, profile.globalMonthlyStatus.progressPercent)}%`,
+                    }}
+                  />
+                </div>
+
+                {profile.globalMonthlyStatus.status === 'underworked' ? (
+                  <div className="flex items-start gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>
+                      {t('worker.globalUnderworkedAlert', {
+                        days: profile.globalMonthlyStatus.remainingWorkingDays,
+                        hours: profile.globalMonthlyStatus.remainingHours,
+                        worked: profile.globalMonthlyStatus.workedHours,
+                        target: profile.globalMonthlyStatus.contractMonthlyHours,
+                      })}
+                    </span>
+                  </div>
+                ) : profile.globalMonthlyStatus.status === 'overworked' ? (
+                  <div className="flex items-start gap-2 text-[11px] font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/30 rounded-xl p-2">
+                    <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <span>
+                      {t('worker.globalOverworkedAlert', {
+                        hours: profile.globalMonthlyStatus.overtimeMonthlyHours,
+                        worked: profile.globalMonthlyStatus.workedHours,
+                        target: profile.globalMonthlyStatus.contractMonthlyHours,
+                      })}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>
+                      {profile.globalMonthlyStatus.remainingHours > 0
+                        ? t('worker.globalRemainingHours', {
+                            hours: profile.globalMonthlyStatus.remainingHours,
+                          })
+                        : t('worker.globalCompletedBadge')}
+                    </span>
+                    <span>{profile.globalMonthlyStatus.progressPercent}%</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Live Shift Timer Display */}
             <div className="text-center my-4 py-4 px-6 bg-slate-900/50 rounded-3xl border border-slate-800/50 shadow-inner">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -1057,6 +1147,86 @@ export function WorkerAppPage() {
                 className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded-xl border border-slate-700 font-medium"
               />
             </div>
+
+            {/* Global Contract Card on History Tab */}
+            {profile.isGlobal && (reportGlobalStatus || (selectedMonth === currentMonthStr ? profile.globalMonthlyStatus : null)) && (() => {
+              const gs = (reportGlobalStatus || profile.globalMonthlyStatus)!;
+              return (
+                <div
+                  className={`rounded-2xl p-3.5 border shadow-md ${
+                    gs.status === 'underworked'
+                      ? 'bg-amber-950/50 border-amber-500/40'
+                      : gs.status === 'overworked'
+                      ? 'bg-purple-950/50 border-purple-500/40'
+                      : 'bg-slate-900/80 border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                      {t('worker.globalContractCardTitle')}
+                    </span>
+                    <span className="font-mono font-bold text-indigo-300">
+                      {t('worker.globalProgressLabel', {
+                        worked: gs.workedHours,
+                        target: gs.contractMonthlyHours,
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-2">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        gs.status === 'underworked'
+                          ? 'bg-amber-400'
+                          : gs.overtimeMonthlyHours > 0
+                          ? 'bg-purple-400'
+                          : 'bg-emerald-400'
+                      }`}
+                      style={{
+                        width: `${Math.min(100, gs.progressPercent)}%`,
+                      }}
+                    />
+                  </div>
+
+                  {gs.status === 'underworked' ? (
+                    <div className="flex items-start gap-2 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <span>
+                        {t('worker.globalUnderworkedAlert', {
+                          days: gs.remainingWorkingDays,
+                          hours: gs.remainingHours,
+                          worked: gs.workedHours,
+                          target: gs.contractMonthlyHours,
+                        })}
+                      </span>
+                    </div>
+                  ) : gs.status === 'overworked' ? (
+                    <div className="flex items-start gap-2 text-[11px] font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/30 rounded-xl p-2">
+                      <CheckCircle2 className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                      <span>
+                        {t('worker.globalOverworkedAlert', {
+                          hours: gs.overtimeMonthlyHours,
+                          worked: gs.workedHours,
+                          target: gs.contractMonthlyHours,
+                        })}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>
+                        {gs.remainingHours > 0
+                          ? t('worker.globalRemainingHours', {
+                              hours: gs.remainingHours,
+                            })
+                          : t('worker.globalCompletedBadge')}
+                      </span>
+                      <span>{gs.progressPercent}%</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Month Summary Cards */}
             {monthlySummary && (

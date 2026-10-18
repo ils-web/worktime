@@ -262,19 +262,20 @@ ownerRouter.get('/billing', async (req: Request, res: Response) => {
     });
 
     const billingData = clients.map((client) => {
-      // Approximate hours from CLOCK_IN to CLOCK_OUT pairs
+      // Calculate hours from CLOCK_IN to CLOCK_OUT pairs per employee
       let totalHours = 0;
-      let lastInTime: Date | null = null;
+      const lastInByEmp = new Map<string, Date>();
       for (const log of client.logs) {
         if (log.action === 'CLOCK_IN') {
-          lastInTime = log.dateTime;
+          lastInByEmp.set(log.empId, log.dateTime);
         } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
+          const lastInTime = lastInByEmp.get(log.empId);
           if (lastInTime) {
             const diff = (log.dateTime.getTime() - lastInTime.getTime()) / 3600000;
             if (diff > 0 && diff < 24) {
               totalHours += diff;
             }
-            lastInTime = null;
+            lastInByEmp.delete(log.empId);
           }
         }
       }

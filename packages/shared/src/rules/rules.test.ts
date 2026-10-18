@@ -10,6 +10,7 @@ import {
   addDays,
   getDayOfWeek,
   getScheduledShiftEndTime,
+  evaluateGlobalMonthlyStatus,
 } from './time';
 import { calculateClientBilling } from './billing';
 
@@ -254,5 +255,56 @@ describe('Billing Rules', () => {
     const nightIn = jerusalemDateTimeToDate('2026-10-07', '22:30');
     const nightEnd = getScheduledShiftEndTime(nightIn, '06:00');
     expect(nightEnd.toISOString()).toBe(jerusalemDateTimeToDate('2026-10-08', '06:00').toISOString());
+  });
+
+  it('evaluates Global Employee monthly status and 3-working-days alert window', () => {
+    // In October 2026 (31 days):
+    // Oct 31 = Sat, Oct 30 = Fri
+    // Last 3 working days (Sun-Thu) are: Tue Oct 27, Wed Oct 28, Thu Oct 29.
+    // On Mon Oct 26 (4 working days left): not in alert window yet
+    const midMonth = evaluateGlobalMonthlyStatus({
+      workedHours: 140,
+      contractMonthlyHours: 182,
+      now: jerusalemDateTimeToDate('2026-10-26', '10:00'),
+    });
+    expect(midMonth.remainingWorkingDays).toBe(4);
+    expect(midMonth.isAlertWindow).toBe(false);
+    expect(midMonth.status).toBe('in_progress');
+    expect(midMonth.shouldAlert).toBe(false);
+    expect(midMonth.remainingHours).toBe(42);
+
+    // On Tue Oct 27 (3 working days left: Tue 27, Wed 28, Thu 29): in alert window, underworked
+    const underworkedAlert = evaluateGlobalMonthlyStatus({
+      workedHours: 155.5,
+      contractMonthlyHours: 182,
+      now: jerusalemDateTimeToDate('2026-10-27', '10:00'),
+    });
+    expect(underworkedAlert.remainingWorkingDays).toBe(3);
+    expect(underworkedAlert.isAlertWindow).toBe(true);
+    expect(underworkedAlert.status).toBe('underworked');
+    expect(underworkedAlert.shouldAlert).toBe(true);
+    expect(underworkedAlert.diffHours).toBe(-26.5);
+    expect(underworkedAlert.remainingHours).toBe(26.5);
+
+    // Overworked employee triggers alert both in and before the 3-day window
+    const overworkedAlert = evaluateGlobalMonthlyStatus({
+      workedHours: 195.25,
+      contractMonthlyHours: 182,
+      now: jerusalemDateTimeToDate('2026-10-28', '14:00'),
+    });
+    expect(overworkedAlert.remainingWorkingDays).toBe(2);
+    expect(overworkedAlert.isAlertWindow).toBe(true);
+    expect(overworkedAlert.status).toBe('overworked');
+    expect(overworkedAlert.shouldAlert).toBe(true);
+    expect(overworkedAlert.overtimeMonthlyHours).toBe(13.25);
+
+    // Exact norm completed in 3-day window -> no alert
+    const completed = evaluateGlobalMonthlyStatus({
+      workedHours: 182,
+      contractMonthlyHours: 182,
+      now: jerusalemDateTimeToDate('2026-10-29', '18:00'),
+    });
+    expect(completed.status).toBe('completed');
+    expect(completed.shouldAlert).toBe(false);
   });
 });

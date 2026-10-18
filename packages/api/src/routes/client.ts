@@ -12,6 +12,8 @@ import {
   addDays,
   formatIsoToDisplayDate,
   getDayOfWeek,
+  evaluateGlobalMonthlyStatus,
+  GlobalMonthlyEvaluation,
 } from '@timetracker/shared';
 import { authRequired, requireRole } from '../middleware/auth';
 import { generateCsvReport, ReportRow } from '../services/csvReportService';
@@ -48,6 +50,7 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
       include: {
         foreman: { select: { id: true, name: true } },
         sites: { include: { site: true } },
+        schedules: true,
         logs: {
           take: 1,
           orderBy: { dateTime: 'desc' },
@@ -56,14 +59,60 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Compute current-month worked hours for Global Employees if any exist
+    const hasGlobalEmployees = employees.some(
+      (emp) => emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0
+    );
+    const workedHoursByEmpId = new Map<string, number>();
+    const now = new Date();
+    const currentMonthStr = getJerusalemParts(now).dateStr.slice(0, 7);
+
+    if (hasGlobalEmployees) {
+      try {
+        const monthStart = jerusalemDateTimeToDate(`${currentMonthStr}-01`, '00:00');
+        const { rows } = await computeClientReportRows(
+          clientId,
+          monthStart,
+          now,
+          isForeman ? req.user?.id : undefined
+        );
+        for (const r of rows) {
+          if (r.date.startsWith(currentMonthStr)) {
+            workedHoursByEmpId.set(
+              r.empId,
+              (workedHoursByEmpId.get(r.empId) ?? 0) + r.netHours
+            );
+          }
+        }
+      } catch (calcErr) {
+        console.error('Error computing global employee monthly hours:', calcErr);
+      }
+    }
+
     const enriched = employees.map((emp) => {
       const lastLog = emp.logs[0];
       const isOnShift = lastLog ? lastLog.action === 'CLOCK_IN' || lastLog.action === 'AUTO_RESUME' : false;
+
+      let globalMonthlyStatus: GlobalMonthlyEvaluation | null = null;
+      if (emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0) {
+        const scheduledDays = emp.schedules
+          ?.filter((s) => s.shiftType !== 'off')
+          .map((s) => s.dayOfWeek);
+        globalMonthlyStatus = evaluateGlobalMonthlyStatus({
+          workedHours: workedHoursByEmpId.get(emp.empId) ?? 0,
+          contractMonthlyHours: emp.contractMonthlyHours!,
+          periodMonth: currentMonthStr,
+          now,
+          workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : undefined,
+        });
+      }
+
       return {
         ...emp,
         isOnShift,
         lastLogAction: lastLog?.action ?? null,
         lastLogTime: lastLog?.dateTime ?? null,
+        globalMonthlyStatus,
       };
     });
 
@@ -80,6 +129,11 @@ const createEmployeeSchema = z.object({
   isMobile: z.boolean().default(false),
   strictGps: z.boolean().default(false),
   autoCloseShift: z.boolean().default(false),
+  isGlobal: z.boolean().default(false),
+  contractMonthlyHours: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? null : Number(v)),
+    z.number().min(0).max(744).nullable().optional()
+  ),
   geofence: z.any().optional(),
   shifts: z.any().optional(),
   foremanId: z.string().optional().nullable(),
@@ -123,7 +177,7 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
       }
     }
 
-    const employee = await prisma.employee.create({
+    const created = await prisma.employee.create({
       data: {
         clientId,
         empId: data.empId,
@@ -131,9 +185,18 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
         isMobile: data.isMobile,
         strictGps: data.strictGps,
         autoCloseShift: data.autoCloseShift,
+        isGlobal: data.isGlobal,
+        contractMonthlyHours: data.isGlobal ? (data.contractMonthlyHours ?? null) : null,
         geofence: finalGeofence,
         shifts: data.shifts || null,
         foremanId: data.foremanId || null,
+        ...(data.siteIds && data.siteIds.length > 0
+          ? {
+              sites: {
+                create: data.siteIds.map((siteId) => ({ siteId })),
+              },
+            }
+          : {}),
       },
       include: {
         sites: { include: { site: true } },
@@ -141,16 +204,7 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
       },
     });
 
-    if (data.siteIds && data.siteIds.length > 0) {
-      await prisma.employeeSite.createMany({
-        data: data.siteIds.map((siteId) => ({
-          employeeId: employee.id,
-          siteId,
-        })),
-      });
-    }
-
-    res.json({ success: true, employee });
+    res.json({ success: true, employee: created });
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: 'Заполните обязательные поля корректно' });
@@ -168,7 +222,19 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
   try {
     const clientId = getTargetClientId(req);
     const currentEmpId = req.params['empId'] as string;
-    const { name, newEmpId, isMobile, strictGps, autoCloseShift, geofence, shifts, foremanId, siteIds } = req.body;
+    const {
+      name,
+      newEmpId,
+      isMobile,
+      strictGps,
+      autoCloseShift,
+      isGlobal,
+      contractMonthlyHours,
+      geofence,
+      shifts,
+      foremanId,
+      siteIds,
+    } = req.body;
 
     const employee = await prisma.employee.findFirst({
       where: { empId: currentEmpId, clientId },
@@ -208,24 +274,6 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
       }
     }
 
-    const updated = await prisma.employee.update({
-      where: { id: employee.id },
-      data: {
-        empId: finalEmpId,
-        ...(name ? { name } : {}),
-        ...(isMobile !== undefined ? { isMobile } : {}),
-        ...(strictGps !== undefined ? { strictGps } : {}),
-        ...(autoCloseShift !== undefined ? { autoCloseShift } : {}),
-        ...(finalGeofence !== undefined ? { geofence: finalGeofence } : {}),
-        ...(shifts !== undefined ? { shifts } : {}),
-        ...(foremanId !== undefined ? { foremanId: foremanId || null } : {}),
-      },
-      include: {
-        sites: { include: { site: true } },
-        foreman: { select: { id: true, name: true } },
-      },
-    });
-
     if (siteIds !== undefined && Array.isArray(siteIds)) {
       await prisma.employeeSite.deleteMany({ where: { employeeId: employee.id } });
       if (siteIds.length > 0) {
@@ -237,6 +285,40 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
         });
       }
     }
+
+    const parsedContractHours =
+      contractMonthlyHours === '' || contractMonthlyHours === null || contractMonthlyHours === undefined
+        ? null
+        : Number(contractMonthlyHours);
+
+    const updated = await prisma.employee.update({
+      where: { id: employee.id },
+      data: {
+        empId: finalEmpId,
+        ...(name ? { name } : {}),
+        ...(isMobile !== undefined ? { isMobile } : {}),
+        ...(strictGps !== undefined ? { strictGps } : {}),
+        ...(autoCloseShift !== undefined ? { autoCloseShift } : {}),
+        ...(isGlobal !== undefined ? { isGlobal: Boolean(isGlobal) } : {}),
+        ...(contractMonthlyHours !== undefined
+          ? {
+              contractMonthlyHours:
+                (isGlobal !== undefined ? Boolean(isGlobal) : employee.isGlobal) &&
+                parsedContractHours !== null &&
+                !isNaN(parsedContractHours)
+                  ? parsedContractHours
+                  : null,
+            }
+          : {}),
+        ...(finalGeofence !== undefined ? { geofence: finalGeofence } : {}),
+        ...(shifts !== undefined ? { shifts } : {}),
+        ...(foremanId !== undefined ? { foremanId: foremanId || null } : {}),
+      },
+      include: {
+        sites: { include: { site: true } },
+        foreman: { select: { id: true, name: true } },
+      },
+    });
 
     res.json({ success: true, employee: updated });
   } catch (err) {
@@ -1077,12 +1159,46 @@ clientRouter.get('/hours', async (req: Request, res: Response) => {
       empId
     );
 
+    // Also compute global employee contract progress for the selected period month
+    const globalEmployees = await prisma.employee.findMany({
+      where: {
+        clientId,
+        isGlobal: true,
+        contractMonthlyHours: { gt: 0 },
+        ...(foremanId ? { foremanId } : {}),
+        ...(empId ? { empId } : {}),
+      },
+      include: { schedules: true },
+    });
+
+    const periodMonth = getJerusalemParts(endDate).dateStr.slice(0, 7);
+    const globalSummaries = globalEmployees.map((emp) => {
+      const workedInPeriod = rows
+        .filter((r) => r.empId === emp.empId && r.date.startsWith(periodMonth))
+        .reduce((acc, r) => acc + r.netHours, 0);
+      const scheduledDays = emp.schedules
+        ?.filter((s) => s.shiftType !== 'off')
+        .map((s) => s.dayOfWeek);
+      const status = evaluateGlobalMonthlyStatus({
+        workedHours: workedInPeriod,
+        contractMonthlyHours: emp.contractMonthlyHours!,
+        periodMonth,
+        workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : undefined,
+      });
+      return {
+        empId: emp.empId,
+        name: emp.name,
+        ...status,
+      };
+    });
+
     res.json({
       success: true,
       clientName,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       hours: rows,
+      globalSummaries,
     });
   } catch (err) {
     console.error('Hours report error:', err);

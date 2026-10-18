@@ -75,17 +75,18 @@ cronRouter.get('/billing', async (req: Request, res: Response) => {
         continue;
       }
 
-      // Calculate total hours
+      // Calculate total hours per employee so overlapping shifts do not collide
       let totalHours = 0;
-      let lastIn: Date | null = null;
+      const lastInByEmp = new Map<string, Date>();
       for (const log of client.logs) {
         if (log.action === 'CLOCK_IN') {
-          lastIn = log.dateTime;
+          lastInByEmp.set(log.empId, log.dateTime);
         } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
+          const lastIn = lastInByEmp.get(log.empId);
           if (lastIn) {
             const diff = (log.dateTime.getTime() - lastIn.getTime()) / 3600000;
             if (diff > 0 && diff < 24) totalHours += diff;
-            lastIn = null;
+            lastInByEmp.delete(log.empId);
           }
         }
       }
