@@ -95,15 +95,12 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
 
       let globalMonthlyStatus: GlobalMonthlyEvaluation | null = null;
       if (emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0) {
-        const scheduledDays = emp.schedules
-          ?.filter((s) => s.shiftType !== 'off')
-          .map((s) => s.dayOfWeek);
         globalMonthlyStatus = evaluateGlobalMonthlyStatus({
           workedHours: workedHoursByEmpId.get(emp.empId) ?? 0,
           contractMonthlyHours: emp.contractMonthlyHours!,
           periodMonth: currentMonthStr,
           now,
-          workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : undefined,
+          schedules: emp.schedules,
         });
       }
 
@@ -1176,14 +1173,11 @@ clientRouter.get('/hours', async (req: Request, res: Response) => {
       const workedInPeriod = rows
         .filter((r) => r.empId === emp.empId && r.date.startsWith(periodMonth))
         .reduce((acc, r) => acc + r.netHours, 0);
-      const scheduledDays = emp.schedules
-        ?.filter((s) => s.shiftType !== 'off')
-        .map((s) => s.dayOfWeek);
       const status = evaluateGlobalMonthlyStatus({
         workedHours: workedInPeriod,
         contractMonthlyHours: emp.contractMonthlyHours!,
         periodMonth,
-        workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : undefined,
+        schedules: emp.schedules,
       });
       return {
         empId: emp.empId,

@@ -394,7 +394,42 @@ export interface EvaluateGlobalMonthlyParams {
   contractMonthlyHours: number;
   periodMonth?: string; // YYYY-MM (defaults to current Jerusalem month)
   now?: Date;
-  workingDaysOfWeek?: number[]; // Defaults to [0, 1, 2, 3, 4] (Sun-Thu in Israel)
+  workingDaysOfWeek?: number[]; // Explicit working days override
+  schedules?: Array<{ dayOfWeek: number; shiftType: string }> | null; // Employee schedule records from DB
+}
+
+/**
+ * Resolves the active working days of the week (0 = Sunday .. 6 = Saturday) from an employee's
+ * schedule rows. In the schedule matrix, days 0..4 (Sunday–Thursday in Israel) default to working
+ * days unless explicitly marked 'off', while days 5..6 (Friday–Saturday) are weekend days unless
+ * explicitly assigned a shift other than 'off'.
+ */
+export function resolveWorkingDaysFromSchedules(
+  schedules?: Array<{ dayOfWeek: number; shiftType: string }> | null
+): number[] {
+  if (!schedules || schedules.length === 0) {
+    return [0, 1, 2, 3, 4]; // Standard Israeli workweek: Sunday (0) - Thursday (4)
+  }
+
+  const byDay = new Map<number, string>();
+  for (const s of schedules) {
+    byDay.set(s.dayOfWeek, s.shiftType);
+  }
+
+  const workingDays: number[] = [];
+  for (let d = 0; d <= 6; d++) {
+    const shiftType = byDay.get(d);
+    if (shiftType !== undefined) {
+      if (shiftType !== 'off') {
+        workingDays.push(d);
+      }
+    } else if (d >= 0 && d <= 4) {
+      // Unmodified Sunday–Thursday cells in the schedule matrix are working days by default
+      workingDays.push(d);
+    }
+  }
+
+  return workingDays.length > 0 ? workingDays : [0, 1, 2, 3, 4];
 }
 
 export interface GlobalMonthlyEvaluation {
@@ -426,11 +461,12 @@ export function evaluateGlobalMonthlyStatus(params: EvaluateGlobalMonthlyParams)
     ? params.periodMonth
     : currentMonthStr;
 
-  const workingDaysSet = new Set(
+  const resolvedDays =
     params.workingDaysOfWeek && params.workingDaysOfWeek.length > 0
       ? params.workingDaysOfWeek
-      : [0, 1, 2, 3, 4] // Standard Israeli workweek: Sunday (0) - Thursday (4)
-  );
+      : resolveWorkingDaysFromSchedules(params.schedules);
+
+  const workingDaysSet = new Set(resolvedDays);
 
   const [yStr, mStr] = periodMonth.split('-');
   const year = parseInt(yStr ?? String(nowParts.year), 10);

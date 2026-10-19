@@ -316,6 +316,8 @@ export function ClientScheduleTab() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['client-employees'] });
+      queryClient.invalidateQueries({ queryKey: ['client-hours'] });
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     },

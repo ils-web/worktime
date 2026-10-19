@@ -243,14 +243,11 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
           effectiveShifts,
           employee.client.autoDeductLunch ?? false
         );
-        const scheduledDays = employee.schedules
-          ?.filter((s) => s.shiftType !== 'off')
-          .map((s) => s.dayOfWeek);
         globalMonthlyStatus = evaluateGlobalMonthlyStatus({
           workedHours: monthData.totalNet,
           contractMonthlyHours: employee.contractMonthlyHours!,
           periodMonth: currentMonth,
-          workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : undefined,
+          schedules: employee.schedules,
         });
       } catch (gErr) {
         console.error('Worker globalMonthlyStatus error:', gErr);
@@ -664,14 +661,11 @@ workerRouter.get('/report/:empId', async (req: Request, res: Response) => {
 
     let globalMonthlyStatus: GlobalMonthlyEvaluation | null = null;
     if (employee.isGlobal && (employee.contractMonthlyHours ?? 0) > 0) {
-      const scheduledDays = employee.schedules
-        ?.filter((s) => s.shiftType !== 'off')
-        .map((s) => s.dayOfWeek);
       globalMonthlyStatus = evaluateGlobalMonthlyStatus({
         workedHours: monthData.totalNet,
         contractMonthlyHours: employee.contractMonthlyHours!,
         periodMonth: month,
-        workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : undefined,
+        schedules: employee.schedules,
       });
     }
 

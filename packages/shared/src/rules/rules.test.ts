@@ -306,5 +306,22 @@ describe('Billing Rules', () => {
     });
     expect(completed.status).toBe('completed');
     expect(completed.shouldAlert).toBe(false);
+
+    // Partial DB schedules (e.g., only Sun='morning', Fri='off', Sat='off' saved in DB, Mon-Thu untouched)
+    // On Oct 19, 2026 (Monday): should count all Sun-Thu (9 working days left), NOT just Sundays (1 day left)
+    const oct19PartialSchedule = evaluateGlobalMonthlyStatus({
+      workedHours: 72.1,
+      contractMonthlyHours: 182,
+      now: jerusalemDateTimeToDate('2026-10-19', '07:12'),
+      schedules: [
+        { dayOfWeek: 6, shiftType: 'off' },
+        { dayOfWeek: 5, shiftType: 'off' },
+        { dayOfWeek: 0, shiftType: 'morning' },
+      ],
+    });
+    expect(oct19PartialSchedule.remainingWorkingDays).toBe(9);
+    expect(oct19PartialSchedule.isAlertWindow).toBe(false);
+    expect(oct19PartialSchedule.status).toBe('in_progress');
+    expect(oct19PartialSchedule.shouldAlert).toBe(false);
   });
 });

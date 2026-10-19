@@ -97150,15 +97150,34 @@ function getScheduledShiftEndTime(clockInDate, shiftEndStr) {
   const targetDateStr = endMinutes <= inMinutes ? addDays(inParts.dateStr, 1) : inParts.dateStr;
   return jerusalemDateTimeToDate(targetDateStr, shiftEndStr);
 }
+function resolveWorkingDaysFromSchedules(schedules) {
+  if (!schedules || schedules.length === 0) {
+    return [0, 1, 2, 3, 4];
+  }
+  const byDay = /* @__PURE__ */ new Map();
+  for (const s of schedules) {
+    byDay.set(s.dayOfWeek, s.shiftType);
+  }
+  const workingDays = [];
+  for (let d = 0; d <= 6; d++) {
+    const shiftType = byDay.get(d);
+    if (shiftType !== void 0) {
+      if (shiftType !== "off") {
+        workingDays.push(d);
+      }
+    } else if (d >= 0 && d <= 4) {
+      workingDays.push(d);
+    }
+  }
+  return workingDays.length > 0 ? workingDays : [0, 1, 2, 3, 4];
+}
 function evaluateGlobalMonthlyStatus(params) {
   const nowDate = params.now ?? /* @__PURE__ */ new Date();
   const nowParts = getJerusalemParts(nowDate);
   const currentMonthStr = nowParts.dateStr.slice(0, 7);
   const periodMonth = params.periodMonth && /^\d{4}-\d{2}$/.test(params.periodMonth) ? params.periodMonth : currentMonthStr;
-  const workingDaysSet = new Set(
-    params.workingDaysOfWeek && params.workingDaysOfWeek.length > 0 ? params.workingDaysOfWeek : [0, 1, 2, 3, 4]
-    // Standard Israeli workweek: Sunday (0) - Thursday (4)
-  );
+  const resolvedDays = params.workingDaysOfWeek && params.workingDaysOfWeek.length > 0 ? params.workingDaysOfWeek : resolveWorkingDaysFromSchedules(params.schedules);
+  const workingDaysSet = new Set(resolvedDays);
   const [yStr, mStr] = periodMonth.split("-");
   const year = parseInt(yStr ?? String(nowParts.year), 10);
   const month = parseInt(mStr ?? String(nowParts.month), 10);
@@ -98702,13 +98721,12 @@ clientRouter.get("/employees", async (req, res) => {
       const isOnShift = lastLog ? lastLog.action === "CLOCK_IN" || lastLog.action === "AUTO_RESUME" : false;
       let globalMonthlyStatus = null;
       if (emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0) {
-        const scheduledDays = emp.schedules?.filter((s) => s.shiftType !== "off").map((s) => s.dayOfWeek);
         globalMonthlyStatus = evaluateGlobalMonthlyStatus({
           workedHours: workedHoursByEmpId.get(emp.empId) ?? 0,
           contractMonthlyHours: emp.contractMonthlyHours,
           periodMonth: currentMonthStr,
           now,
-          workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : void 0
+          schedules: emp.schedules
         });
       }
       return {
@@ -99591,12 +99609,11 @@ clientRouter.get("/hours", async (req, res) => {
     const periodMonth = getJerusalemParts(endDate).dateStr.slice(0, 7);
     const globalSummaries = globalEmployees.map((emp) => {
       const workedInPeriod = rows.filter((r) => r.empId === emp.empId && r.date.startsWith(periodMonth)).reduce((acc, r) => acc + r.netHours, 0);
-      const scheduledDays = emp.schedules?.filter((s) => s.shiftType !== "off").map((s) => s.dayOfWeek);
       const status = evaluateGlobalMonthlyStatus({
         workedHours: workedInPeriod,
         contractMonthlyHours: emp.contractMonthlyHours,
         periodMonth,
-        workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : void 0
+        schedules: emp.schedules
       });
       return {
         empId: emp.empId,
@@ -100137,12 +100154,11 @@ workerRouter.get("/profile/:empId", async (req, res) => {
           effectiveShifts,
           employee.client.autoDeductLunch ?? false
         );
-        const scheduledDays = employee.schedules?.filter((s) => s.shiftType !== "off").map((s) => s.dayOfWeek);
         globalMonthlyStatus = evaluateGlobalMonthlyStatus({
           workedHours: monthData.totalNet,
           contractMonthlyHours: employee.contractMonthlyHours,
           periodMonth: currentMonth,
-          workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : void 0
+          schedules: employee.schedules
         });
       } catch (gErr) {
         console.error("Worker globalMonthlyStatus error:", gErr);
@@ -100486,12 +100502,11 @@ workerRouter.get("/report/:empId", async (req, res) => {
     );
     let globalMonthlyStatus = null;
     if (employee.isGlobal && (employee.contractMonthlyHours ?? 0) > 0) {
-      const scheduledDays = employee.schedules?.filter((s) => s.shiftType !== "off").map((s) => s.dayOfWeek);
       globalMonthlyStatus = evaluateGlobalMonthlyStatus({
         workedHours: monthData.totalNet,
         contractMonthlyHours: employee.contractMonthlyHours,
         periodMonth: month,
-        workingDaysOfWeek: scheduledDays && scheduledDays.length > 0 ? scheduledDays : void 0
+        schedules: employee.schedules
       });
     }
     res.json({
