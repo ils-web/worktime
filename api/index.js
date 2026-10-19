@@ -99058,7 +99058,37 @@ clientRouter.get("/schedule", async (req, res) => {
 clientRouter.post("/schedule", async (req, res) => {
   try {
     const clientId = getTargetClientId(req);
-    const { employeeId, dayOfWeek, shiftType } = req.body;
+    const { items, employeeId, dayOfWeek, shiftType } = req.body;
+    if (Array.isArray(items) && items.length > 0) {
+      const validItems = items.filter(
+        (it) => typeof it.employeeId === "number" && typeof it.dayOfWeek === "number" && typeof it.shiftType === "string"
+      );
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < validItems.length; i += CHUNK_SIZE) {
+        const chunk = validItems.slice(i, i + CHUNK_SIZE);
+        await prisma.$transaction(
+          chunk.map(
+            (it) => prisma.schedule.upsert({
+              where: {
+                employeeId_dayOfWeek: {
+                  employeeId: it.employeeId,
+                  dayOfWeek: it.dayOfWeek
+                }
+              },
+              update: { shiftType: it.shiftType },
+              create: {
+                clientId,
+                employeeId: it.employeeId,
+                dayOfWeek: it.dayOfWeek,
+                shiftType: it.shiftType
+              }
+            })
+          )
+        );
+      }
+      res.json({ success: true, count: validItems.length });
+      return;
+    }
     const schedule = await prisma.schedule.upsert({
       where: {
         employeeId_dayOfWeek: { employeeId, dayOfWeek }
@@ -99159,28 +99189,37 @@ clientRouter.get("/logs/recent", async (req, res) => {
       where: { clientId },
       include: { employee: { select: { id: true, empId: true, name: true } } },
       orderBy: { dateTime: "desc" },
-      take: 50
+      take: 100
     });
     let todayStats = null;
     try {
       const now = /* @__PURE__ */ new Date();
       const todayStr = getJerusalemParts(now).dateStr;
-      const startOfDay = new Date(now);
-      startOfDay.setHours(0, 0, 0, 0);
-      const yesterday = new Date(startOfDay.getTime() - 24 * 3600 * 1e3);
-      const { rows } = await computeClientReportRows(clientId, yesterday, now);
-      const todayRows = rows.filter((r) => r.date === todayStr);
+      const todayStart = jerusalemDateTimeToDate(todayStr, "00:00");
+      const yesterdayStart = jerusalemDateTimeToDate(addDays(todayStr, -1), "00:00");
+      const [reportResult, todayLogs] = await Promise.all([
+        computeClientReportRows(clientId, yesterdayStart, now),
+        prisma.timeLog.findMany({
+          where: {
+            clientId,
+            dateTime: { gte: todayStart }
+          },
+          include: { employee: { select: { id: true, empId: true, name: true } } },
+          orderBy: { dateTime: "desc" }
+        })
+      ]);
+      const todayRows = reportResult.rows.filter((r) => r.date === todayStr);
       let totalCompletedHours = 0;
       for (const r of todayRows) {
         totalCompletedHours += r.netHours;
       }
-      const completedShiftsCount = logs.filter(
+      const completedShiftsCount = todayLogs.filter(
         (l) => (l.action === "CLOCK_OUT" || l.action === "AUTO_EXIT") && getJerusalemParts(l.dateTime).dateStr === todayStr
       ).length;
-      const clockInsCount = logs.filter(
+      const clockInsCount = todayLogs.filter(
         (l) => l.action === "CLOCK_IN" && getJerusalemParts(l.dateTime).dateStr === todayStr
       ).length;
-      const manualLogsToday = logs.filter(
+      const manualLogsToday = todayLogs.filter(
         (l) => l.isManual && getJerusalemParts(l.dateTime).dateStr === todayStr
       );
       const topWorkersToday = todayRows.map((r) => ({ empId: r.empId, name: r.name, hours: r.netHours })).sort((a, b) => b.hours - a.hours).slice(0, 5);

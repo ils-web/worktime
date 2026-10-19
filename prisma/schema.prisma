@@ -111,6 +111,9 @@ model TimeLog {
   @@index([clientId])
   @@index([empId])
   @@index([dateTime])
+  @@index([clientId, dateTime])
+  @@index([empId, dateTime])
+  @@index([employeeId, dateTime])
 }
 
 enum LogAction {

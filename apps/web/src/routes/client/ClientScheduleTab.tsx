@@ -295,24 +295,24 @@ export function ClientScheduleTab() {
     window.open(url, '_blank');
   };
 
-  // Save Schedule Mutation
+  // Save Schedule Mutation (Single Batch Request for 400+ workers scale)
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const promises: Promise<any>[] = [];
+      const items: Array<{ employeeId: number; dayOfWeek: number; shiftType: string }> = [];
       for (const [key, shiftType] of Object.entries(scheduleMatrix)) {
         const [empIdStr, dayOfWeekStr] = key.split('_');
         const employeeId = parseInt(empIdStr || '0', 10);
         const dayOfWeek = parseInt(dayOfWeekStr || '0', 10);
         if (employeeId) {
-          promises.push(
-            apiRequest('/api/client/schedule', {
-              method: 'POST',
-              body: JSON.stringify({ employeeId, dayOfWeek, shiftType }),
-            })
-          );
+          items.push({ employeeId, dayOfWeek, shiftType });
         }
       }
-      await Promise.all(promises);
+      if (items.length > 0) {
+        await apiRequest('/api/client/schedule', {
+          method: 'POST',
+          body: JSON.stringify({ items }),
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-schedule'] });
