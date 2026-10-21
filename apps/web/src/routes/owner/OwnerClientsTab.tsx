@@ -231,13 +231,31 @@ export function OwnerClientsTab() {
                           )}
                         </td>
                         <td className="p-4 text-xs">
-                          {c.trialEndsAt ? (
-                            <span className={isTrialActive ? 'text-emerald-400' : 'text-rose-400'}>
-                              {formatIsoToDisplayDate(c.trialEndsAt.slice(0, 10))}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500">Бессрочно</span>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTariffClientId(c.id);
+                              setTariffForm({
+                                tariffMode: c.tariffMode,
+                                pricePerUser: c.pricePerUser,
+                                pricePerHour: c.pricePerHour,
+                                trialEndsAt: c.trialEndsAt
+                                  ? new Date(c.trialEndsAt).toISOString().slice(0, 10)
+                                  : '',
+                              });
+                            }}
+                            title="Нажмите, чтобы изменить срок триала или сделать бессрочным"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-amber-500/50 hover:bg-slate-800/80 transition cursor-pointer"
+                          >
+                            {c.trialEndsAt ? (
+                              <span className={isTrialActive ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-bold'}>
+                                {formatIsoToDisplayDate(c.trialEndsAt.slice(0, 10))}
+                                {!isTrialActive && ' (Истёк)'}
+                              </span>
+                            ) : (
+                              <span className="text-emerald-400 font-semibold">♾️ Бессрочно</span>
+                            )}
+                          </button>
                         </td>
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -521,16 +539,56 @@ export function OwnerClientsTab() {
               />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Дата окончания триала</label>
-            <DatePicker
-              value={tariffForm.trialEndsAt}
-              onChange={(val) => setTariffForm({ ...tariffForm, trialEndsAt: val })}
-              placeholder="ДД/ММ/ГГГГ"
-            />
-            <span className="text-[11px] text-slate-500 mt-1 block">
-              Оставьте пустым для бессрочного доступа
-            </span>
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-slate-300">
+              Статус триала / Дата окончания
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTariffForm({ ...tariffForm, trialEndsAt: '' })}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                  !tariffForm.trialEndsAt
+                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-950'
+                    : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-300'
+                }`}
+              >
+                ♾️ Постоянный доступ (Бессрочно)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const d = new Date(Date.now() + 14 * 86400000);
+                  setTariffForm({ ...tariffForm, trialEndsAt: d.toISOString().slice(0, 10) });
+                }}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-amber-300 border border-slate-700 hover:border-amber-500/50 transition"
+              >
+                +14 дней
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const d = new Date(Date.now() + 30 * 86400000);
+                  setTariffForm({ ...tariffForm, trialEndsAt: d.toISOString().slice(0, 10) });
+                }}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 text-amber-300 border border-slate-700 hover:border-amber-500/50 transition"
+              >
+                +30 дней
+              </button>
+            </div>
+            <div className="pt-1">
+              <DatePicker
+                value={tariffForm.trialEndsAt}
+                onChange={(val) => setTariffForm({ ...tariffForm, trialEndsAt: val })}
+                placeholder="Бессрочно (без ограничения)"
+                className="w-full"
+              />
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                {tariffForm.trialEndsAt
+                  ? `Триал действует до ${formatIsoToDisplayDate(tariffForm.trialEndsAt)}. Нажмите «Постоянный доступ», чтобы снять ограничение.`
+                  : '✅ Ограничение триала снято — компания работает постоянно.'}
+              </span>
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-3">
             <button

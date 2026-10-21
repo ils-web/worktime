@@ -59,7 +59,10 @@ ownerRouter.post('/clients', async (req: Request, res: Response) => {
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(data.password, salt);
-    const trialEndsAt = new Date(Date.now() + data.trialDays * 24 * 60 * 60 * 1000);
+    const trialEndsAt =
+      data.trialDays > 0
+        ? new Date(Date.now() + data.trialDays * 24 * 60 * 60 * 1000)
+        : null;
 
     const defaultShifts = {
       morning: { start: '07:00', end: '16:00' },

@@ -104,6 +104,10 @@ export function DatePicker({
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
     setTextInput(raw);
+    if (!raw.trim() && !required) {
+      onChange('');
+      return;
+    }
     const parsed = parseDisplayToIsoDate(raw);
     if (parsed && parsed.length === 10 && !isNaN(new Date(parsed).getTime())) {
       onChange(parsed);
@@ -113,6 +117,10 @@ export function DatePicker({
   };
 
   const handleBlur = () => {
+    if (!textInput.trim() && !required) {
+      onChange('');
+      return;
+    }
     // If invalid text entered, reset to formatted current value
     const parsed = parseDisplayToIsoDate(textInput);
     if (!parsed || parsed.length !== 10 || isNaN(new Date(parsed).getTime())) {
