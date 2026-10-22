@@ -5,10 +5,10 @@ import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
 import { Plus, StickyNote, DollarSign, Loader2 } from 'lucide-react';
 import { DatePicker } from '../../components/ui/DatePicker';
-import { formatIsoToDisplayDate } from '@timetracker/shared';
+import { formatIsoToDisplayDate, localizeSystemNote } from '@timetracker/shared';
 
 export function ClientNotesTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -103,7 +103,9 @@ export function ClientNotesTab() {
                       {n.employee?.name || n.empId}
                       <span className="block text-xs font-mono text-slate-400">{n.empId}</span>
                     </td>
-                    <td className="p-4 text-slate-300 text-xs sm:text-sm">{n.noteText}</td>
+                    <td className="p-4 text-slate-300 text-xs sm:text-sm">
+                      {localizeSystemNote(n.noteText, i18n.language)}
+                    </td>
                     <td className="p-4">
                       {n.expense ? (
                         <span className="font-bold text-amber-400 flex items-center gap-1">

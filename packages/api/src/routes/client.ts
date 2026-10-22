@@ -1326,7 +1326,8 @@ clientRouter.get('/reports/csv', async (req: Request, res: Response) => {
       empId
     );
 
-    const csvData = generateCsvReport(rows, clientName);
+    const lang = (req.query['lang'] as string) || 'ru';
+    const csvData = generateCsvReport(rows, clientName, lang);
     const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${startDate.toISOString().slice(0, 10)}.csv`;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

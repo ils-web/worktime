@@ -9,6 +9,8 @@ import {
   addDays,
   getDayOfWeek,
   getJerusalemParts,
+  localizeSystemNote,
+  isSystemGpsNote,
 } from '@timetracker/shared';
 import {
   Download,
@@ -153,10 +155,10 @@ export function ClientHoursTab() {
   // Download PDF
   const handleDownloadPdf = async (customLang?: string) => {
     try {
-      const lang = customLang || 'he';
+      const lang = customLang || i18n.language || 'he';
       const empParam = selectedEmpId ? `&empId=${encodeURIComponent(selectedEmpId)}` : '';
       const blob = await apiRequest<Blob>(
-        `/api/client/reports/pdf?startDate=${startDate}&endDate=${endDate}&lang=${lang}${empParam}`
+        `/api/client/reports/pdf?startDate=${startDate}&endDate=${endDate}&lang=${encodeURIComponent(lang)}${empParam}`
       );
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -176,9 +178,10 @@ export function ClientHoursTab() {
   // Download CSV
   const handleDownloadCsv = async () => {
     try {
+      const lang = i18n.language || 'ru';
       const empParam = selectedEmpId ? `&empId=${encodeURIComponent(selectedEmpId)}` : '';
       const blob = await apiRequest<Blob>(
-        `/api/client/reports/csv?startDate=${startDate}&endDate=${endDate}${empParam}`
+        `/api/client/reports/csv?startDate=${startDate}&endDate=${endDate}&lang=${encodeURIComponent(lang)}${empParam}`
       );
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -310,14 +313,11 @@ export function ClientHoursTab() {
 
           <button
             type="button"
-            onClick={() => handleDownloadPdf('he')}
+            onClick={() => handleDownloadPdf(i18n.language)}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-emerald-950"
           >
             <Download className="w-3.5 h-3.5" />
             <span>{t('admin.downloadPdf')}</span>
-            {i18n.language !== 'he' && (
-              <span className="text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded font-bold">עברית</span>
-            )}
           </button>
         </div>
       </div>
@@ -488,7 +488,7 @@ export function ClientHoursTab() {
                       </td>
                       <td className="p-3.5 whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          {row.dayOfWeek || getDayOfWeek(row.date, i18n.language)}
+                          {getDayOfWeek(row.date, i18n.language) || row.dayOfWeek}
                         </span>
                       </td>
                       <td className="p-3.5 font-semibold text-white">
@@ -520,17 +520,17 @@ export function ClientHoursTab() {
                       <td className="p-3.5 text-xs text-rose-400">
                         {row.overtimeHours > 0 ? `${row.overtimeHours.toFixed(2)} ${t('admin.hourUnit')}` : '—'}
                       </td>
-                      <td className="p-3.5 text-xs text-slate-400 max-w-xs truncate" title={row.notes || ''}>
+                      <td
+                        className="p-3.5 text-xs text-slate-400 max-w-xs truncate"
+                        title={localizeSystemNote(row.notes || '', i18n.language)}
+                      >
                         {row.notes ? (
-                          row.notes.includes('строгий GPS') ||
-                          row.notes.includes('strict GPS') ||
-                          row.notes.includes('GPS קפדני') ||
-                          row.notes.includes('GPS صارم') ? (
+                          isSystemGpsNote(row.notes) ? (
                             <span className="inline-flex items-center gap-1 text-amber-300 font-semibold bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded text-[11px]">
-                              📍 {row.notes}
+                              📍 {localizeSystemNote(row.notes, i18n.language)}
                             </span>
                           ) : (
-                            row.notes
+                            localizeSystemNote(row.notes, i18n.language)
                           )
                         ) : (
                           '—'
@@ -548,7 +548,7 @@ export function ClientHoursTab() {
                               const [endH = '17', endM = '00'] = (row.lastOut && row.lastOut !== '—' ? row.lastOut : '17:00').split(':');
                               setManualStartTime(`${startH.padStart(2, '0')}:${startM.padStart(2, '0')}`);
                               setManualEndTime(`${endH.padStart(2, '0')}:${endM.padStart(2, '0')}`);
-                              setManualNotes(row.notes || '');
+                              setManualNotes(localizeSystemNote(row.notes || '', i18n.language));
                               const isNight =
                                 row.firstIn &&
                                 row.lastOut &&

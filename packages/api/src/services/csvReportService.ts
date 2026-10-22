@@ -18,12 +18,12 @@ export interface ReportRow {
   sessionsCount?: number;
 }
 
-import { formatIsoToDisplayDate, getDayOfWeek } from '@timetracker/shared';
+import { formatIsoToDisplayDate, getDayOfWeek, localizeSystemNote } from '@timetracker/shared';
 
 /**
  * Generates CSV string for report rows with UTF-8 BOM for Excel compatibility
  */
-export function generateCsvReport(rows: ReportRow[], clientName: string): string {
+export function generateCsvReport(rows: ReportRow[], clientName: string, lang: string = 'ru'): string {
   const BOM = '\uFEFF';
   const header = [
     'ID Сотрудника',
@@ -43,7 +43,8 @@ export function generateCsvReport(rows: ReportRow[], clientName: string): string
 
   const csvRows = rows.map((r) => {
     const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? ' *' : '');
-    const dayStr = r.dayOfWeek || getDayOfWeek(r.date, 'ru');
+    const dayStr = getDayOfWeek(r.date, lang) || r.dayOfWeek || '';
+    const noteStr = localizeSystemNote(r.notes || '', lang);
     return [
       `"${r.empId}"`,
       `"${r.name.replace(/"/g, '""')}"`,
@@ -57,7 +58,7 @@ export function generateCsvReport(rows: ReportRow[], clientName: string): string
       r.nightHours.toFixed(2),
       r.saturdayHours.toFixed(2),
       r.overtimeHours.toFixed(2),
-      `"${(r.notes || '').replace(/"/g, '""')}"`,
+      `"${noteStr.replace(/"/g, '""')}"`,
     ].join(',');
   });
 

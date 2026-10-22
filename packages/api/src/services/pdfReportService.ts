@@ -2,7 +2,7 @@ import { PDFDocument, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { ReportRow } from './csvReportService';
 import { getArialRegularBytes, getArialBoldBytes } from './fontAssets';
-import { formatIsoToDisplayDate, getDayOfWeek } from '@timetracker/shared';
+import { formatIsoToDisplayDate, getDayOfWeek, localizeSystemNote } from '@timetracker/shared';
 
 /**
  * Normalizes text for PDF rendering with Arial Unicode font.
@@ -655,7 +655,7 @@ export async function generatePdfReport(
           rawVal = (formatIsoToDisplayDate(r.date) || r.date) + (r.isManual ? ' *' : '');
           break;
         case 'dayOfWeek':
-          rawVal = r.dayOfWeek || getDayOfWeek(r.date, normLang);
+          rawVal = getDayOfWeek(r.date, normLang) || r.dayOfWeek || '';
           break;
         case 'name':
           rawVal = r.name;
@@ -691,7 +691,7 @@ export async function generatePdfReport(
           if (r.overtimeHours > 0) cellColor = rgb(0.75, 0.45, 0.05);
           break;
         case 'notes':
-          rawVal = r.notes || '';
+          rawVal = localizeSystemNote(r.notes || '', normLang);
           cellColor = rgb(0.35, 0.4, 0.48);
           break;
         default:

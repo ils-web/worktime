@@ -134,6 +134,21 @@ describe('TimeTracker API Endpoints', () => {
     expect(res.body.error).toContain('Вы вне зоны');
   });
 
+  it('8b. Worker clock-in WITHOUT GPS coordinates (lat: null) is blocked with 400 GPS_REQUIRED error', async () => {
+    const res = await request(app)
+      .post('/api/worker/log')
+      .send({
+        empId: testEmpId,
+        action: 'CLOCK_IN',
+        lat: null,
+        lng: null,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errorCode).toBe('GPS_REQUIRED');
+    expect(res.body.error).toContain('GPS');
+  });
+
   it('9. Worker clock-in INSIDE geofence succeeds', async () => {
     // Exact location inside 100m radius
     const res = await request(app)

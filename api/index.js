@@ -97169,6 +97169,47 @@ function evaluateGlobalMonthlyStatus(params) {
     shouldAlert
   };
 }
+function localizeSystemNote(noteText, lang = "he") {
+  if (!noteText) return "";
+  const norm = (lang || "he").toLowerCase();
+  const targetLang = norm.startsWith("ru") ? "ru" : norm.startsWith("he") ? "he" : norm.startsWith("ar") ? "ar" : "en";
+  const parts = noteText.split(" \u2022 ");
+  const localizedParts = parts.map((rawPart) => {
+    const part = rawPart.trim();
+    if (!part) return part;
+    const isStrictExit = part.includes("\u0441\u0442\u0440\u043E\u0433\u0438\u0439 GPS") || part.includes("strict GPS") || part.includes("GPS \u05E7\u05E4\u05D3\u05E0\u05D9") || part.includes("GPS \u0635\u0627\u0631\u0645") || part.startsWith("\u041F\u043E\u043A\u0438\u043D\u0443\u043B \u043E\u0431\u044A\u0435\u043A\u0442") || part.startsWith("Left work site") || part.startsWith("\u05E2\u05D6\u05D1 \u05D0\u05EA \u05D4\u05D0\u05EA\u05E8") || part.startsWith("\u063A\u0627\u062F\u0631 \u0627\u0644\u0645\u0648\u0642\u0639");
+    if (isStrictExit) {
+      const siteMatch = part.match(/"([^"]+)"/);
+      const sitePart = siteMatch && siteMatch[1] ? ` "${siteMatch[1]}"` : "";
+      const distMatch = part.match(/[,،]\s*(\d+)\s*(?:м|m|מ'|מ׳|م)?/i) || part.match(/(\d+)\s*(?:м|m|מ'|מ׳|م)\s*\)/i);
+      const dist = distMatch && distMatch[1] ? distMatch[1] : "0";
+      if (targetLang === "ru") return `\u041F\u043E\u043A\u0438\u043D\u0443\u043B \u043E\u0431\u044A\u0435\u043A\u0442${sitePart} (\u0441\u0442\u0440\u043E\u0433\u0438\u0439 GPS, ${dist}\u043C)`;
+      if (targetLang === "he") return `\u05E2\u05D6\u05D1 \u05D0\u05EA \u05D4\u05D0\u05EA\u05E8${sitePart} (GPS \u05E7\u05E4\u05D3\u05E0\u05D9, ${dist} \u05DE')`;
+      if (targetLang === "ar") return `\u063A\u0627\u062F\u0631 \u0627\u0644\u0645\u0648\u0642\u0639${sitePart} (GPS \u0635\u0627\u0631\u0645\u060C ${dist} \u0645)`;
+      return `Left work site${sitePart} (strict GPS, ${dist}m)`;
+    }
+    const isOutOfZoneExit = part.startsWith("\u0412\u044B\u0445\u043E\u0434 \u0432\u043D\u0435 \u043E\u0431\u044A\u0435\u043A\u0442\u0430") || part.startsWith("Clock-out outside site") || part.startsWith("\u05D9\u05E6\u05D9\u05D0\u05D4 \u05DE\u05D7\u05D5\u05E5 \u05DC\u05D0\u05EA\u05E8") || part.startsWith("\u062E\u0631\u0648\u062C \u062E\u0627\u0631\u062C \u0627\u0644\u0645\u0648\u0642\u0639");
+    if (isOutOfZoneExit) {
+      const siteMatch = part.match(/"([^"]+)"/);
+      const sitePart = siteMatch && siteMatch[1] ? ` "${siteMatch[1]}"` : "";
+      const distMatch = part.match(/\((\d+)/) || part.match(/(\d+)\s*(?:м|m|מ'|מ׳|م)/i);
+      const dist = distMatch && distMatch[1] ? distMatch[1] : "0";
+      if (targetLang === "ru") return `\u0412\u044B\u0445\u043E\u0434 \u0432\u043D\u0435 \u043E\u0431\u044A\u0435\u043A\u0442\u0430${sitePart} (${dist}\u043C)`;
+      if (targetLang === "he") return `\u05D9\u05E6\u05D9\u05D0\u05D4 \u05DE\u05D7\u05D5\u05E5 \u05DC\u05D0\u05EA\u05E8${sitePart} (${dist} \u05DE')`;
+      if (targetLang === "ar") return `\u062E\u0631\u0648\u062C \u062E\u0627\u0631\u062C \u0627\u0644\u0645\u0648\u0642\u0639${sitePart} (${dist} \u0645)`;
+      return `Clock-out outside site${sitePart} (${dist}m)`;
+    }
+    const isNoGpsExit = part.startsWith("\u0412\u044B\u0445\u043E\u0434 \u0431\u0435\u0437 GPS") || part.startsWith("Clock-out without GPS") || part.startsWith("\u05D9\u05E6\u05D9\u05D0\u05D4 \u05DC\u05DC\u05D0 GPS") || part.startsWith("\u062E\u0631\u0648\u062C \u0628\u062F\u0648\u0646 GPS");
+    if (isNoGpsExit) {
+      if (targetLang === "ru") return "\u0412\u044B\u0445\u043E\u0434 \u0431\u0435\u0437 GPS (\u0433\u0435\u043E\u043B\u043E\u043A\u0430\u0446\u0438\u044F \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u0430)";
+      if (targetLang === "he") return "\u05D9\u05E6\u05D9\u05D0\u05D4 \u05DC\u05DC\u05D0 GPS (\u05DE\u05D9\u05E7\u05D5\u05DD \u05DB\u05D1\u05D5\u05D9)";
+      if (targetLang === "ar") return "\u062E\u0631\u0648\u062C \u0628\u062F\u0648\u0646 GPS (\u0627\u0644\u0645\u0648\u0642\u0639 \u0645\u062A\u0648\u0642\u0641)";
+      return "Clock-out without GPS (location disabled)";
+    }
+    return part;
+  });
+  return localizedParts.join(" \u2022 ");
+}
 
 // packages/shared/src/rules/billing.ts
 function calculateWorkerDays(employee, period) {
@@ -98042,7 +98083,7 @@ var import_express4 = __toESM(require_express2());
 var import_bcryptjs4 = __toESM(require_bcryptjs());
 
 // packages/api/src/services/csvReportService.ts
-function generateCsvReport(rows, clientName) {
+function generateCsvReport(rows, clientName, lang = "ru") {
   const BOM = "\uFEFF";
   const header = [
     "ID \u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430",
@@ -98061,7 +98102,8 @@ function generateCsvReport(rows, clientName) {
   ].join(",");
   const csvRows = rows.map((r) => {
     const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? " *" : "");
-    const dayStr = r.dayOfWeek || getDayOfWeek(r.date, "ru");
+    const dayStr = getDayOfWeek(r.date, lang) || r.dayOfWeek || "";
+    const noteStr = localizeSystemNote(r.notes || "", lang);
     return [
       `"${r.empId}"`,
       `"${r.name.replace(/"/g, '""')}"`,
@@ -98075,7 +98117,7 @@ function generateCsvReport(rows, clientName) {
       r.nightHours.toFixed(2),
       r.saturdayHours.toFixed(2),
       r.overtimeHours.toFixed(2),
-      `"${(r.notes || "").replace(/"/g, '""')}"`
+      `"${noteStr.replace(/"/g, '""')}"`
     ].join(",");
   });
   return BOM + `"\u041E\u0442\u0447\u0435\u0442 \u043F\u043E \u0447\u0430\u0441\u0430\u043C \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438: ${clientName.replace(/"/g, '""')}"
@@ -98610,7 +98652,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
           rawVal = (formatIsoToDisplayDate(r.date) || r.date) + (r.isManual ? " *" : "");
           break;
         case "dayOfWeek":
-          rawVal = r.dayOfWeek || getDayOfWeek(r.date, normLang);
+          rawVal = getDayOfWeek(r.date, normLang) || r.dayOfWeek || "";
           break;
         case "name":
           rawVal = r.name;
@@ -98646,7 +98688,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
           if (r.overtimeHours > 0) cellColor = (0, import_pdf_lib.rgb)(0.75, 0.45, 0.05);
           break;
         case "notes":
-          rawVal = r.notes || "";
+          rawVal = localizeSystemNote(r.notes || "", normLang);
           cellColor = (0, import_pdf_lib.rgb)(0.35, 0.4, 0.48);
           break;
         default:
@@ -99775,7 +99817,8 @@ clientRouter.get("/reports/csv", async (req, res) => {
       foremanId,
       empId
     );
-    const csvData = generateCsvReport(rows, clientName);
+    const lang = req.query["lang"] || "ru";
+    const csvData = generateCsvReport(rows, clientName, lang);
     const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, "_")}_${startDate.toISOString().slice(0, 10)}.csv`;
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -100344,6 +100387,7 @@ workerRouter.post("/log", async (req, res) => {
       res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
       return;
     }
+    let autoGeneratedNote = null;
     if (!employee.isMobile) {
       const allowedGeofences = [];
       if (employee.sites && employee.sites.length > 0) {
@@ -100353,6 +100397,7 @@ workerRouter.post("/log", async (req, res) => {
               lat: es.site.lat,
               lng: es.site.lng,
               radius: es.site.radius,
+              siteName: es.site.name,
               address: es.site.name + (es.site.address ? ` (${es.site.address})` : "")
             });
           }
@@ -100361,32 +100406,60 @@ workerRouter.post("/log", async (req, res) => {
       if (allowedGeofences.length === 0 && employee.geofence) {
         const gf = employee.geofence;
         if (gf.lat && gf.lng && gf.radius) {
-          allowedGeofences.push(gf);
+          allowedGeofences.push({
+            ...gf,
+            siteName: gf.address || void 0
+          });
         }
       }
-      if (allowedGeofences.length > 0 && data.lat !== void 0 && data.lat !== null && data.lng !== void 0 && data.lng !== null) {
-        let insideAny = false;
-        let minDistance = Infinity;
-        let bestRadius = 100;
-        for (const gf of allowedGeofences) {
-          const { isInside, distanceMeters } = checkGeofence(data.lat, data.lng, gf.lat, gf.lng, gf.radius);
-          if (distanceMeters < minDistance) {
-            minDistance = distanceMeters;
-            bestRadius = gf.radius;
+      if (allowedGeofences.length > 0) {
+        const hasCoords = data.lat !== void 0 && data.lat !== null && data.lng !== void 0 && data.lng !== null && !isNaN(Number(data.lat)) && !isNaN(Number(data.lng));
+        if (!hasCoords) {
+          if (data.action === "CLOCK_IN") {
+            res.status(400).json({
+              error: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0438\u0442\u044C GPS-\u043A\u043E\u043E\u0440\u0434\u0438\u043D\u0430\u0442\u044B. \u0412\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0433\u0435\u043E\u043B\u043E\u043A\u0430\u0446\u0438\u044E (GPS) \u043D\u0430 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435 \u0438 \u0440\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0434\u043E\u0441\u0442\u0443\u043F.",
+              errorCode: "GPS_REQUIRED"
+            });
+            return;
           }
-          if (isInside) {
-            insideAny = true;
-            break;
+          if ((data.action === "CLOCK_OUT" || data.action === "AUTO_EXIT") && employee.strictGps && !data.note) {
+            autoGeneratedNote = "\u0412\u044B\u0445\u043E\u0434 \u0431\u0435\u0437 GPS (\u0433\u0435\u043E\u043B\u043E\u043A\u0430\u0446\u0438\u044F \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u0430)";
           }
-        }
-        if (data.action === "CLOCK_IN" && !insideAny) {
-          res.status(400).json({
-            error: "\u0412\u044B \u0432\u043D\u0435 \u0437\u043E\u043D\u044B \u043E\u0431\u044A\u0435\u043A\u0442\u0430!",
-            errorCode: "OUT_OF_GEOFENCE",
-            distanceMeters: minDistance,
-            radius: bestRadius
-          });
-          return;
+        } else {
+          let insideAny = false;
+          let minDistance = Infinity;
+          let bestRadius = 100;
+          let bestSiteName = "";
+          for (const gf of allowedGeofences) {
+            const { isInside, distanceMeters } = checkGeofence(data.lat, data.lng, gf.lat, gf.lng, gf.radius);
+            if (distanceMeters < minDistance) {
+              minDistance = distanceMeters;
+              bestRadius = gf.radius;
+              bestSiteName = gf.siteName || gf.address || "";
+            }
+            if (isInside) {
+              insideAny = true;
+              break;
+            }
+          }
+          if (data.action === "CLOCK_IN" && !insideAny) {
+            res.status(400).json({
+              error: "\u0412\u044B \u0432\u043D\u0435 \u0437\u043E\u043D\u044B \u043E\u0431\u044A\u0435\u043A\u0442\u0430!",
+              errorCode: "OUT_OF_GEOFENCE",
+              distanceMeters: minDistance,
+              radius: bestRadius
+            });
+            return;
+          }
+          if ((data.action === "CLOCK_OUT" || data.action === "AUTO_EXIT") && !insideAny && !data.note) {
+            const siteLabel = bestSiteName ? ` "${bestSiteName}"` : "";
+            const dist = Math.round(minDistance);
+            if (employee.strictGps) {
+              autoGeneratedNote = `\u041F\u043E\u043A\u0438\u043D\u0443\u043B \u043E\u0431\u044A\u0435\u043A\u0442${siteLabel} (\u0441\u0442\u0440\u043E\u0433\u0438\u0439 GPS, ${dist}\u043C)`;
+            } else {
+              autoGeneratedNote = `\u0412\u044B\u0445\u043E\u0434 \u0432\u043D\u0435 \u043E\u0431\u044A\u0435\u043A\u0442\u0430${siteLabel} (${dist}\u043C)`;
+            }
+          }
         }
       }
     }
@@ -100402,7 +100475,8 @@ workerRouter.post("/log", async (req, res) => {
         dateTime: logDateTime
       }
     });
-    if (data.note || data.expense) {
+    const finalNote = data.note || autoGeneratedNote;
+    if (finalNote || data.expense) {
       const jerusalemParts = getJerusalemParts(logDateTime);
       await prisma.dailyNote.create({
         data: {
@@ -100410,7 +100484,7 @@ workerRouter.post("/log", async (req, res) => {
           empId: employee.empId,
           employeeId: employee.id,
           date: jerusalemParts.dateStr,
-          noteText: data.note || "\u0420\u0430\u0441\u0445\u043E\u0434 \u0441\u043E \u0441\u043C\u0435\u043D\u044B",
+          noteText: finalNote || "\u0420\u0430\u0441\u0445\u043E\u0434 \u0441\u043E \u0441\u043C\u0435\u043D\u044B",
           expense: data.expense || 0
         }
       });

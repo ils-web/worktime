@@ -536,3 +536,118 @@ export function evaluateGlobalMonthlyStatus(params: EvaluateGlobalMonthlyParams)
   };
 }
 
+/**
+ * Checks whether a note string contains a system-generated GPS / geofence event note.
+ */
+export function isSystemGpsNote(noteText?: string | null): boolean {
+  if (!noteText) return false;
+  return (
+    noteText.includes('строгий GPS') ||
+    noteText.includes('strict GPS') ||
+    noteText.includes('GPS קפדני') ||
+    noteText.includes('GPS صارم') ||
+    noteText.includes('Выход вне объекта') ||
+    noteText.includes('Clock-out outside site') ||
+    noteText.includes('יציאה מחוץ לאתר') ||
+    noteText.includes('خروج خارج الموقع') ||
+    noteText.includes('Выход без GPS') ||
+    noteText.includes('Clock-out without GPS') ||
+    noteText.includes('יציאה ללא GPS') ||
+    noteText.includes('خروج بدون GPS')
+  );
+}
+
+/**
+ * Translates system-generated notes (such as Strict GPS auto-exit, out-of-zone clock-out,
+ * or clock-out without GPS) from the worker's PWA language into the report viewer's interface
+ * language ('ru' | 'he' | 'en' | 'ar'). Preserves user-written custom notes untouched.
+ */
+export function localizeSystemNote(noteText?: string | null, lang: string = 'he'): string {
+  if (!noteText) return '';
+  const norm = (lang || 'he').toLowerCase();
+  const targetLang: 'ru' | 'he' | 'ar' | 'en' = norm.startsWith('ru')
+    ? 'ru'
+    : norm.startsWith('he')
+    ? 'he'
+    : norm.startsWith('ar')
+    ? 'ar'
+    : 'en';
+
+  const parts = noteText.split(' • ');
+  const localizedParts = parts.map((rawPart) => {
+    const part = rawPart.trim();
+    if (!part) return part;
+
+    // 1. Strict GPS exit note in any language:
+    // RU: Покинул объект "Site" (строгий GPS, 4638м)
+    // EN: Left work site "Site" (strict GPS, 4638m)
+    // HE: עזב את האתר "Site" (GPS קפדני, 4638 מ')
+    // AR: غادر الموقع "Site" (GPS صارم، 4638 م)
+    const isStrictExit =
+      part.includes('строгий GPS') ||
+      part.includes('strict GPS') ||
+      part.includes('GPS קפדני') ||
+      part.includes('GPS صارم') ||
+      part.startsWith('Покинул объект') ||
+      part.startsWith('Left work site') ||
+      part.startsWith('עזב את האתר') ||
+      part.startsWith('غادر الموقع');
+
+    if (isStrictExit) {
+      const siteMatch = part.match(/"([^"]+)"/);
+      const sitePart = siteMatch && siteMatch[1] ? ` "${siteMatch[1]}"` : '';
+      const distMatch =
+        part.match(/[,،]\s*(\d+)\s*(?:м|m|מ'|מ׳|م)?/i) ||
+        part.match(/(\d+)\s*(?:м|m|מ'|מ׳|م)\s*\)/i);
+      const dist = distMatch && distMatch[1] ? distMatch[1] : '0';
+
+      if (targetLang === 'ru') return `Покинул объект${sitePart} (строгий GPS, ${dist}м)`;
+      if (targetLang === 'he') return `עזב את האתר${sitePart} (GPS קפדני, ${dist} מ')`;
+      if (targetLang === 'ar') return `غادر الموقع${sitePart} (GPS صارم، ${dist} م)`;
+      return `Left work site${sitePart} (strict GPS, ${dist}m)`;
+    }
+
+    // 2. Manual Clock-Out outside site geofence:
+    // RU: Выход вне объекта "Site" (123м)
+    // EN: Clock-out outside site "Site" (123m)
+    // HE: יציאה מחוץ לאתר "Site" (123 מ')
+    // AR: خروج خارج الموقع "Site" (123 م)
+    const isOutOfZoneExit =
+      part.startsWith('Выход вне объекта') ||
+      part.startsWith('Clock-out outside site') ||
+      part.startsWith('יציאה מחוץ לאתר') ||
+      part.startsWith('خروج خارج الموقع');
+
+    if (isOutOfZoneExit) {
+      const siteMatch = part.match(/"([^"]+)"/);
+      const sitePart = siteMatch && siteMatch[1] ? ` "${siteMatch[1]}"` : '';
+      const distMatch = part.match(/\((\d+)/) || part.match(/(\d+)\s*(?:м|m|מ'|מ׳|م)/i);
+      const dist = distMatch && distMatch[1] ? distMatch[1] : '0';
+
+      if (targetLang === 'ru') return `Выход вне объекта${sitePart} (${dist}м)`;
+      if (targetLang === 'he') return `יציאה מחוץ לאתר${sitePart} (${dist} מ')`;
+      if (targetLang === 'ar') return `خروج خارج الموقع${sitePart} (${dist} م)`;
+      return `Clock-out outside site${sitePart} (${dist}m)`;
+    }
+
+    // 3. Clock-Out without GPS coordinates:
+    const isNoGpsExit =
+      part.startsWith('Выход без GPS') ||
+      part.startsWith('Clock-out without GPS') ||
+      part.startsWith('יציאה ללא GPS') ||
+      part.startsWith('خروج بدون GPS');
+
+    if (isNoGpsExit) {
+      if (targetLang === 'ru') return 'Выход без GPS (геолокация отключена)';
+      if (targetLang === 'he') return 'יציאה ללא GPS (מיקום כבוי)';
+      if (targetLang === 'ar') return 'خروج بدون GPS (الموقع متوقف)';
+      return 'Clock-out without GPS (location disabled)';
+    }
+
+    return part;
+  });
+
+  return localizedParts.join(' • ');
+}
+
+

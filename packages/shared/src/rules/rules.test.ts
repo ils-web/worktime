@@ -11,6 +11,8 @@ import {
   getDayOfWeek,
   getScheduledShiftEndTime,
   evaluateGlobalMonthlyStatus,
+  localizeSystemNote,
+  isSystemGpsNote,
 } from './time';
 import { calculateClientBilling } from './billing';
 
@@ -323,5 +325,38 @@ describe('Billing Rules', () => {
     expect(oct19PartialSchedule.isAlertWindow).toBe(false);
     expect(oct19PartialSchedule.status).toBe('in_progress');
     expect(oct19PartialSchedule.shouldAlert).toBe(false);
+  });
+
+  it('localizes system GPS notes across Russian, Hebrew, English and Arabic', () => {
+    // 1. Arabic strict exit note from user screenshot:
+    const arNote = 'غادر الموقع "NaotHaTichon" (GPS صارم، 4638 م)';
+    expect(isSystemGpsNote(arNote)).toBe(true);
+    expect(localizeSystemNote(arNote, 'ru')).toBe('Покинул объект "NaotHaTichon" (строгий GPS, 4638м)');
+    expect(localizeSystemNote(arNote, 'he')).toBe('עזב את האתר "NaotHaTichon" (GPS קפדני, 4638 מ\')');
+    expect(localizeSystemNote(arNote, 'en')).toBe('Left work site "NaotHaTichon" (strict GPS, 4638m)');
+    expect(localizeSystemNote(arNote, 'ar')).toBe('غادر الموقع "NaotHaTichon" (GPS صارم، 4638 م)');
+
+    // 2. Russian strict exit note without quotes:
+    const ruNote = 'Покинул объект (строгий GPS, 1500м)';
+    expect(isSystemGpsNote(ruNote)).toBe(true);
+    expect(localizeSystemNote(ruNote, 'he')).toBe('עזב את האתר (GPS קפדני, 1500 מ\')');
+    expect(localizeSystemNote(ruNote, 'en')).toBe('Left work site (strict GPS, 1500m)');
+
+    // 3. Out-of-zone manual exit notes:
+    const outNote = 'Выход вне объекта "Склад" (250м)';
+    expect(isSystemGpsNote(outNote)).toBe(true);
+    expect(localizeSystemNote(outNote, 'he')).toBe('יציאה מחוץ לאתר "Склад" (250 מ\')');
+    expect(localizeSystemNote(outNote, 'en')).toBe('Clock-out outside site "Склад" (250m)');
+
+    // 4. Clock-out without GPS:
+    const noGpsNote = 'Выход без GPS (геолокация отключена)';
+    expect(isSystemGpsNote(noGpsNote)).toBe(true);
+    expect(localizeSystemNote(noGpsNote, 'he')).toBe('יציאה ללא GPS (מיקום כבוי)');
+    expect(localizeSystemNote(noGpsNote, 'en')).toBe('Clock-out without GPS (location disabled)');
+    expect(localizeSystemNote(noGpsNote, 'ar')).toBe('خروج بدون GPS (الموقع متوقف)');
+
+    // 5. Preserves custom user notes and joins multi-note segments
+    const multiNote = `${arNote} • Купил цемент 5 мешков`;
+    expect(localizeSystemNote(multiNote, 'ru')).toBe('Покинул объект "NaotHaTichon" (строгий GPS, 4638м) • Купил цемент 5 мешков');
   });
 });

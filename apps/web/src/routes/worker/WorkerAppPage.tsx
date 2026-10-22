@@ -450,6 +450,25 @@ export function WorkerAppPage() {
     return () => clearInterval(interval);
   }, [status.isOnShift, profile?.autoCloseShift, scheduledEndTime, isSubmittingAction]);
 
+  // Strict GPS out-of-bounds auto-exit monitor
+  const outOfZoneCountRef = useRef(0);
+  const lastVisibilityResumeRef = useRef<number>(Date.now());
+
+  // Screen Wake Lock while on shift with strict GPS enabled to keep GPS updates active
+  useEffect(() => {
+    let wakeLock: any = null;
+    if (status.isOnShift && profile?.strictGps && !profile.isMobile && typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      (navigator as any).wakeLock?.request('screen').then((lock: any) => {
+        wakeLock = lock;
+      }).catch(() => {});
+    }
+    return () => {
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+      }
+    };
+  }, [status.isOnShift, profile?.strictGps, profile?.isMobile]);
+
   // 7. Clock In / Out Action Handlers
   const handleClockAction = async (
     action: 'CLOCK_IN' | 'CLOCK_OUT' | 'AUTO_EXIT',
@@ -469,23 +488,75 @@ export function WorkerAppPage() {
       setAutoCloseReason(reason || 'SCHEDULE');
     }
 
-    // If CLOCK_IN, check geofence boundary locally
+    let activeGeo = geoResult;
+    let activeEval = geofenceEval;
+
+    // Actively obtain fresh GPS coordinates if stale (>20s) or missing for non-mobile workers
+    if (profile && !profile.isMobile) {
+      const isStale = !activeGeo || Date.now() - activeGeo.timestamp > 20000;
+      if (isStale && typeof navigator !== 'undefined' && navigator.geolocation) {
+        try {
+          setIsLocating(true);
+          const freshCoords = await getCurrentCoordinates(action === 'CLOCK_IN' ? 10000 : 5000);
+          activeGeo = freshCoords;
+          setGeoResult(freshCoords);
+          setGeoError(null);
+          activeEval = evaluateWorkerGeofence(freshCoords.lat, freshCoords.lng, profile);
+          setGeofenceEval(activeEval);
+        } catch (gErr: any) {
+          setGeoError(gErr.message || t('worker.gpsError'));
+        } finally {
+          setIsLocating(false);
+        }
+      } else if (activeGeo && !activeEval) {
+        activeEval = evaluateWorkerGeofence(activeGeo.lat, activeGeo.lng, profile);
+        setGeofenceEval(activeEval);
+      }
+    }
+
+    // If CLOCK_IN, enforce GPS requirement and geofence boundary locally
     if (action === 'CLOCK_IN' && profile && !profile.isMobile) {
-      if (geofenceEval && !geofenceEval.isInside) {
-        alert(
-          t('worker.geoOutBlock', {
-            dist: geofenceEval.distanceMeters,
-            radius: geofenceEval.allowedRadius,
-          })
-        );
-        setIsSubmittingAction(false);
-        return;
+      const hasGeofenceConfig = (profile.sites && profile.sites.length > 0) || Boolean(profile.geofence);
+      if (hasGeofenceConfig) {
+        if (!activeGeo) {
+          alert(t('worker.geoDenied'));
+          setIsSubmittingAction(false);
+          return;
+        }
+        if (activeEval && !activeEval.isInside) {
+          alert(
+            t('worker.geoOutBlock', {
+              dist: activeEval.distanceMeters,
+              radius: activeEval.allowedRadius,
+            })
+          );
+          setIsSubmittingAction(false);
+          return;
+        }
+      }
+    }
+
+    // On manual CLOCK_OUT: if non-mobile worker is outside site geofence or without GPS, attach departure note
+    let effectiveNote = customNote;
+    if (action === 'CLOCK_OUT' && profile && !profile.isMobile && !effectiveNote) {
+      if (activeEval && !activeEval.isInside) {
+        const targetSite = activeEval.targetName ? ` "${activeEval.targetName}"` : '';
+        const dist = Math.round(activeEval.distanceMeters);
+        if (profile.strictGps) {
+          effectiveNote =
+            t('worker.strictExitNote', { site: targetSite, dist }) ||
+            `Покинул объект${targetSite} (строгий GPS, ${dist}м)`;
+        } else {
+          effectiveNote = `Выход вне объекта${targetSite} (${dist}м)`;
+        }
+      } else if (!activeGeo && profile.strictGps) {
+        effectiveNote = 'Выход без GPS (геолокация отключена)';
       }
     }
 
     const actionTime = new Date().toISOString();
-    const lat = geoResult?.lat ?? null;
-    const lng = geoResult?.lng ?? null;
+    const lat = activeGeo?.lat ?? null;
+    const lng = activeGeo?.lng ?? null;
     const fallbackH = Math.floor(elapsedSeconds / 3600);
     const fallbackM = Math.floor((elapsedSeconds % 3600) / 60);
 
@@ -497,7 +568,7 @@ export function WorkerAppPage() {
         lat,
         lng,
         dateTime: actionTime,
-        note: customNote,
+        note: effectiveNote,
       });
 
       setStatus({
@@ -529,7 +600,7 @@ export function WorkerAppPage() {
         action,
         lat,
         lng,
-        note: customNote,
+        note: effectiveNote,
       });
 
       if (res.success) {
@@ -568,7 +639,7 @@ export function WorkerAppPage() {
           lat,
           lng,
           dateTime: actionTime,
-          note: customNote,
+          note: effectiveNote,
         });
 
         setStatus({
@@ -598,8 +669,6 @@ export function WorkerAppPage() {
   };
 
   // Strict GPS out-of-bounds auto-exit monitor
-  const outOfZoneCountRef = useRef(0);
-
   useEffect(() => {
     if (!profile?.strictGps || !status.isOnShift || profile.isMobile || !geofenceEval || isSubmittingAction) {
       outOfZoneCountRef.current = 0;
@@ -608,19 +677,23 @@ export function WorkerAppPage() {
 
     if (!geofenceEval.isInside) {
       const accuracy = geoResult?.accuracy || 0;
-      const isDefinitiveExit = geofenceEval.distanceMeters > geofenceEval.allowedRadius + Math.max(40, accuracy);
-      const isReliableAccuracy = accuracy <= 150;
+      const justResumed = Date.now() - lastVisibilityResumeRef.current < 15000;
+      const isDefinitiveExit =
+        geofenceEval.distanceMeters > geofenceEval.allowedRadius + Math.min(accuracy, 120) ||
+        geofenceEval.distanceMeters > Math.max(150, geofenceEval.allowedRadius * 1.5);
+      const isReliableAccuracy = accuracy <= 250;
 
-      if (isDefinitiveExit || isReliableAccuracy) {
+      if (isDefinitiveExit || isReliableAccuracy || justResumed) {
         outOfZoneCountRef.current += 1;
-        if (isDefinitiveExit || outOfZoneCountRef.current >= 2) {
+        if (isDefinitiveExit || justResumed || outOfZoneCountRef.current >= 2) {
           outOfZoneCountRef.current = 0;
           const targetSite = geofenceEval.targetName ? ` "${geofenceEval.targetName}"` : '';
           const dist = Math.round(geofenceEval.distanceMeters);
-          const note = t('worker.strictExitNote', {
-            site: targetSite,
-            dist,
-          }) || `Покинул объект${targetSite} (строгий GPS, ${dist}м)`;
+          const note =
+            t('worker.strictExitNote', {
+              site: targetSite,
+              dist,
+            }) || `Покинул объект${targetSite} (строгий GPS, ${dist}м)`;
 
           handleClockAction('AUTO_EXIT', note, 'STRICT_GPS');
         }
@@ -642,6 +715,7 @@ export function WorkerAppPage() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        lastVisibilityResumeRef.current = Date.now();
         fetchProfile();
         refreshLocation();
       }
