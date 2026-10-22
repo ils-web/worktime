@@ -50,6 +50,7 @@ interface WorkerProfile {
   id: string;
   empId: string;
   name: string;
+  position?: string | null;
   companyName: string;
   isMobile: boolean;
   strictGps: boolean;
@@ -784,6 +785,9 @@ export function WorkerAppPage() {
               {profile.companyName}
             </div>
             <h1 className="text-lg font-black tracking-tight text-white">{profile.name}</h1>
+            {profile.position && (
+              <div className="text-xs text-slate-400 font-medium mt-0.5">{profile.position}</div>
+            )}
           </div>
 
           {/* Language Switcher Buttons & Logout */}

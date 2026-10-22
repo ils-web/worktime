@@ -45,6 +45,7 @@ model Client {
   externalCustId  String?    // Morning/iCount Customer ID
 
   defaultShifts   Json       // { morning: {start,end}, evening: {...}, night: {...} }
+  positions       Json?      // Array of strings: predefined positions / specialties for the company
 
   tariffMode      TariffMode @default(PER_USER)
   pricePerUser    Float      @default(0)
@@ -72,6 +73,7 @@ model Employee {
   clientId  String
   empId     String   @unique // Public alphanumeric ID for /w/:empId
   name      String
+  position  String?  // Job title / specialty (תפקיד / מקצוע)
   isMobile             Boolean  @default(false)
   strictGps            Boolean  @default(false)
   autoCloseShift       Boolean  @default(false)

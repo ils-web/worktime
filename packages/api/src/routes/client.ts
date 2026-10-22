@@ -14,6 +14,8 @@ import {
   getDayOfWeek,
   evaluateGlobalMonthlyStatus,
   GlobalMonthlyEvaluation,
+  DEFAULT_COMPANY_POSITIONS,
+  normalizePositionsList,
 } from '@timetracker/shared';
 import { authRequired, requireRole } from '../middleware/auth';
 import { generateCsvReport, ReportRow } from '../services/csvReportService';
@@ -32,6 +34,26 @@ function getTargetClientId(req: Request): string {
   return req.user?.clientId ?? req.user?.id ?? '';
 }
 
+async function ensurePositionInClientList(clientId: string, position?: string | null) {
+  const cleanPos = position?.trim();
+  if (!cleanPos || !clientId) return;
+  try {
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { positions: true },
+    });
+    const currentList = normalizePositionsList(client?.positions);
+    if (!currentList.includes(cleanPos)) {
+      await prisma.client.update({
+        where: { id: clientId },
+        data: { positions: [...currentList, cleanPos] },
+      });
+    }
+  } catch (err) {
+    console.error('Error syncing custom position to client positions list:', err);
+  }
+}
+
 /**
  * 1. Employees: List
  */
@@ -45,19 +67,25 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
       whereClause.foremanId = req.user?.id;
     }
 
-    const employees = await prisma.employee.findMany({
-      where: whereClause,
-      include: {
-        foreman: { select: { id: true, name: true } },
-        sites: { include: { site: true } },
-        schedules: true,
-        logs: {
-          take: 1,
-          orderBy: { dateTime: 'desc' },
+    const [employees, clientRecord] = await Promise.all([
+      prisma.employee.findMany({
+        where: whereClause,
+        include: {
+          foreman: { select: { id: true, name: true } },
+          sites: { include: { site: true } },
+          schedules: true,
+          logs: {
+            take: 1,
+            orderBy: { dateTime: 'desc' },
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.client.findUnique({
+        where: { id: clientId },
+        select: { positions: true },
+      }),
+    ]);
 
     // Compute current-month worked hours for Global Employees if any exist
     const hasGlobalEmployees = employees.some(
@@ -113,7 +141,11 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
       };
     });
 
-    res.json({ success: true, employees: enriched });
+    res.json({
+      success: true,
+      employees: enriched,
+      positions: normalizePositionsList(clientRecord?.positions),
+    });
   } catch (err) {
     console.error('List employees error:', err);
     res.status(500).json({ error: 'Ошибка получения сотрудников' });
@@ -123,6 +155,7 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
 const createEmployeeSchema = z.object({
   empId: z.string().min(2),
   name: z.string().min(2),
+  position: z.string().max(120).nullable().optional(),
   isMobile: z.boolean().default(false),
   strictGps: z.boolean().default(false),
   autoCloseShift: z.boolean().default(false),
@@ -174,11 +207,14 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
       }
     }
 
+    const cleanPosition = data.position?.trim() || null;
+
     const created = await prisma.employee.create({
       data: {
         clientId,
         empId: data.empId,
         name: data.name,
+        position: cleanPosition,
         isMobile: data.isMobile,
         strictGps: data.strictGps,
         autoCloseShift: data.autoCloseShift,
@@ -201,6 +237,10 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
       },
     });
 
+    if (cleanPosition) {
+      await ensurePositionInClientList(clientId, cleanPosition);
+    }
+
     res.json({ success: true, employee: created });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -222,6 +262,7 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
     const {
       name,
       newEmpId,
+      position,
       isMobile,
       strictGps,
       autoCloseShift,
@@ -288,11 +329,15 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
         ? null
         : Number(contractMonthlyHours);
 
+    const cleanPosition =
+      position !== undefined ? (typeof position === 'string' ? position.trim() || null : null) : undefined;
+
     const updated = await prisma.employee.update({
       where: { id: employee.id },
       data: {
         empId: finalEmpId,
         ...(name ? { name } : {}),
+        ...(cleanPosition !== undefined ? { position: cleanPosition } : {}),
         ...(isMobile !== undefined ? { isMobile } : {}),
         ...(strictGps !== undefined ? { strictGps } : {}),
         ...(autoCloseShift !== undefined ? { autoCloseShift } : {}),
@@ -316,6 +361,10 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
         foreman: { select: { id: true, name: true } },
       },
     });
+
+    if (cleanPosition) {
+      await ensurePositionInClientList(clientId, cleanPosition);
+    }
 
     res.json({ success: true, employee: updated });
   } catch (err) {
@@ -577,6 +626,7 @@ clientRouter.get('/settings', async (req: Request, res: Response) => {
         username: true,
         logoUrl: true,
         defaultShifts: true,
+        positions: true,
         autoDeductLunch: true,
         trialEndsAt: true,
         tariffMode: true,
@@ -588,12 +638,15 @@ clientRouter.get('/settings', async (req: Request, res: Response) => {
       },
     });
 
+    const normalizedPositions = normalizePositionsList(client?.positions);
+
     res.json({
       success: true,
-      settings: client,
+      settings: client ? { ...client, positions: normalizedPositions } : null,
       name: client?.name,
       logoUrl: client?.logoUrl,
       defaultShifts: client?.defaultShifts,
+      positions: normalizedPositions,
       autoDeductLunch: client?.autoDeductLunch,
     });
   } catch (err) {
@@ -608,6 +661,7 @@ clientRouter.post('/settings', requireRole('client'), async (req: Request, res: 
     const {
       name,
       defaultShifts,
+      positions,
       autoDeductLunch,
       legalName,
       taxId,
@@ -621,6 +675,7 @@ clientRouter.post('/settings', requireRole('client'), async (req: Request, res: 
       data: {
         ...(name ? { name } : {}),
         ...(defaultShifts ? { defaultShifts } : {}),
+        ...(Array.isArray(positions) ? { positions: normalizePositionsList(positions) } : {}),
         ...(autoDeductLunch !== undefined ? { autoDeductLunch } : {}),
         ...(legalName !== undefined ? { legalName: legalName?.trim() || null } : {}),
         ...(taxId !== undefined ? { taxId: taxId?.trim() || null } : {}),

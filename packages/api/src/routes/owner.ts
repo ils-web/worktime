@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@timetracker/db';
-import { calculateClientBilling } from '@timetracker/shared';
+import { calculateClientBilling, DEFAULT_COMPANY_POSITIONS, normalizePositionsList } from '@timetracker/shared';
 import { authRequired, requireRole } from '../middleware/auth';
 import { IsraeliInvoiceService } from '../services/israeliInvoiceService';
 
@@ -40,6 +40,7 @@ const createClientSchema = z.object({
   pricePerUser: z.number().default(0),
   pricePerHour: z.number().default(0),
   trialDays: z.number().default(14),
+  positions: z.array(z.string()).optional(),
 });
 
 /**
@@ -70,6 +71,10 @@ ownerRouter.post('/clients', async (req: Request, res: Response) => {
       night: { start: '00:00', end: '07:00' },
     };
 
+    const positions = data.positions
+      ? normalizePositionsList(data.positions)
+      : DEFAULT_COMPANY_POSITIONS;
+
     const client = await prisma.client.create({
       data: {
         username: data.username,
@@ -80,6 +85,7 @@ ownerRouter.post('/clients', async (req: Request, res: Response) => {
         pricePerHour: data.pricePerHour,
         trialEndsAt,
         defaultShifts,
+        positions,
       },
     });
 

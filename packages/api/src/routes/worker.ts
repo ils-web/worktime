@@ -260,6 +260,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         id: employee.id,
         empId: employee.empId,
         name: employee.name,
+        position: employee.position ?? null,
         companyName: employee.client.name,
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,

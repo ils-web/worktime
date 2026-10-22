@@ -4,9 +4,9 @@ import { apiRequest } from '../../lib/api';
 import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { PasswordInput } from '../../components/ui/PasswordInput';
-import { Plus, Key, ToggleLeft, ToggleRight, DollarSign, Trash2, Loader2, AlertTriangle, Building2 } from 'lucide-react';
+import { Plus, Key, ToggleLeft, ToggleRight, DollarSign, Trash2, Loader2, AlertTriangle, Building2, Briefcase, X } from 'lucide-react';
 import { DatePicker } from '../../components/ui/DatePicker';
-import { formatIsoToDisplayDate } from '@timetracker/shared';
+import { formatIsoToDisplayDate, DEFAULT_COMPANY_POSITIONS } from '@timetracker/shared';
 
 export function OwnerClientsTab() {
   const queryClient = useQueryClient();
@@ -26,7 +26,9 @@ export function OwnerClientsTab() {
     pricePerUser: 10,
     pricePerHour: 2.5,
     trialDays: 14,
+    positions: [...DEFAULT_COMPANY_POSITIONS],
   });
+  const [newPosInput, setNewPosInput] = useState('');
 
   const [newPassword, setNewPassword] = useState('');
   const [tariffForm, setTariffForm] = useState({
@@ -66,7 +68,9 @@ export function OwnerClientsTab() {
         pricePerUser: 10,
         pricePerHour: 2.5,
         trialDays: 14,
+        positions: [...DEFAULT_COMPANY_POSITIONS],
       });
+      setNewPosInput('');
     },
   });
 
@@ -425,6 +429,77 @@ export function OwnerClientsTab() {
               onChange={(e) => setCreateForm({ ...createForm, trialDays: parseInt(e.target.value) || 0 })}
               className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm"
             />
+          </div>
+
+          {/* Predefined Positions & Specialties List */}
+          <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Список должностей и специальностей (תפקידים)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setCreateForm({ ...createForm, positions: [...DEFAULT_COMPANY_POSITIONS] })}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 underline"
+              >
+                Сбросить по умолчанию
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newPosInput}
+                onChange={(e) => setNewPosInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const trimmed = newPosInput.trim();
+                    if (trimmed && !createForm.positions.includes(trimmed)) {
+                      setCreateForm({ ...createForm, positions: [...createForm.positions, trimmed] });
+                      setNewPosInput('');
+                    }
+                  }
+                }}
+                placeholder="Добавить должность (например: Медсестра / אחות)..."
+                className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const trimmed = newPosInput.trim();
+                  if (trimmed && !createForm.positions.includes(trimmed)) {
+                    setCreateForm({ ...createForm, positions: [...createForm.positions, trimmed] });
+                    setNewPosInput('');
+                  }
+                }}
+                className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold transition"
+              >
+                + Добавить
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pt-1">
+              {createForm.positions.map((pos) => (
+                <span
+                  key={pos}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-[11px]"
+                >
+                  <span>{pos}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCreateForm({
+                        ...createForm,
+                        positions: createForm.positions.filter((p) => p !== pos),
+                      })
+                    }
+                    className="text-slate-400 hover:text-rose-400 transition"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-3">
             <button

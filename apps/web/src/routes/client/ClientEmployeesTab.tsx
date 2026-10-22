@@ -23,7 +23,9 @@ import {
   RefreshCw,
   AlertTriangle,
   CalendarCheck,
+  Briefcase,
 } from 'lucide-react';
+import { normalizePositionsList } from '@timetracker/shared';
 
 interface ClientEmployeesTabProps {
   userRole?: string;
@@ -42,6 +44,8 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
   const [form, setForm] = useState({
     empId: '',
     name: '',
+    positionMode: '',
+    customPosition: '',
     isMobile: false,
     strictGps: false,
     autoCloseShift: false,
@@ -59,6 +63,8 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
   const [editForm, setEditForm] = useState({
     name: '',
     newEmpId: '',
+    positionMode: '',
+    customPosition: '',
     isMobile: false,
     strictGps: false,
     autoCloseShift: false,
@@ -75,7 +81,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
   // Queries
   const { data: empData, isLoading } = useQuery({
     queryKey: ['client-employees'],
-    queryFn: () => apiRequest<{ employees: any[] }>('/api/client/employees'),
+    queryFn: () => apiRequest<{ employees: any[]; positions?: string[] }>('/api/client/employees'),
   });
 
   const { data: sitesData } = useQuery({
@@ -98,10 +104,13 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-employees'] });
       queryClient.invalidateQueries({ queryKey: ['client-sites'] });
+      queryClient.invalidateQueries({ queryKey: ['client-settings'] });
       setIsCreateOpen(false);
       setForm({
         empId: '',
         name: '',
+        positionMode: '',
+        customPosition: '',
         isMobile: false,
         strictGps: false,
         autoCloseShift: false,
@@ -126,6 +135,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-employees'] });
       queryClient.invalidateQueries({ queryKey: ['client-sites'] });
+      queryClient.invalidateQueries({ queryKey: ['client-settings'] });
       setEditingEmp(null);
     },
   });
@@ -149,12 +159,14 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
   });
 
   const employees = empData?.employees || [];
+  const companyPositions = normalizePositionsList(empData?.positions);
   const foremen = foremenData?.foremen || [];
 
   const filteredEmployees = employees.filter(
     (e) =>
       e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.empId.toLowerCase().includes(searchTerm.toLowerCase())
+      e.empId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (e.position && e.position.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const copyQrLink = (empId: string) => {
@@ -233,6 +245,14 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                     <tr key={emp.id} className="hover:bg-slate-800/40 transition">
                       <td className="p-4">
                         <div className="font-semibold text-white">{emp.name}</div>
+                        {emp.position && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+                              <Briefcase className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <span>{emp.position}</span>
+                            </span>
+                          </div>
+                        )}
                         {emp.isGlobal && emp.contractMonthlyHours > 0 && (
                           <div className="flex flex-wrap items-center gap-1.5 mt-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
@@ -374,9 +394,15 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                                   ? primarySite.address || primarySite.name
                                   : emp.geofence?.address || primarySite?.address || '';
 
+                              const existingPos = emp.position || '';
+                              const isPredefinedPos =
+                                !existingPos || companyPositions.includes(existingPos);
+
                               setEditForm({
                                 name: emp.name,
                                 newEmpId: emp.empId,
+                                positionMode: isPredefinedPos ? existingPos : '__OTHER__',
+                                customPosition: isPredefinedPos ? '' : existingPos,
                                 isMobile: !!emp.isMobile,
                                 strictGps: !!emp.strictGps,
                                 autoCloseShift: !!emp.autoCloseShift,
@@ -452,9 +478,14 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            const resolvedPosition =
+              form.positionMode === '__OTHER__'
+                ? form.customPosition.trim()
+                : form.positionMode.trim();
             createMutation.mutate({
               empId: form.empId,
               name: form.name,
+              position: resolvedPosition || null,
               isMobile: form.isMobile,
               strictGps: form.strictGps,
               autoCloseShift: form.autoCloseShift,
@@ -501,6 +532,50 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 placeholder="E101"
               />
             </div>
+          </div>
+
+          {/* Position / Specialty (תפקיד / מקצוע) */}
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Briefcase className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{t('admin.empPosition')}</span>
+            </label>
+            <select
+              value={form.positionMode}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  positionMode: e.target.value,
+                  ...(e.target.value !== '__OTHER__' ? { customPosition: '' } : {}),
+                })
+              }
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">{t('admin.empPositionNone')}</option>
+              {companyPositions.map((pos) => (
+                <option key={pos} value={pos}>
+                  {pos}
+                </option>
+              ))}
+              <option value="__OTHER__">{t('admin.empPositionOther')}</option>
+            </select>
+
+            {form.positionMode === '__OTHER__' && (
+              <div className="space-y-1 pt-0.5">
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={form.customPosition}
+                  onChange={(e) => setForm({ ...form, customPosition: e.target.value })}
+                  placeholder={t('admin.empPositionCustomPlaceholder')}
+                  className="w-full px-3.5 py-2 bg-slate-900 border border-emerald-500/60 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <p className="text-[11px] text-emerald-400/90">
+                  {t('admin.empPositionCustomHint')}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -792,11 +867,16 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              const resolvedPosition =
+                editForm.positionMode === '__OTHER__'
+                  ? editForm.customPosition.trim()
+                  : editForm.positionMode.trim();
               updateMutation.mutate({
                 empId: editingEmp.empId,
                 body: {
                   name: editForm.name,
                   newEmpId: editForm.newEmpId,
+                  position: resolvedPosition || null,
                   isMobile: editForm.isMobile,
                   strictGps: editForm.strictGps,
                   autoCloseShift: editForm.autoCloseShift,
@@ -844,6 +924,50 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                   className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
                 />
               </div>
+            </div>
+
+            {/* Position / Specialty (תפקיד / מקצוע) */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{t('admin.empPosition')}</span>
+              </label>
+              <select
+                value={editForm.positionMode}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    positionMode: e.target.value,
+                    ...(e.target.value !== '__OTHER__' ? { customPosition: '' } : {}),
+                  })
+                }
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">{t('admin.empPositionNone')}</option>
+                {companyPositions.map((pos) => (
+                  <option key={pos} value={pos}>
+                    {pos}
+                  </option>
+                ))}
+                <option value="__OTHER__">{t('admin.empPositionOther')}</option>
+              </select>
+
+              {editForm.positionMode === '__OTHER__' && (
+                <div className="space-y-1 pt-0.5">
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    value={editForm.customPosition}
+                    onChange={(e) => setEditForm({ ...editForm, customPosition: e.target.value })}
+                    placeholder={t('admin.empPositionCustomPlaceholder')}
+                    className="w-full px-3.5 py-2 bg-slate-900 border border-emerald-500/60 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <p className="text-[11px] text-emerald-400/90">
+                    {t('admin.empPositionCustomHint')}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

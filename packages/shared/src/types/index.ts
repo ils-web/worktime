@@ -63,6 +63,7 @@ export interface GlobalMonthlyStatus {
 export interface WorkerSessionState {
   empId: string;
   name: string;
+  position?: string | null;
   isMobile: boolean;
   strictGps: boolean;
   autoCloseShift?: boolean;
@@ -103,4 +104,37 @@ export interface ClientMonthlyBillingSummary {
   totalHours: number;
   pricePerHour: number;
   totalCost: number;
+}
+
+export const DEFAULT_COMPANY_POSITIONS: string[] = [
+  'Рабочий / פועל כללי',
+  'Специалист / איש מקצוע',
+  'Бригадир / ראש צוות',
+  'Электрик / חשמלאי',
+  'Сантехник / אינסטלטור',
+  'Маляр-штукатур / צבעי וטייח',
+  'Сварщик / רתך',
+  'Уборщик / עובד ניקיון',
+  'Охранник / שומר',
+  'Водитель / נהג',
+  'Уход / Медперсонал / מטפל/ת',
+  'Администратор / פקיד/ה',
+];
+
+export function normalizePositionsList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [...DEFAULT_COMPANY_POSITIONS];
+  }
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of raw) {
+    if (typeof item === 'string') {
+      const trimmed = item.trim();
+      if (trimmed && !seen.has(trimmed)) {
+        seen.add(trimmed);
+        result.push(trimmed);
+      }
+    }
+  }
+  return result;
 }

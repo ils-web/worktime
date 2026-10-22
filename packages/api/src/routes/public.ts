@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@timetracker/db';
+import { DEFAULT_COMPANY_POSITIONS } from '@timetracker/shared';
 import { signSessionToken } from '../middleware/auth';
 
 export const publicRouter = Router();
@@ -83,6 +84,7 @@ publicRouter.post('/register', async (req: Request, res: Response) => {
         name: data.name,
         trialEndsAt,
         defaultShifts,
+        positions: DEFAULT_COMPANY_POSITIONS,
       },
     });
 

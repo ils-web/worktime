@@ -96801,102 +96801,39 @@ authRouter.get("/me", authRequired, (req, res) => {
 // packages/api/src/routes/public.ts
 var import_express2 = __toESM(require_express2());
 var import_bcryptjs2 = __toESM(require_bcryptjs());
-var publicRouter = (0, import_express2.Router)();
-var contactSchema = external_exports.object({
-  name: external_exports.string().min(1),
-  company: external_exports.string().optional(),
-  phone: external_exports.string().min(1),
-  email: external_exports.string().email().optional().or(external_exports.literal("")),
-  message: external_exports.string().optional()
-});
-publicRouter.post("/contact", async (req, res) => {
-  try {
-    const data = contactSchema.parse(req.body);
-    const contact = await prisma.contactRequest.create({
-      data: {
-        name: data.name,
-        company: data.company || null,
-        phone: data.phone,
-        email: data.email || null,
-        message: data.message || null
-      }
-    });
-    res.json({ success: true, id: contact.id });
-  } catch (err) {
-    if (err instanceof external_exports.ZodError) {
-      res.status(400).json({ error: "\u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0437\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043F\u043E\u043B\u044F (\u0438\u043C\u044F \u0438 \u0442\u0435\u043B\u0435\u0444\u043E\u043D)" });
-      return;
-    }
-    console.error("Contact error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043A\u0438" });
-  }
-});
-var registerSchema = external_exports.object({
-  username: external_exports.string().min(3),
-  password: external_exports.string().min(6),
-  name: external_exports.string().min(2),
-  phone: external_exports.string().optional()
-});
-publicRouter.post("/register", async (req, res) => {
-  try {
-    const data = registerSchema.parse(req.body);
-    const existing = await prisma.client.findUnique({
-      where: { username: data.username }
-    });
-    if (existing) {
-      res.status(400).json({ error: "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u0441 \u0442\u0430\u043A\u0438\u043C \u043B\u043E\u0433\u0438\u043D\u043E\u043C \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442" });
-      return;
-    }
-    const salt = await import_bcryptjs2.default.genSalt(10);
-    const passwordHash = await import_bcryptjs2.default.hash(data.password, salt);
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1e3);
-    const defaultShifts = {
-      morning: { start: "07:00", end: "16:00" },
-      evening: { start: "16:00", end: "00:00" },
-      night: { start: "00:00", end: "07:00" }
-    };
-    const client = await prisma.client.create({
-      data: {
-        username: data.username,
-        passwordHash,
-        name: data.name,
-        trialEndsAt,
-        defaultShifts
-      }
-    });
-    const token = signSessionToken({
-      id: client.id,
-      role: "client",
-      name: client.name,
-      clientId: client.id
-    });
-    const isProd = process.env["NODE_ENV"] === "production";
-    res.cookie("session", token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60 * 1e3
-    });
-    res.json({
-      success: true,
-      role: "client",
-      clientId: client.id,
-      name: client.name
-    });
-  } catch (err) {
-    if (err instanceof external_exports.ZodError) {
-      res.status(400).json({ error: "\u041B\u043E\u0433\u0438\u043D \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0442 3 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432, \u043F\u0430\u0440\u043E\u043B\u044C \u043E\u0442 6 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432" });
-      return;
-    }
-    console.error("Registration error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438" });
-  }
-});
 
-// packages/api/src/routes/owner.ts
-var import_express3 = __toESM(require_express2());
-var import_bcryptjs3 = __toESM(require_bcryptjs());
+// packages/shared/src/types/index.ts
+var DEFAULT_COMPANY_POSITIONS = [
+  "\u0420\u0430\u0431\u043E\u0447\u0438\u0439 / \u05E4\u05D5\u05E2\u05DC \u05DB\u05DC\u05DC\u05D9",
+  "\u0421\u043F\u0435\u0446\u0438\u0430\u043B\u0438\u0441\u0442 / \u05D0\u05D9\u05E9 \u05DE\u05E7\u05E6\u05D5\u05E2",
+  "\u0411\u0440\u0438\u0433\u0430\u0434\u0438\u0440 / \u05E8\u05D0\u05E9 \u05E6\u05D5\u05D5\u05EA",
+  "\u042D\u043B\u0435\u043A\u0442\u0440\u0438\u043A / \u05D7\u05E9\u05DE\u05DC\u05D0\u05D9",
+  "\u0421\u0430\u043D\u0442\u0435\u0445\u043D\u0438\u043A / \u05D0\u05D9\u05E0\u05E1\u05D8\u05DC\u05D8\u05D5\u05E8",
+  "\u041C\u0430\u043B\u044F\u0440-\u0448\u0442\u0443\u043A\u0430\u0442\u0443\u0440 / \u05E6\u05D1\u05E2\u05D9 \u05D5\u05D8\u05D9\u05D9\u05D7",
+  "\u0421\u0432\u0430\u0440\u0449\u0438\u043A / \u05E8\u05EA\u05DA",
+  "\u0423\u0431\u043E\u0440\u0449\u0438\u043A / \u05E2\u05D5\u05D1\u05D3 \u05E0\u05D9\u05E7\u05D9\u05D5\u05DF",
+  "\u041E\u0445\u0440\u0430\u043D\u043D\u0438\u043A / \u05E9\u05D5\u05DE\u05E8",
+  "\u0412\u043E\u0434\u0438\u0442\u0435\u043B\u044C / \u05E0\u05D4\u05D2",
+  "\u0423\u0445\u043E\u0434 / \u041C\u0435\u0434\u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B / \u05DE\u05D8\u05E4\u05DC/\u05EA",
+  "\u0410\u0434\u043C\u0438\u043D\u0438\u0441\u0442\u0440\u0430\u0442\u043E\u0440 / \u05E4\u05E7\u05D9\u05D3/\u05D4"
+];
+function normalizePositionsList(raw) {
+  if (!Array.isArray(raw)) {
+    return [...DEFAULT_COMPANY_POSITIONS];
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const result = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (trimmed && !seen.has(trimmed)) {
+        seen.add(trimmed);
+        result.push(trimmed);
+      }
+    }
+  }
+  return result;
+}
 
 // packages/shared/src/rules/geo.ts
 var EARTH_RADIUS_METERS = 6371e3;
@@ -97281,6 +97218,105 @@ function calculateClientBilling(params) {
   }
 }
 
+// packages/api/src/routes/public.ts
+var publicRouter = (0, import_express2.Router)();
+var contactSchema = external_exports.object({
+  name: external_exports.string().min(1),
+  company: external_exports.string().optional(),
+  phone: external_exports.string().min(1),
+  email: external_exports.string().email().optional().or(external_exports.literal("")),
+  message: external_exports.string().optional()
+});
+publicRouter.post("/contact", async (req, res) => {
+  try {
+    const data = contactSchema.parse(req.body);
+    const contact = await prisma.contactRequest.create({
+      data: {
+        name: data.name,
+        company: data.company || null,
+        phone: data.phone,
+        email: data.email || null,
+        message: data.message || null
+      }
+    });
+    res.json({ success: true, id: contact.id });
+  } catch (err) {
+    if (err instanceof external_exports.ZodError) {
+      res.status(400).json({ error: "\u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0437\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043F\u043E\u043B\u044F (\u0438\u043C\u044F \u0438 \u0442\u0435\u043B\u0435\u0444\u043E\u043D)" });
+      return;
+    }
+    console.error("Contact error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043A\u0438" });
+  }
+});
+var registerSchema = external_exports.object({
+  username: external_exports.string().min(3),
+  password: external_exports.string().min(6),
+  name: external_exports.string().min(2),
+  phone: external_exports.string().optional()
+});
+publicRouter.post("/register", async (req, res) => {
+  try {
+    const data = registerSchema.parse(req.body);
+    const existing = await prisma.client.findUnique({
+      where: { username: data.username }
+    });
+    if (existing) {
+      res.status(400).json({ error: "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u0441 \u0442\u0430\u043A\u0438\u043C \u043B\u043E\u0433\u0438\u043D\u043E\u043C \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442" });
+      return;
+    }
+    const salt = await import_bcryptjs2.default.genSalt(10);
+    const passwordHash = await import_bcryptjs2.default.hash(data.password, salt);
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1e3);
+    const defaultShifts = {
+      morning: { start: "07:00", end: "16:00" },
+      evening: { start: "16:00", end: "00:00" },
+      night: { start: "00:00", end: "07:00" }
+    };
+    const client = await prisma.client.create({
+      data: {
+        username: data.username,
+        passwordHash,
+        name: data.name,
+        trialEndsAt,
+        defaultShifts,
+        positions: DEFAULT_COMPANY_POSITIONS
+      }
+    });
+    const token = signSessionToken({
+      id: client.id,
+      role: "client",
+      name: client.name,
+      clientId: client.id
+    });
+    const isProd = process.env["NODE_ENV"] === "production";
+    res.cookie("session", token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1e3
+    });
+    res.json({
+      success: true,
+      role: "client",
+      clientId: client.id,
+      name: client.name
+    });
+  } catch (err) {
+    if (err instanceof external_exports.ZodError) {
+      res.status(400).json({ error: "\u041B\u043E\u0433\u0438\u043D \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0442 3 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432, \u043F\u0430\u0440\u043E\u043B\u044C \u043E\u0442 6 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432" });
+      return;
+    }
+    console.error("Registration error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438" });
+  }
+});
+
+// packages/api/src/routes/owner.ts
+var import_express3 = __toESM(require_express2());
+var import_bcryptjs3 = __toESM(require_bcryptjs());
+
 // packages/api/src/services/israeliInvoiceService.ts
 var IsraeliInvoiceService = class {
   /**
@@ -97570,7 +97606,8 @@ var createClientSchema = external_exports.object({
   tariffMode: external_exports.enum(["PER_USER", "PER_HOUR"]).default("PER_USER"),
   pricePerUser: external_exports.number().default(0),
   pricePerHour: external_exports.number().default(0),
-  trialDays: external_exports.number().default(14)
+  trialDays: external_exports.number().default(14),
+  positions: external_exports.array(external_exports.string()).optional()
 });
 ownerRouter.post("/clients", async (req, res) => {
   try {
@@ -97590,6 +97627,7 @@ ownerRouter.post("/clients", async (req, res) => {
       evening: { start: "16:00", end: "00:00" },
       night: { start: "00:00", end: "07:00" }
     };
+    const positions = data.positions ? normalizePositionsList(data.positions) : DEFAULT_COMPANY_POSITIONS;
     const client = await prisma.client.create({
       data: {
         username: data.username,
@@ -97599,7 +97637,8 @@ ownerRouter.post("/clients", async (req, res) => {
         pricePerUser: data.pricePerUser,
         pricePerHour: data.pricePerHour,
         trialEndsAt,
-        defaultShifts
+        defaultShifts,
+        positions
       }
     });
     res.json({ success: true, client });
@@ -98668,6 +98707,25 @@ clientRouter.use(authRequired, requireRole("client", "foreman"));
 function getTargetClientId(req) {
   return req.user?.clientId ?? req.user?.id ?? "";
 }
+async function ensurePositionInClientList(clientId, position) {
+  const cleanPos = position?.trim();
+  if (!cleanPos || !clientId) return;
+  try {
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { positions: true }
+    });
+    const currentList = normalizePositionsList(client?.positions);
+    if (!currentList.includes(cleanPos)) {
+      await prisma.client.update({
+        where: { id: clientId },
+        data: { positions: [...currentList, cleanPos] }
+      });
+    }
+  } catch (err) {
+    console.error("Error syncing custom position to client positions list:", err);
+  }
+}
 clientRouter.get("/employees", async (req, res) => {
   try {
     const clientId = getTargetClientId(req);
@@ -98676,19 +98734,25 @@ clientRouter.get("/employees", async (req, res) => {
     if (isForeman) {
       whereClause.foremanId = req.user?.id;
     }
-    const employees = await prisma.employee.findMany({
-      where: whereClause,
-      include: {
-        foreman: { select: { id: true, name: true } },
-        sites: { include: { site: true } },
-        schedules: true,
-        logs: {
-          take: 1,
-          orderBy: { dateTime: "desc" }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+    const [employees, clientRecord] = await Promise.all([
+      prisma.employee.findMany({
+        where: whereClause,
+        include: {
+          foreman: { select: { id: true, name: true } },
+          sites: { include: { site: true } },
+          schedules: true,
+          logs: {
+            take: 1,
+            orderBy: { dateTime: "desc" }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      }),
+      prisma.client.findUnique({
+        where: { id: clientId },
+        select: { positions: true }
+      })
+    ]);
     const hasGlobalEmployees = employees.some(
       (emp) => emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0
     );
@@ -98737,7 +98801,11 @@ clientRouter.get("/employees", async (req, res) => {
         globalMonthlyStatus
       };
     });
-    res.json({ success: true, employees: enriched });
+    res.json({
+      success: true,
+      employees: enriched,
+      positions: normalizePositionsList(clientRecord?.positions)
+    });
   } catch (err) {
     console.error("List employees error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u043E\u0432" });
@@ -98746,6 +98814,7 @@ clientRouter.get("/employees", async (req, res) => {
 var createEmployeeSchema = external_exports.object({
   empId: external_exports.string().min(2),
   name: external_exports.string().min(2),
+  position: external_exports.string().max(120).nullable().optional(),
   isMobile: external_exports.boolean().default(false),
   strictGps: external_exports.boolean().default(false),
   autoCloseShift: external_exports.boolean().default(false),
@@ -98787,11 +98856,13 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
         }
       }
     }
+    const cleanPosition = data.position?.trim() || null;
     const created = await prisma.employee.create({
       data: {
         clientId,
         empId: data.empId,
         name: data.name,
+        position: cleanPosition,
         isMobile: data.isMobile,
         strictGps: data.strictGps,
         autoCloseShift: data.autoCloseShift,
@@ -98811,6 +98882,9 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
         foreman: { select: { id: true, name: true } }
       }
     });
+    if (cleanPosition) {
+      await ensurePositionInClientList(clientId, cleanPosition);
+    }
     res.json({ success: true, employee: created });
   } catch (err) {
     if (err instanceof external_exports.ZodError) {
@@ -98828,6 +98902,7 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
     const {
       name,
       newEmpId,
+      position,
       isMobile,
       strictGps,
       autoCloseShift,
@@ -98883,11 +98958,13 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
       }
     }
     const parsedContractHours = contractMonthlyHours === "" || contractMonthlyHours === null || contractMonthlyHours === void 0 ? null : Number(contractMonthlyHours);
+    const cleanPosition = position !== void 0 ? typeof position === "string" ? position.trim() || null : null : void 0;
     const updated = await prisma.employee.update({
       where: { id: employee.id },
       data: {
         empId: finalEmpId,
         ...name ? { name } : {},
+        ...cleanPosition !== void 0 ? { position: cleanPosition } : {},
         ...isMobile !== void 0 ? { isMobile } : {},
         ...strictGps !== void 0 ? { strictGps } : {},
         ...autoCloseShift !== void 0 ? { autoCloseShift } : {},
@@ -98904,6 +98981,9 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
         foreman: { select: { id: true, name: true } }
       }
     });
+    if (cleanPosition) {
+      await ensurePositionInClientList(clientId, cleanPosition);
+    }
     res.json({ success: true, employee: updated });
   } catch (err) {
     console.error("Update employee error:", err);
@@ -99113,6 +99193,7 @@ clientRouter.get("/settings", async (req, res) => {
         username: true,
         logoUrl: true,
         defaultShifts: true,
+        positions: true,
         autoDeductLunch: true,
         trialEndsAt: true,
         tariffMode: true,
@@ -99123,12 +99204,14 @@ clientRouter.get("/settings", async (req, res) => {
         billingPhone: true
       }
     });
+    const normalizedPositions = normalizePositionsList(client?.positions);
     res.json({
       success: true,
-      settings: client,
+      settings: client ? { ...client, positions: normalizedPositions } : null,
       name: client?.name,
       logoUrl: client?.logoUrl,
       defaultShifts: client?.defaultShifts,
+      positions: normalizedPositions,
       autoDeductLunch: client?.autoDeductLunch
     });
   } catch (err) {
@@ -99142,6 +99225,7 @@ clientRouter.post("/settings", requireRole("client"), async (req, res) => {
     const {
       name,
       defaultShifts,
+      positions,
       autoDeductLunch,
       legalName,
       taxId,
@@ -99154,6 +99238,7 @@ clientRouter.post("/settings", requireRole("client"), async (req, res) => {
       data: {
         ...name ? { name } : {},
         ...defaultShifts ? { defaultShifts } : {},
+        ...Array.isArray(positions) ? { positions: normalizePositionsList(positions) } : {},
         ...autoDeductLunch !== void 0 ? { autoDeductLunch } : {},
         ...legalName !== void 0 ? { legalName: legalName?.trim() || null } : {},
         ...taxId !== void 0 ? { taxId: taxId?.trim() || null } : {},
@@ -100209,6 +100294,7 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         id: employee.id,
         empId: employee.empId,
         name: employee.name,
+        position: employee.position ?? null,
         companyName: employee.client.name,
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,

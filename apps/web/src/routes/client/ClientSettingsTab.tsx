@@ -22,8 +22,12 @@ import {
   Phone,
   MapPin,
   Save,
+  Briefcase,
+  Plus,
+  X,
 } from 'lucide-react';
 import { TimeInput24 } from '../../components/ui/TimeInput24';
+import { DEFAULT_COMPANY_POSITIONS, normalizePositionsList } from '@timetracker/shared';
 
 export function ClientSettingsTab() {
   const { t } = useTranslation();
@@ -40,6 +44,8 @@ export function ClientSettingsTab() {
     evening: { start: '16:00', end: '00:00' },
     night: { start: '22:00', end: '06:00' },
   });
+  const [positions, setPositions] = useState<string[]>([...DEFAULT_COMPANY_POSITIONS]);
+  const [newPositionInput, setNewPositionInput] = useState('');
 
   // Israeli Tax & Billing Details
   const [legalName, setLegalName] = useState('');
@@ -72,6 +78,7 @@ export function ClientSettingsTab() {
       if (s.defaultShifts) {
         setShifts(s.defaultShifts);
       }
+      setPositions(normalizePositionsList(s.positions));
       setLegalName(s.legalName || '');
       setTaxId(s.taxId || '');
       setBillingEmail(s.billingEmail || '');
@@ -89,6 +96,7 @@ export function ClientSettingsTab() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['client-employees'] });
       setMessage({ type: 'success', text: t('admin.settingsSavedSuccess') });
       setTimeout(() => setMessage(null), 3000);
     },
@@ -128,10 +136,20 @@ export function ClientSettingsTab() {
   const handleGeneralSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
+    const trimmedPending = newPositionInput.trim();
+    const finalPositions =
+      trimmedPending && !positions.includes(trimmedPending)
+        ? [...positions, trimmedPending]
+        : positions;
+    if (trimmedPending) {
+      setPositions(finalPositions);
+      setNewPositionInput('');
+    }
     saveMutation.mutate({
       name,
       autoDeductLunch,
       defaultShifts: shifts,
+      positions: finalPositions,
     });
   };
 
@@ -410,6 +428,80 @@ export function ClientSettingsTab() {
                   </span>
                 </div>
               </label>
+            </div>
+
+            {/* Company Positions & Specialties List */}
+            <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{t('admin.positionsSectionTitle')}</span>
+                  </label>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {t('admin.positionsSectionDesc')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPositions([...DEFAULT_COMPANY_POSITIONS])}
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 underline self-start sm:self-auto shrink-0"
+                >
+                  {t('admin.resetDefaultPositions')}
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newPositionInput}
+                  onChange={(e) => setNewPositionInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const trimmed = newPositionInput.trim();
+                      if (trimmed && !positions.includes(trimmed)) {
+                        setPositions([...positions, trimmed]);
+                        setNewPositionInput('');
+                      }
+                    }
+                  }}
+                  placeholder={t('admin.addPositionPlaceholder')}
+                  className="flex-1 px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const trimmed = newPositionInput.trim();
+                    if (trimmed && !positions.includes(trimmed)) {
+                      setPositions([...positions, trimmed]);
+                      setNewPositionInput('');
+                    }
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{t('admin.addPositionBtn')}</span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {positions.map((pos) => (
+                  <span
+                    key={pos}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700/80 text-slate-200 text-xs"
+                  >
+                    <span>{pos}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPositions(positions.filter((p) => p !== pos))}
+                      className="text-slate-400 hover:text-rose-400 transition"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
 
             <button
