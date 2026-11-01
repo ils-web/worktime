@@ -393,6 +393,108 @@ describe('TimeTracker API Endpoints', () => {
     expect(found.shiftType).toBe('morning_evening');
   });
 
+  it('14b. Multi-Site Transit employee stops timer on exit from Site A and auto-resumes with transit time on arrival at Site B', async () => {
+    // 1. Create two sites: Site A and Site B
+    const siteARes = await request(app)
+      .post('/api/client/sites')
+      .set('Cookie', clientCookie)
+      .send({
+        name: 'Объект Север',
+        address: 'Тель-Авив Север',
+        lat: 32.1,
+        lng: 34.8,
+        radius: 150,
+      });
+    expect(siteARes.status).toBe(200);
+    const siteAId = siteARes.body.site.id;
+
+    const siteBRes = await request(app)
+      .post('/api/client/sites')
+      .set('Cookie', clientCookie)
+      .send({
+        name: 'Объект Юг',
+        address: 'Тель-Авив Юг',
+        lat: 32.05,
+        lng: 34.76,
+        radius: 150,
+      });
+    expect(siteBRes.status).toBe(200);
+    const siteBId = siteBRes.body.site.id;
+
+    // 2. Create employee with multiSiteTransit = true assigned to both sites
+    const transitEmpId = `TR_${Date.now()}`;
+    const empRes = await request(app)
+      .post('/api/client/employees')
+      .set('Cookie', clientCookie)
+      .send({
+        empId: transitEmpId,
+        name: 'Транзитный Работник',
+        isMobile: false,
+        strictGps: true,
+        multiSiteTransit: true,
+        siteIds: [siteAId, siteBId],
+      });
+    expect(empRes.status).toBe(200);
+    expect(empRes.body.employee.multiSiteTransit).toBe(true);
+
+    // 3. Simulate CLOCK_IN at Site A (60 mins ago) and AUTO_EXIT when leaving Site A (25 mins ago)
+    const nowMs = Date.now();
+    const clockInAtSiteA = new Date(nowMs - 60 * 60 * 1000).toISOString();
+    const exitFromSiteA = new Date(nowMs - 25 * 60 * 1000).toISOString();
+
+    await request(app)
+      .post('/api/worker/log')
+      .send({
+        empId: transitEmpId,
+        action: 'CLOCK_IN',
+        lat: 32.1,
+        lng: 34.8,
+        dateTime: clockInAtSiteA,
+      });
+
+    await request(app)
+      .post('/api/worker/log')
+      .send({
+        empId: transitEmpId,
+        action: 'AUTO_EXIT',
+        lat: 32.095,
+        lng: 34.795,
+        dateTime: exitFromSiteA,
+        note: 'Покинул объект "Объект Север" (строгий GPS, 650м)',
+      });
+
+    // Verify worker profile shows timer stopped and lastExitedSiteName = 'Объект Север'
+    const profileStopped = await request(app).get(`/api/worker/profile/${transitEmpId}`);
+    expect(profileStopped.status).toBe(200);
+    expect(profileStopped.body.status.isOnShift).toBe(false);
+    expect(profileStopped.body.status.lastExitedSiteName).toBe('Объект Север');
+
+    // 4. Worker arrives at Site B by GPS -> CLOCK_IN converts previous AUTO_EXIT to AUTO_PAUSE and logs AUTO_RESUME
+    const arriveSiteBRes = await request(app)
+      .post('/api/worker/log')
+      .send({
+        empId: transitEmpId,
+        action: 'CLOCK_IN',
+        lat: 32.05,
+        lng: 34.76,
+      });
+
+    expect(arriveSiteBRes.status).toBe(200);
+    expect(arriveSiteBRes.body.success).toBe(true);
+    expect(arriveSiteBRes.body.log.action).toBe('AUTO_RESUME');
+    expect(arriveSiteBRes.body.transitResumed).toBeDefined();
+    expect(arriveSiteBRes.body.transitResumed.fromSite).toBe('Объект Север');
+    expect(arriveSiteBRes.body.transitResumed.toSite).toBe('Объект Юг');
+    expect(arriveSiteBRes.body.transitResumed.transitMinutes).toBeGreaterThanOrEqual(24);
+
+    // Verify profile now shows isOnShift: true and lastActionTime is original Site A start time
+    const profileResumed = await request(app).get(`/api/worker/profile/${transitEmpId}`);
+    expect(profileResumed.body.status.isOnShift).toBe(true);
+    expect(new Date(profileResumed.body.status.lastActionTime).getTime()).toBe(
+      new Date(clockInAtSiteA).getTime()
+    );
+  }, 15000);
+
   it('15. Owner can delete client and cleanup test clients', async () => {
     const ownerToken = signSessionToken({ id: 'owner', role: 'owner', name: 'Master Owner' });
     const ownerCookie = `session=${ownerToken}`;

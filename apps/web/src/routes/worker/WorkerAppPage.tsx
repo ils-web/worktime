@@ -56,6 +56,7 @@ interface WorkerProfile {
   companyName: string;
   isMobile: boolean;
   strictGps: boolean;
+  multiSiteTransit?: boolean;
   autoCloseShift?: boolean;
   isGlobal?: boolean;
   contractMonthlyHours?: number | null;
@@ -74,6 +75,7 @@ interface WorkerStatus {
   isOnShift: boolean;
   lastAction: string | null;
   lastActionTime: string | null;
+  lastExitedSiteName?: string | null;
   scheduledEndTime?: string | null;
   scheduledShiftType?: string | null;
   autoClosedDueToShiftEnd?: boolean;
@@ -293,6 +295,7 @@ export function WorkerAppPage() {
   const [scheduledEndTime, setScheduledEndTime] = useState<string | null>(null);
   const [showAutoCloseAlert, setShowAutoCloseAlert] = useState(false);
   const [autoCloseReason, setAutoCloseReason] = useState<'SCHEDULE' | 'STRICT_GPS' | null>(null);
+  const [transitBanner, setTransitBanner] = useState<string | null>(null);
   const [completedShiftSummary, setCompletedShiftSummary] = useState<{
     hours: number;
     minutes: number;
@@ -527,9 +530,16 @@ export function WorkerAppPage() {
     }
   }, [profile, refreshLocation]);
 
-  // Strict GPS Watcher when on shift
+  // Strict GPS / Multi-Site Transit Watcher when on shift OR waiting for arrival at next site
+  const shouldWatchGps = Boolean(
+    profile &&
+      !profile.isMobile &&
+      (((profile.strictGps || profile.multiSiteTransit) && status.isOnShift) ||
+        (profile.multiSiteTransit && !status.isOnShift && status.lastExitedSiteName))
+  );
+
   useEffect(() => {
-    if (!profile?.strictGps || !status.isOnShift || typeof navigator === 'undefined' || !navigator.geolocation) {
+    if (!shouldWatchGps || typeof navigator === 'undefined' || !navigator.geolocation) {
       return;
     }
 
@@ -552,7 +562,7 @@ export function WorkerAppPage() {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [profile, status.isOnShift]);
+  }, [profile, shouldWatchGps]);
 
   // 6. Live Shift Timer
   useEffect(() => {
@@ -732,7 +742,13 @@ export function WorkerAppPage() {
 
     // Online: Send direct API request
     try {
-      const res = await api.post<{ success: boolean; log: any; todaySummary?: any }>('/api/worker/log', {
+      const res = await api.post<{
+        success: boolean;
+        log: any;
+        shiftStartTime?: string;
+        transitResumed?: { fromSite: string; toSite: string; transitMinutes: number } | null;
+        todaySummary?: any;
+      }>('/api/worker/log', {
         empId,
         action,
         lat,
@@ -741,15 +757,28 @@ export function WorkerAppPage() {
       });
 
       if (res.success) {
-        setStatus({
+        setStatus((prev) => ({
+          ...prev,
           isOnShift: action === 'CLOCK_IN',
-          lastAction: action,
-          lastActionTime: res.log.dateTime,
-        });
+          lastAction: res.log?.action || action,
+          lastActionTime: res.shiftStartTime || res.log.dateTime,
+          ...(action === 'CLOCK_IN' ? { lastExitedSiteName: null } : {}),
+        }));
         refreshLocation();
 
         if (action === 'CLOCK_IN') {
           setShowClockInConfirm(false);
+          if (res.transitResumed) {
+            setShowAutoCloseAlert(false);
+            playAlertChime();
+            setTransitBanner(
+              t('worker.transitResumedBanner', {
+                mins: res.transitResumed.transitMinutes,
+                from: res.transitResumed.fromSite,
+                to: res.transitResumed.toSite,
+              })
+            );
+          }
           fetchProfile();
         } else if (action === 'CLOCK_OUT') {
           const h = res.todaySummary?.hours ?? fallbackH;
@@ -808,9 +837,10 @@ export function WorkerAppPage() {
     }
   };
 
-  // Strict GPS out-of-bounds auto-exit monitor
+  // Strict GPS / Multi-Site Transit out-of-bounds auto-exit monitor
   useEffect(() => {
-    if (!profile?.strictGps || !status.isOnShift || profile.isMobile || !geofenceEval || isSubmittingAction) {
+    const isStrictOrTransit = Boolean(profile?.strictGps || profile?.multiSiteTransit);
+    if (!isStrictOrTransit || !status.isOnShift || profile?.isMobile || !geofenceEval || isSubmittingAction) {
       outOfZoneCountRef.current = 0;
       return;
     }
@@ -843,12 +873,39 @@ export function WorkerAppPage() {
     }
   }, [
     profile?.strictGps,
+    profile?.multiSiteTransit,
     profile?.isMobile,
     status.isOnShift,
     geofenceEval,
     geoResult?.accuracy,
     isSubmittingAction,
     t,
+  ]);
+
+  // Multi-Site Transit: Automatic timer restart upon GPS arrival at another assigned site
+  useEffect(() => {
+    if (
+      !profile?.multiSiteTransit ||
+      profile.isMobile ||
+      status.isOnShift ||
+      !status.lastExitedSiteName ||
+      !geofenceEval?.isInside ||
+      !geofenceEval.targetName ||
+      geofenceEval.targetName === status.lastExitedSiteName ||
+      isSubmittingAction
+    ) {
+      return;
+    }
+
+    handleClockAction('CLOCK_IN');
+  }, [
+    profile?.multiSiteTransit,
+    profile?.isMobile,
+    status.isOnShift,
+    status.lastExitedSiteName,
+    geofenceEval?.isInside,
+    geofenceEval?.targetName,
+    isSubmittingAction,
   ]);
 
   // Re-check profile & location on tab focus or screen unlock
@@ -868,9 +925,9 @@ export function WorkerAppPage() {
     };
   }, [fetchProfile, refreshLocation]);
 
-  // Periodic active polling for strict GPS workers on shift
+  // Periodic active polling for strict GPS / multi-site transit workers
   useEffect(() => {
-    if (!profile?.strictGps || !status.isOnShift || profile.isMobile) return;
+    if (!shouldWatchGps) return;
 
     const interval = setInterval(() => {
       if (!isSubmittingAction && !isLocating) {
@@ -879,7 +936,7 @@ export function WorkerAppPage() {
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [profile?.strictGps, status.isOnShift, profile?.isMobile, isSubmittingAction, isLocating, refreshLocation]);
+  }, [shouldWatchGps, isSubmittingAction, isLocating, refreshLocation]);
 
   // 8. Notes & Expenses Handler
   const handleSaveNote = async (e: React.FormEvent) => {
@@ -1265,6 +1322,35 @@ export function WorkerAppPage() {
                     <span>{profile.globalMonthlyStatus.progressPercent}%</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Multi-Site Transit Resumed Notification Banner */}
+            {transitBanner && (
+              <div className="bg-cyan-950/70 border border-cyan-500/40 rounded-2xl p-3.5 mb-4 flex items-start justify-between gap-2 shadow-md">
+                <div className="flex items-start gap-2.5 text-xs text-cyan-100">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <span className="font-semibold leading-relaxed">{transitBanner}</span>
+                </div>
+                <button
+                  onClick={() => setTransitBanner(null)}
+                  className="text-cyan-300 hover:text-white font-bold px-1.5 text-base leading-none"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {/* Multi-Site Transit Standby Card (when worker exited Site 1 and is traveling to Site 2) */}
+            {!status.isOnShift && profile.multiSiteTransit && status.lastExitedSiteName && (
+              <div className="bg-cyan-950/40 border border-cyan-500/35 rounded-2xl p-3.5 mb-4 shadow-md">
+                <div className="text-xs font-bold text-cyan-300 flex items-center gap-1.5 mb-1">
+                  <Compass className="w-4 h-4 text-cyan-400 animate-spin" />
+                  <span>{t('worker.transitStandbyTitle')}</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  {t('worker.transitStandbyDesc', { site: status.lastExitedSiteName })}
+                </p>
               </div>
             )}
 

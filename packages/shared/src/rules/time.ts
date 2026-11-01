@@ -553,7 +553,11 @@ export function isSystemGpsNote(noteText?: string | null): boolean {
     noteText.includes('Выход без GPS') ||
     noteText.includes('Clock-out without GPS') ||
     noteText.includes('יציאה ללא GPS') ||
-    noteText.includes('خروج بدون GPS')
+    noteText.includes('خروج بدون GPS') ||
+    noteText.includes('Время на переезд между объектами') ||
+    noteText.includes('Transit time between sites') ||
+    noteText.includes('זמן נסיעה בין אתרים') ||
+    noteText.includes('وقت التنقل بين المواقع')
   );
 }
 
@@ -642,6 +646,43 @@ export function localizeSystemNote(noteText?: string | null, lang: string = 'he'
       if (targetLang === 'he') return 'יציאה ללא GPS (מיקום כבוי)';
       if (targetLang === 'ar') return 'خروج بدون GPS (الموقع متوقف)';
       return 'Clock-out without GPS (location disabled)';
+    }
+
+    // 4. Multi-site transit time note:
+    // RU: Время на переезд между объектами: 35 мин (из "Site A" в "Site B")
+    // EN: Transit time between sites: 35 min (from "Site A" to "Site B")
+    // HE: זמן נסיעה בין אתרים: 35 דק' (מ-"Site A" ל-"Site B")
+    // AR: وقت التنقل بين المواقع: 35 د (من "Site A" إلى "Site B")
+    const isTransitNote =
+      part.startsWith('Время на переезд между объектами') ||
+      part.startsWith('Transit time between sites') ||
+      part.startsWith('זמן נסיעה בין אתרים') ||
+      part.startsWith('وقت التنقل بين المواقع');
+
+    if (isTransitNote) {
+      const minsMatch = part.match(/:\s*(\d+)\s*/);
+      const mins = minsMatch && minsMatch[1] ? minsMatch[1] : '0';
+      const siteQuotes = Array.from(part.matchAll(/"([^"]+)"/g)).map((m) => m[1]);
+      const fromSite = siteQuotes[0] || '';
+      const toSite = siteQuotes[1] || '';
+
+      if (fromSite && toSite) {
+        if (targetLang === 'ru') {
+          return `Время на переезд между объектами: ${mins} мин (из "${fromSite}" в "${toSite}")`;
+        }
+        if (targetLang === 'he') {
+          return `זמן נסיעה בין אתרים: ${mins} דק' (מ-"${fromSite}" ל-"${toSite}")`;
+        }
+        if (targetLang === 'ar') {
+          return `وقت التنقل بين المواقع: ${mins} د (من "${fromSite}" إلى "${toSite}")`;
+        }
+        return `Transit time between sites: ${mins} min (from "${fromSite}" to "${toSite}")`;
+      }
+
+      if (targetLang === 'ru') return `Время на переезд между объектами: ${mins} мин`;
+      if (targetLang === 'he') return `זמן נסיעה בין אתרים: ${mins} דק'`;
+      if (targetLang === 'ar') return `وقت التنقل بين المواقع: ${mins} د`;
+      return `Transit time between sites: ${mins} min`;
     }
 
     return part;

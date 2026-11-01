@@ -76,6 +76,7 @@ model Employee {
   position  String?  // Job title / specialty (תפקיד / מקצוע)
   isMobile             Boolean  @default(false)
   strictGps            Boolean  @default(false)
+  multiSiteTransit     Boolean  @default(false)
   autoCloseShift       Boolean  @default(false)
   isGlobal             Boolean  @default(false)
   contractMonthlyHours Float?

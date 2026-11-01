@@ -24,6 +24,87 @@ interface TrackedSession extends WorkSession {
 
 export const workerRouter = Router();
 
+function buildAllowedGeofences(employee: {
+  sites?: Array<{
+    site: {
+      id?: string;
+      name: string;
+      address?: string | null;
+      lat: number;
+      lng: number;
+      radius: number;
+    };
+  }>;
+  geofence?: any;
+}): Array<GeofenceConfig & { siteId?: string; siteName: string }> {
+  const allowedGeofences: Array<GeofenceConfig & { siteId?: string; siteName: string }> = [];
+
+  if (employee.sites && employee.sites.length > 0) {
+    for (const es of employee.sites) {
+      if (es.site.lat && es.site.lng && es.site.radius) {
+        allowedGeofences.push({
+          lat: es.site.lat,
+          lng: es.site.lng,
+          radius: es.site.radius,
+          siteId: es.site.id,
+          siteName: es.site.name,
+          address: es.site.name + (es.site.address ? ` (${es.site.address})` : ''),
+        });
+      }
+    }
+  }
+
+  if (allowedGeofences.length === 0 && employee.geofence) {
+    const gf = employee.geofence as unknown as GeofenceConfig;
+    if (gf.lat && gf.lng && gf.radius) {
+      allowedGeofences.push({
+        ...gf,
+        siteName: gf.address || 'Объект',
+      });
+    }
+  }
+
+  return allowedGeofences;
+}
+
+function matchSiteByCoords(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+  geofences: Array<GeofenceConfig & { siteId?: string; siteName: string }>
+) {
+  if (
+    lat === undefined ||
+    lat === null ||
+    lng === undefined ||
+    lng === null ||
+    isNaN(Number(lat)) ||
+    isNaN(Number(lng))
+  ) {
+    return {
+      insideSite: null as (GeofenceConfig & { siteId?: string; siteName: string }) | null,
+      closestSite: null as (GeofenceConfig & { siteId?: string; siteName: string }) | null,
+      minDistance: Infinity,
+    };
+  }
+
+  let insideSite: (GeofenceConfig & { siteId?: string; siteName: string }) | null = null;
+  let closestSite: (GeofenceConfig & { siteId?: string; siteName: string }) | null = null;
+  let minDistance = Infinity;
+
+  for (const gf of geofences) {
+    const { isInside, distanceMeters } = checkGeofence(Number(lat), Number(lng), gf.lat, gf.lng, gf.radius);
+    if (distanceMeters < minDistance) {
+      minDistance = distanceMeters;
+      closestSite = gf;
+    }
+    if (isInside && !insideSite) {
+      insideSite = gf;
+    }
+  }
+
+  return { insideSite, closestSite, minDistance };
+}
+
 /**
  * Helper to compute a worker's monthly sessions and daily breakdown in Asia/Jerusalem timezone.
  */
@@ -142,7 +223,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
           include: { site: true },
         },
         logs: {
-          take: 5,
+          take: 20,
           orderBy: { dateTime: 'desc' },
         },
       },
@@ -155,6 +236,20 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
 
     let lastLog = employee.logs[0];
     let isOnShift = lastLog ? lastLog.action === 'CLOCK_IN' || lastLog.action === 'AUTO_RESUME' : false;
+    let activeClockInTime: Date | null = lastLog?.dateTime ?? null;
+
+    if (isOnShift) {
+      for (const l of employee.logs) {
+        if (l.action === 'CLOCK_IN') {
+          activeClockInTime = l.dateTime;
+        } else if (l.action === 'AUTO_RESUME' || l.action === 'AUTO_PAUSE') {
+          continue;
+        } else {
+          break;
+        }
+      }
+    }
+
     let autoClosedDueToShiftEnd = false;
     let scheduledEndTimeStr: string | null = null;
     let scheduledShiftType: string | null = null;
@@ -162,8 +257,8 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
     // Shift overrides or client default shifts
     const effectiveShifts = (employee.shifts || employee.client.defaultShifts) as unknown as ClientShiftsConfig;
 
-    if (employee.autoCloseShift && isOnShift && lastLog) {
-      const inParts = getJerusalemParts(lastLog.dateTime);
+    if (employee.autoCloseShift && isOnShift && activeClockInTime) {
+      const inParts = getJerusalemParts(activeClockInTime);
       const daySchedule = employee.schedules.find((s) => s.dayOfWeek === inParts.dayOfWeek);
       const rawShiftType = (daySchedule?.shiftType && daySchedule.shiftType !== 'off') ? daySchedule.shiftType : 'morning';
       let resolvedShiftType = rawShiftType;
@@ -182,7 +277,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
 
       scheduledShiftType = resolvedShiftType;
       const shiftWindow = effectiveShifts?.[resolvedShiftType as keyof ClientShiftsConfig] || { start: '08:00', end: '17:00' };
-      const scheduledEndDate = getScheduledShiftEndTime(lastLog.dateTime, shiftWindow.end);
+      const scheduledEndDate = getScheduledShiftEndTime(activeClockInTime, shiftWindow.end);
       scheduledEndTimeStr = scheduledEndDate.toISOString();
 
       const now = new Date();
@@ -200,6 +295,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         isOnShift = false;
         autoClosedDueToShiftEnd = true;
         lastLog = autoExit;
+        activeClockInTime = autoExit.dateTime;
       }
     } else if (employee.autoCloseShift && !isOnShift && lastLog && lastLog.action === 'AUTO_EXIT') {
       const diffHours = (Date.now() - new Date(lastLog.dateTime).getTime()) / 3600000;
@@ -209,7 +305,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
     }
 
     let autoClosedDueToStrictGps = false;
-    if (employee.strictGps && !isOnShift && lastLog && lastLog.action === 'AUTO_EXIT') {
+    if ((employee.strictGps || employee.multiSiteTransit) && !isOnShift && lastLog && lastLog.action === 'AUTO_EXIT') {
       const diffHours = (Date.now() - new Date(lastLog.dateTime).getTime()) / 3600000;
       if (diffHours < 24) {
         const dParts = getJerusalemParts(lastLog.dateTime);
@@ -228,6 +324,31 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         if (strictNote) {
           autoClosedDueToStrictGps = true;
         }
+      }
+    }
+
+    let lastExitedSiteName: string | null = null;
+    if (
+      employee.multiSiteTransit &&
+      !isOnShift &&
+      lastLog &&
+      (lastLog.action === 'AUTO_EXIT' || lastLog.action === 'CLOCK_OUT')
+    ) {
+      const todayDateStr = getJerusalemParts(new Date()).dateStr;
+      const lastLogDateStr = getJerusalemParts(lastLog.dateTime).dateStr;
+      const diffHours = (Date.now() - new Date(lastLog.dateTime).getTime()) / 3600000;
+      if (lastLogDateStr === todayDateStr && diffHours <= 6) {
+        const allowedGeofences = buildAllowedGeofences(employee);
+        const prevActiveLog = employee.logs.find(
+          (l, idx) => idx > 0 && (l.action === 'CLOCK_IN' || l.action === 'AUTO_RESUME')
+        );
+        const fromPrevCoords = matchSiteByCoords(prevActiveLog?.lat, prevActiveLog?.lng, allowedGeofences);
+        const fromExitCoords = matchSiteByCoords(lastLog.lat, lastLog.lng, allowedGeofences);
+        lastExitedSiteName =
+          fromPrevCoords.insideSite?.siteName ||
+          fromPrevCoords.closestSite?.siteName ||
+          fromExitCoords.closestSite?.siteName ||
+          null;
       }
     }
 
@@ -264,6 +385,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         companyName: employee.client.name,
         isMobile: employee.isMobile,
         strictGps: employee.strictGps,
+        multiSiteTransit: employee.multiSiteTransit ?? false,
         autoCloseShift: employee.autoCloseShift ?? false,
         isGlobal: employee.isGlobal ?? false,
         contractMonthlyHours: employee.contractMonthlyHours ?? null,
@@ -275,11 +397,12 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
       status: {
         isOnShift,
         lastAction: lastLog?.action ?? null,
-        lastActionTime: lastLog?.dateTime ?? null,
+        lastActionTime: activeClockInTime ?? lastLog?.dateTime ?? null,
         scheduledEndTime: scheduledEndTimeStr,
         scheduledShiftType,
         autoClosedDueToShiftEnd,
         autoClosedDueToStrictGps,
+        lastExitedSiteName,
       },
     });
   } catch (err) {
@@ -311,7 +434,7 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
         client: true,
         sites: { include: { site: true } },
         logs: {
-          take: 1,
+          take: 20,
           orderBy: { dateTime: 'desc' },
         },
       },
@@ -328,7 +451,10 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
     // Deduplicate rapid accidental/repeated same-state actions within 5 minutes
     if (lastLog) {
       const diffMs = Math.abs(logDateTime.getTime() - new Date(lastLog.dateTime).getTime());
-      const isDuplicateClockIn = data.action === 'CLOCK_IN' && lastLog.action === 'CLOCK_IN' && diffMs < 5 * 60 * 1000;
+      const isDuplicateClockIn =
+        (data.action === 'CLOCK_IN' || data.action === 'AUTO_RESUME') &&
+        (lastLog.action === 'CLOCK_IN' || lastLog.action === 'AUTO_RESUME') &&
+        diffMs < 5 * 60 * 1000;
       const isDuplicateClockOut =
         (data.action === 'CLOCK_OUT' || data.action === 'AUTO_EXIT') &&
         (lastLog.action === 'CLOCK_OUT' || lastLog.action === 'AUTO_EXIT') &&
@@ -342,34 +468,16 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
 
     // Geofence check if not mobile worker
     let autoGeneratedNote: string | null = null;
+    let effectiveAction = data.action;
+    let shiftStartTime: Date | null = null;
+    let transitResumed: {
+      transitMinutes: number;
+      fromSite: string;
+      toSite: string;
+    } | null = null;
+
     if (!employee.isMobile) {
-      const allowedGeofences: Array<GeofenceConfig & { siteName?: string }> = [];
-
-      // 1. Assigned sites
-      if (employee.sites && employee.sites.length > 0) {
-        for (const es of employee.sites) {
-          if (es.site.lat && es.site.lng && es.site.radius) {
-            allowedGeofences.push({
-              lat: es.site.lat,
-              lng: es.site.lng,
-              radius: es.site.radius,
-              siteName: es.site.name,
-              address: es.site.name + (es.site.address ? ` (${es.site.address})` : ''),
-            });
-          }
-        }
-      }
-
-      // 2. Custom employee geofence fallback
-      if (allowedGeofences.length === 0 && employee.geofence) {
-        const gf = employee.geofence as unknown as GeofenceConfig;
-        if (gf.lat && gf.lng && gf.radius) {
-          allowedGeofences.push({
-            ...gf,
-            siteName: gf.address || undefined,
-          });
-        }
-      }
+      const allowedGeofences = buildAllowedGeofences(employee);
 
       if (allowedGeofences.length > 0) {
         const hasCoords =
@@ -382,38 +490,33 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
 
         if (!hasCoords) {
           // On CLOCK_IN: non-mobile workers assigned to a site/geofence MUST provide valid GPS coordinates
-          if (data.action === 'CLOCK_IN') {
+          if (data.action === 'CLOCK_IN' || data.action === 'AUTO_RESUME') {
             res.status(400).json({
               error: 'Не удалось определить GPS-координаты. Включите геолокацию (GPS) на телефоне и разрешите доступ.',
               errorCode: 'GPS_REQUIRED',
             });
             return;
           }
-          // On CLOCK_OUT or AUTO_EXIT without GPS coordinates: record note if strictGps is enabled
-          if ((data.action === 'CLOCK_OUT' || data.action === 'AUTO_EXIT') && employee.strictGps && !data.note) {
+          // On CLOCK_OUT or AUTO_EXIT without GPS coordinates: record note if strictGps or multiSiteTransit is enabled
+          if (
+            (data.action === 'CLOCK_OUT' || data.action === 'AUTO_EXIT') &&
+            (employee.strictGps || employee.multiSiteTransit) &&
+            !data.note
+          ) {
             autoGeneratedNote = 'Выход без GPS (геолокация отключена)';
           }
         } else {
-          let insideAny = false;
-          let minDistance = Infinity;
-          let bestRadius = 100;
-          let bestSiteName = '';
+          const { insideSite, closestSite, minDistance } = matchSiteByCoords(
+            data.lat,
+            data.lng,
+            allowedGeofences
+          );
+          const insideAny = Boolean(insideSite);
+          const bestRadius = closestSite?.radius || 100;
+          const bestSiteName = closestSite?.siteName || closestSite?.address || '';
 
-          for (const gf of allowedGeofences) {
-            const { isInside, distanceMeters } = checkGeofence(data.lat!, data.lng!, gf.lat, gf.lng, gf.radius);
-            if (distanceMeters < minDistance) {
-              minDistance = distanceMeters;
-              bestRadius = gf.radius;
-              bestSiteName = gf.siteName || gf.address || '';
-            }
-            if (isInside) {
-              insideAny = true;
-              break;
-            }
-          }
-
-          // On CLOCK_IN: must be inside at least one allowed geofence/site
-          if (data.action === 'CLOCK_IN' && !insideAny) {
+          // On CLOCK_IN / AUTO_RESUME: must be inside at least one allowed geofence/site
+          if ((data.action === 'CLOCK_IN' || data.action === 'AUTO_RESUME') && !insideAny) {
             res.status(400).json({
               error: 'Вы вне зоны объекта!',
               errorCode: 'OUT_OF_GEOFENCE',
@@ -423,11 +526,71 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
             return;
           }
 
+          // Multi-Site Transit: If worker is marked as moving between fixed sites (`multiSiteTransit`),
+          // exited Site A earlier today (timer stopped), and now arrived by GPS at a different assigned Site B:
+          // automatically resume the shift timer, credit the GPS transit duration, and record the transit note.
+          if (
+            (data.action === 'CLOCK_IN' || data.action === 'AUTO_RESUME') &&
+            employee.multiSiteTransit &&
+            insideSite &&
+            lastLog &&
+            (lastLog.action === 'AUTO_EXIT' || lastLog.action === 'CLOCK_OUT')
+          ) {
+            const logDateStr = getJerusalemParts(logDateTime).dateStr;
+            const lastLogDateStr = getJerusalemParts(lastLog.dateTime).dateStr;
+            const transitMs = logDateTime.getTime() - new Date(lastLog.dateTime).getTime();
+
+            if (logDateStr === lastLogDateStr && transitMs > 0 && transitMs <= 6 * 3600 * 1000) {
+              const prevActiveLog = employee.logs.find(
+                (l, idx) => idx > 0 && (l.action === 'CLOCK_IN' || l.action === 'AUTO_RESUME')
+              );
+              const fromPrevCoords = matchSiteByCoords(
+                prevActiveLog?.lat,
+                prevActiveLog?.lng,
+                allowedGeofences
+              );
+              const fromExitCoords = matchSiteByCoords(lastLog.lat, lastLog.lng, allowedGeofences);
+              const prevSiteName =
+                fromPrevCoords.insideSite?.siteName ||
+                fromPrevCoords.closestSite?.siteName ||
+                fromExitCoords.closestSite?.siteName ||
+                null;
+
+              if (prevSiteName && prevSiteName !== insideSite.siteName) {
+                const transitMinutes = Math.max(1, Math.round(transitMs / 60000));
+
+                await prisma.timeLog.update({
+                  where: { id: lastLog.id },
+                  data: { action: 'AUTO_PAUSE' },
+                });
+
+                effectiveAction = 'AUTO_RESUME';
+                transitResumed = {
+                  transitMinutes,
+                  fromSite: prevSiteName,
+                  toSite: insideSite.siteName,
+                };
+
+                // Find the opening CLOCK_IN of the active shift so live timer shows full elapsed shift time
+                for (let i = 1; i < employee.logs.length; i++) {
+                  const l = employee.logs[i]!;
+                  if (l.action === 'CLOCK_IN') {
+                    shiftStartTime = l.dateTime;
+                  } else if (l.action === 'AUTO_RESUME' || l.action === 'AUTO_PAUSE') {
+                    continue;
+                  } else {
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
           // On CLOCK_OUT or AUTO_EXIT outside geofence: record departure / out-of-zone note
           if ((data.action === 'CLOCK_OUT' || data.action === 'AUTO_EXIT') && !insideAny && !data.note) {
             const siteLabel = bestSiteName ? ` "${bestSiteName}"` : '';
             const dist = Math.round(minDistance);
-            if (employee.strictGps) {
+            if (employee.strictGps || employee.multiSiteTransit) {
               autoGeneratedNote = `Покинул объект${siteLabel} (строгий GPS, ${dist}м)`;
             } else {
               autoGeneratedNote = `Выход вне объекта${siteLabel} (${dist}м)`;
@@ -442,12 +605,56 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
         empId: employee.empId,
         employeeId: employee.id,
         clientId: employee.clientId,
-        action: data.action,
+        action: effectiveAction,
         lat: data.lat ?? null,
         lng: data.lng ?? null,
         dateTime: logDateTime,
       },
     });
+
+    // If multi-site transit occurred, replace the temporary exit note from the previous site with the transit note
+    if (transitResumed) {
+      const jerusalemParts = getJerusalemParts(logDateTime);
+      const transitNoteText = `Время на переезд между объектами: ${transitResumed.transitMinutes} мин (из "${transitResumed.fromSite}" в "${transitResumed.toSite}")`;
+
+      const recentNotesToday = await prisma.dailyNote.findMany({
+        where: {
+          employeeId: employee.id,
+          date: jerusalemParts.dateStr,
+        },
+        orderBy: { id: 'desc' },
+      });
+
+      const tempExitNote = recentNotesToday.find(
+        (n) =>
+          n.noteText.startsWith('Покинул объект') ||
+          n.noteText.startsWith('Left work site') ||
+          n.noteText.startsWith('עזב את האתר') ||
+          n.noteText.startsWith('غادر الموقع') ||
+          n.noteText.startsWith('Выход вне объекта') ||
+          n.noteText.startsWith('Clock-out outside site') ||
+          n.noteText.startsWith('יציאה מחוץ לאתר') ||
+          n.noteText.startsWith('خروج خارج الموقع')
+      );
+
+      if (tempExitNote) {
+        await prisma.dailyNote.update({
+          where: { id: tempExitNote.id },
+          data: { noteText: transitNoteText },
+        });
+      } else {
+        await prisma.dailyNote.create({
+          data: {
+            clientId: employee.clientId,
+            empId: employee.empId,
+            employeeId: employee.id,
+            date: jerusalemParts.dateStr,
+            noteText: transitNoteText,
+            expense: 0,
+          },
+        });
+      }
+    }
 
     // Save note or expense if provided (or auto-generated by GPS geofence check)
     const finalNote = data.note || autoGeneratedNote;
@@ -516,7 +723,13 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
       }
     }
 
-    res.json({ success: true, log, todaySummary });
+    res.json({
+      success: true,
+      log,
+      todaySummary,
+      ...(shiftStartTime ? { shiftStartTime } : {}),
+      ...(transitResumed ? { transitResumed } : {}),
+    });
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: 'Неверные параметры запроса' });

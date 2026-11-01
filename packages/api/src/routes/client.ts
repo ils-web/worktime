@@ -158,6 +158,7 @@ const createEmployeeSchema = z.object({
   position: z.string().max(120).nullable().optional(),
   isMobile: z.boolean().default(false),
   strictGps: z.boolean().default(false),
+  multiSiteTransit: z.boolean().default(false),
   autoCloseShift: z.boolean().default(false),
   isGlobal: z.boolean().default(false),
   contractMonthlyHours: z.preprocess(
@@ -217,6 +218,7 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
         position: cleanPosition,
         isMobile: data.isMobile,
         strictGps: data.strictGps,
+        multiSiteTransit: data.isMobile ? false : data.multiSiteTransit,
         autoCloseShift: data.autoCloseShift,
         isGlobal: data.isGlobal,
         contractMonthlyHours: data.isGlobal ? (data.contractMonthlyHours ?? null) : null,
@@ -265,6 +267,7 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
       position,
       isMobile,
       strictGps,
+      multiSiteTransit,
       autoCloseShift,
       isGlobal,
       contractMonthlyHours,
@@ -340,6 +343,9 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
         ...(cleanPosition !== undefined ? { position: cleanPosition } : {}),
         ...(isMobile !== undefined ? { isMobile } : {}),
         ...(strictGps !== undefined ? { strictGps } : {}),
+        ...(multiSiteTransit !== undefined
+          ? { multiSiteTransit: isMobile ? false : Boolean(multiSiteTransit) }
+          : {}),
         ...(autoCloseShift !== undefined ? { autoCloseShift } : {}),
         ...(isGlobal !== undefined ? { isGlobal: Boolean(isGlobal) } : {}),
         ...(contractMonthlyHours !== undefined
@@ -1144,6 +1150,10 @@ async function computeClientReportRows(
           } else {
             currentInLog.allLogIds.push(log.id);
           }
+        }
+      } else if (log.action === 'AUTO_PAUSE' || log.action === 'AUTO_RESUME') {
+        if (currentInLog) {
+          currentInLog.allLogIds.push(log.id);
         }
       } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
         if (currentInLog) {

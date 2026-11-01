@@ -48,6 +48,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     customPosition: '',
     isMobile: false,
     strictGps: false,
+    multiSiteTransit: false,
     autoCloseShift: false,
     isGlobal: false,
     contractMonthlyHours: 182,
@@ -67,6 +68,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     customPosition: '',
     isMobile: false,
     strictGps: false,
+    multiSiteTransit: false,
     autoCloseShift: false,
     isGlobal: false,
     contractMonthlyHours: 182,
@@ -113,6 +115,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
         customPosition: '',
         isMobile: false,
         strictGps: false,
+        multiSiteTransit: false,
         autoCloseShift: false,
         isGlobal: false,
         contractMonthlyHours: 182,
@@ -327,6 +330,15 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                           ) : (
                             <Badge variant="slate">{t('admin.standardGps')}</Badge>
                           )}
+                          {emp.multiSiteTransit && !emp.isMobile && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+                              title={t('admin.empMultiSiteTransitDesc')}
+                            >
+                              <Building2 className="w-2.5 h-2.5 text-cyan-400" />
+                              <span>{t('admin.multiSiteTransitBadge')}</span>
+                            </span>
+                          )}
                           {emp.autoCloseShift && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20" title={t('admin.empAutoCloseShift')}>
                               <Clock className="w-2.5 h-2.5" />
@@ -405,6 +417,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                                 customPosition: isPredefinedPos ? '' : existingPos,
                                 isMobile: !!emp.isMobile,
                                 strictGps: !!emp.strictGps,
+                                multiSiteTransit: !!emp.multiSiteTransit,
                                 autoCloseShift: !!emp.autoCloseShift,
                                 isGlobal: !!emp.isGlobal,
                                 contractMonthlyHours: emp.contractMonthlyHours || 182,
@@ -488,6 +501,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
               position: resolvedPosition || null,
               isMobile: form.isMobile,
               strictGps: form.strictGps,
+              multiSiteTransit: form.isMobile ? false : form.multiSiteTransit,
               autoCloseShift: form.autoCloseShift,
               isGlobal: form.isGlobal,
               contractMonthlyHours: form.isGlobal ? Number(form.contractMonthlyHours) || 182 : null,
@@ -583,7 +597,13 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
               <input
                 type="checkbox"
                 checked={form.isMobile}
-                onChange={(e) => setForm({ ...form, isMobile: e.target.checked })}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    isMobile: e.target.checked,
+                    ...(e.target.checked ? { multiSiteTransit: false } : {}),
+                  })
+                }
                 className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500"
               />
               <span className="text-xs text-white">{t('admin.empMobileNoGeo')}</span>
@@ -599,6 +619,33 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
               <span className="text-xs text-white">{t('admin.empStrictMode')}</span>
             </label>
           </div>
+
+          {/* Multi-Site Transit Option (between fixed assigned sites) */}
+          {!form.isMobile && (
+            <label className="flex items-start gap-3 p-3 bg-cyan-950/20 border border-cyan-500/30 hover:border-cyan-500/50 rounded-xl cursor-pointer transition">
+              <input
+                type="checkbox"
+                checked={form.multiSiteTransit}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    multiSiteTransit: e.target.checked,
+                    ...(e.target.checked ? { strictGps: true } : {}),
+                  })
+                }
+                className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 mt-0.5"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs text-white font-semibold flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  {t('admin.empMultiSiteTransit')}
+                </span>
+                <span className="text-[11px] text-slate-400 mt-0.5">
+                  {t('admin.empMultiSiteTransitDesc')}
+                </span>
+              </div>
+            </label>
+          )}
 
           {/* Auto Close Shift Option */}
           <label className="flex items-start gap-3 p-3 bg-slate-950/60 border border-slate-800 hover:border-slate-700 rounded-xl cursor-pointer transition">
@@ -879,6 +926,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                   position: resolvedPosition || null,
                   isMobile: editForm.isMobile,
                   strictGps: editForm.strictGps,
+                  multiSiteTransit: editForm.isMobile ? false : editForm.multiSiteTransit,
                   autoCloseShift: editForm.autoCloseShift,
                   isGlobal: editForm.isGlobal,
                   contractMonthlyHours: editForm.isGlobal
@@ -975,7 +1023,13 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 <input
                   type="checkbox"
                   checked={editForm.isMobile}
-                  onChange={(e) => setEditForm({ ...editForm, isMobile: e.target.checked })}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      isMobile: e.target.checked,
+                      ...(e.target.checked ? { multiSiteTransit: false } : {}),
+                    })
+                  }
                   className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500"
                 />
                 <span className="text-xs text-white">{t('admin.empMobileNoGeo')}</span>
@@ -991,6 +1045,33 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 <span className="text-xs text-white">{t('admin.empStrictMode')}</span>
               </label>
             </div>
+
+            {/* Multi-Site Transit Option (between fixed assigned sites) */}
+            {!editForm.isMobile && (
+              <label className="flex items-start gap-3 p-3 bg-cyan-950/20 border border-cyan-500/30 hover:border-cyan-500/50 rounded-xl cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={editForm.multiSiteTransit}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      multiSiteTransit: e.target.checked,
+                      ...(e.target.checked ? { strictGps: true } : {}),
+                    })
+                  }
+                  className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500 mt-0.5"
+                />
+                <div className="flex flex-col">
+                  <span className="text-xs text-white font-semibold flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    {t('admin.empMultiSiteTransit')}
+                  </span>
+                  <span className="text-[11px] text-slate-400 mt-0.5">
+                    {t('admin.empMultiSiteTransitDesc')}
+                  </span>
+                </div>
+              </label>
+            )}
 
             {/* Auto Close Shift Option */}
             <label className="flex items-start gap-3 p-3 bg-slate-950/60 border border-slate-800 hover:border-slate-700 rounded-xl cursor-pointer transition">
