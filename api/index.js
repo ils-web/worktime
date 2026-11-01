@@ -98147,6 +98147,35 @@ function getArialBoldBytes() {
 }
 
 // packages/api/src/services/pdfReportService.ts
+var BidiMirrorMap = {
+  "(": ")",
+  ")": "(",
+  "[": "]",
+  "]": "[",
+  "{": "}",
+  "}": "{"
+};
+function formatBidiText(text) {
+  if (!text) return "";
+  const trimmed = String(text).trim();
+  if (!trimmed) return "";
+  if (!/[\u0590-\u05FF\u0600-\u06FF]/.test(trimmed)) {
+    return trimmed;
+  }
+  const firstScriptChar = trimmed.match(/[\u0590-\u05FF\u0600-\u06FF]|[A-Za-z\u0400-\u04FF]/);
+  const isFontkitRtl = firstScriptChar ? /[\u0590-\u05FF\u0600-\u06FF]/.test(firstScriptChar[0]) : false;
+  if (isFontkitRtl) {
+    const mirrored = trimmed.replace(/[()[\]{}]/g, (ch) => BidiMirrorMap[ch] || ch);
+    return mirrored.replace(
+      /[A-Za-z0-9\u0400-\u04FF]+(?:[\s.:/_+-]+[A-Za-z0-9\u0400-\u04FF]+)*/g,
+      (ltrRun) => Array.from(ltrRun).reverse().join("")
+    );
+  }
+  return trimmed.replace(
+    /[\u0590-\u05FF]+(?:[\s'"״׳,.:/-]+[\u0590-\u05FF]+)*/g,
+    (rtlRun) => Array.from(rtlRun).reverse().join("")
+  );
+}
 var LOCALES = {
   he: {
     systemTitle: "TimeTracker SaaS",
@@ -98324,8 +98353,8 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
     color: (0, import_pdf_lib.rgb)(0.7, 0.75, 0.85)
   });
   const rightEdge = startX + totalTableWidth - 16;
-  const safeClientName = clientName?.trim() || "";
-  const safePeriodTitle = periodTitle?.trim() || "";
+  const safeClientName = formatBidiText(clientName?.trim() || "");
+  const safePeriodTitle = formatBidiText(periodTitle?.trim() || "");
   if (isRtl) {
     const compLabelW = fontBold.widthOfTextAtSize(t.companyLabel, 10.5);
     const compValW = safeClientName ? fontBold.widthOfTextAtSize(safeClientName, 10.5) : 0;
@@ -98366,8 +98395,9 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
     const col1Width = Math.max(compLabelW + compValW + 12, periodLabelW + periodValW + 12);
     const col2Right = rightEdge - col1Width - 32;
     if (singleEmployeeName) {
+      const safeEmpName = formatBidiText(singleEmployeeName);
       const empLabelW = fontBold.widthOfTextAtSize(t.employeeLabel, 10.5);
-      const empValW = fontBold.widthOfTextAtSize(singleEmployeeName, 10.5);
+      const empValW = fontBold.widthOfTextAtSize(safeEmpName, 10.5);
       page.drawText(t.employeeLabel, {
         x: col2Right - empLabelW,
         y: y + 16,
@@ -98375,7 +98405,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         font: fontBold,
         color: (0, import_pdf_lib.rgb)(1, 1, 1)
       });
-      page.drawText(singleEmployeeName, {
+      page.drawText(safeEmpName, {
         x: col2Right - empLabelW - 6 - empValW,
         y: y + 16,
         size: 10.5,
@@ -98383,7 +98413,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         color: (0, import_pdf_lib.rgb)(0.25, 0.9, 0.55)
         // emerald accent for the worker name
       });
-      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsText = formatBidiText(`${t.shiftsLabel} ${rows.length}`);
       const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
       page.drawText(shiftsText, {
         x: col2Right - shiftsW,
@@ -98393,7 +98423,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         color: (0, import_pdf_lib.rgb)(0.75, 0.8, 0.9)
       });
     } else if (uniqueEmployees.length > 1) {
-      const multiEmpText = `${t.employeeLabel} ${uniqueEmployees.length}`;
+      const multiEmpText = formatBidiText(`${t.employeeLabel} ${uniqueEmployees.length}`);
       const multiEmpW = fontBold.widthOfTextAtSize(multiEmpText, 10.5);
       page.drawText(multiEmpText, {
         x: col2Right - multiEmpW,
@@ -98402,7 +98432,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         font: fontBold,
         color: (0, import_pdf_lib.rgb)(1, 1, 1)
       });
-      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsText = formatBidiText(`${t.shiftsLabel} ${rows.length}`);
       const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
       page.drawText(shiftsText, {
         x: col2Right - shiftsW,
@@ -98413,7 +98443,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
       });
     }
   } else {
-    const compStr = safeClientName ? `${t.companyLabel} ${safeClientName}` : t.companyLabel;
+    const compStr = formatBidiText(safeClientName ? `${t.companyLabel} ${safeClientName}` : t.companyLabel);
     const compW = fontBold.widthOfTextAtSize(compStr, 10.5);
     page.drawText(compStr, {
       x: rightEdge - compW,
@@ -98422,7 +98452,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
       font: fontBold,
       color: (0, import_pdf_lib.rgb)(1, 1, 1)
     });
-    const periodStr = safePeriodTitle ? `${t.periodLabel} ${safePeriodTitle}` : t.periodLabel;
+    const periodStr = formatBidiText(safePeriodTitle ? `${t.periodLabel} ${safePeriodTitle}` : t.periodLabel);
     const periodW = font.widthOfTextAtSize(periodStr, 9);
     page.drawText(periodStr, {
       x: rightEdge - periodW,
@@ -98434,7 +98464,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
     const col1Width = Math.max(compW, periodW);
     const col2Right = rightEdge - col1Width - 32;
     if (singleEmployeeName) {
-      const empStr = `${t.employeeLabel} ${singleEmployeeName}`;
+      const empStr = formatBidiText(`${t.employeeLabel} ${singleEmployeeName}`);
       const empW = fontBold.widthOfTextAtSize(empStr, 10.5);
       page.drawText(empStr, {
         x: col2Right - empW,
@@ -98443,7 +98473,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         font: fontBold,
         color: (0, import_pdf_lib.rgb)(0.25, 0.9, 0.55)
       });
-      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsText = formatBidiText(`${t.shiftsLabel} ${rows.length}`);
       const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
       page.drawText(shiftsText, {
         x: col2Right - shiftsW,
@@ -98453,7 +98483,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         color: (0, import_pdf_lib.rgb)(0.75, 0.8, 0.9)
       });
     } else if (uniqueEmployees.length > 1) {
-      const empsStr = `${t.employeeLabel} ${uniqueEmployees.length}`;
+      const empsStr = formatBidiText(`${t.employeeLabel} ${uniqueEmployees.length}`);
       const empsW = fontBold.widthOfTextAtSize(empsStr, 10.5);
       page.drawText(empsStr, {
         x: col2Right - empsW,
@@ -98462,7 +98492,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         font: fontBold,
         color: (0, import_pdf_lib.rgb)(1, 1, 1)
       });
-      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsText = formatBidiText(`${t.shiftsLabel} ${rows.length}`);
       const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
       page.drawText(shiftsText, {
         x: col2Right - shiftsW,
@@ -98613,7 +98643,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
         height: 17,
         color: (0, import_pdf_lib.rgb)(0.12, 0.16, 0.24)
       });
-      const secTitle = `${t.employeeLabel} ${r.name} (${r.empId})`;
+      const secTitle = formatBidiText(`${t.employeeLabel} ${r.name} (${r.empId})`);
       const secW = fontBold.widthOfTextAtSize(secTitle, 8.5);
       const secX = isRtl ? startX + totalTableWidth - 10 - secW : startX + 10;
       page.drawText(secTitle, {
@@ -98697,7 +98727,8 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
       const activeFont = isBold ? fontBold : font;
       const fontSize = 7.5;
       const maxW = rCol.width - 8;
-      const cellText = truncateToWidth(rawVal, maxW, activeFont, fontSize);
+      const truncated = truncateToWidth(rawVal, maxW, activeFont, fontSize);
+      const cellText = formatBidiText(truncated);
       if (cellText && cellText.trim() !== "") {
         const textW = activeFont.widthOfTextAtSize(cellText, fontSize);
         let textX;
@@ -98722,7 +98753,7 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
   const totalPages = pages.length;
   for (let pIdx = 0; pIdx < totalPages; pIdx++) {
     const curP = pages[pIdx];
-    const footerText = `${t.page} ${pIdx + 1} ${t.of} ${totalPages}`;
+    const footerText = formatBidiText(`${t.page} ${pIdx + 1} ${t.of} ${totalPages}`);
     const fW = font.widthOfTextAtSize(footerText, 7.5);
     curP.drawText(footerText, {
       x: startX + (totalTableWidth - fW) / 2,
@@ -100380,12 +100411,27 @@ workerRouter.post("/log", async (req, res) => {
       where: { empId: data.empId },
       include: {
         client: true,
-        sites: { include: { site: true } }
+        sites: { include: { site: true } },
+        logs: {
+          take: 1,
+          orderBy: { dateTime: "desc" }
+        }
       }
     });
     if (!employee || !employee.client.isActive) {
       res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
       return;
+    }
+    const logDateTime = data.dateTime ? new Date(data.dateTime) : /* @__PURE__ */ new Date();
+    const lastLog = employee.logs[0];
+    if (lastLog) {
+      const diffMs = Math.abs(logDateTime.getTime() - new Date(lastLog.dateTime).getTime());
+      const isDuplicateClockIn = data.action === "CLOCK_IN" && lastLog.action === "CLOCK_IN" && diffMs < 5 * 60 * 1e3;
+      const isDuplicateClockOut = (data.action === "CLOCK_OUT" || data.action === "AUTO_EXIT") && (lastLog.action === "CLOCK_OUT" || lastLog.action === "AUTO_EXIT") && diffMs < 5 * 60 * 1e3;
+      if (isDuplicateClockIn || isDuplicateClockOut) {
+        res.json({ success: true, log: lastLog, deduplicated: true });
+        return;
+      }
     }
     let autoGeneratedNote = null;
     if (!employee.isMobile) {
@@ -100463,7 +100509,6 @@ workerRouter.post("/log", async (req, res) => {
         }
       }
     }
-    const logDateTime = data.dateTime ? new Date(data.dateTime) : /* @__PURE__ */ new Date();
     const log = await prisma.timeLog.create({
       data: {
         empId: employee.empId,

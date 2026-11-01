@@ -310,12 +310,34 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
       include: {
         client: true,
         sites: { include: { site: true } },
+        logs: {
+          take: 1,
+          orderBy: { dateTime: 'desc' },
+        },
       },
     });
 
     if (!employee || !employee.client.isActive) {
       res.status(404).json({ error: 'Сотрудник не найден' });
       return;
+    }
+
+    const logDateTime = data.dateTime ? new Date(data.dateTime) : new Date();
+    const lastLog = employee.logs[0];
+
+    // Deduplicate rapid accidental/repeated same-state actions within 5 minutes
+    if (lastLog) {
+      const diffMs = Math.abs(logDateTime.getTime() - new Date(lastLog.dateTime).getTime());
+      const isDuplicateClockIn = data.action === 'CLOCK_IN' && lastLog.action === 'CLOCK_IN' && diffMs < 5 * 60 * 1000;
+      const isDuplicateClockOut =
+        (data.action === 'CLOCK_OUT' || data.action === 'AUTO_EXIT') &&
+        (lastLog.action === 'CLOCK_OUT' || lastLog.action === 'AUTO_EXIT') &&
+        diffMs < 5 * 60 * 1000;
+
+      if (isDuplicateClockIn || isDuplicateClockOut) {
+        res.json({ success: true, log: lastLog, deduplicated: true });
+        return;
+      }
     }
 
     // Geofence check if not mobile worker
@@ -414,8 +436,6 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
         }
       }
     }
-
-    const logDateTime = data.dateTime ? new Date(data.dateTime) : new Date();
 
     const log = await prisma.timeLog.create({
       data: {

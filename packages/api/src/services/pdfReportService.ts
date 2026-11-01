@@ -4,15 +4,62 @@ import { ReportRow } from './csvReportService';
 import { getArialRegularBytes, getArialBoldBytes } from './fontAssets';
 import { formatIsoToDisplayDate, getDayOfWeek, localizeSystemNote } from '@timetracker/shared';
 
+const BidiMirrorMap: Record<string, string> = {
+  '(': ')',
+  ')': '(',
+  '[': ']',
+  ']': '[',
+  '{': '}',
+  '}': '{',
+};
+
 /**
- * Normalizes text for PDF rendering with Arial Unicode font.
- * Fontkit handles OpenType glyph layout and bidirectional Hebrew script natively.
- * Text is preserved in its natural logical order so Hebrew words are read naturally RTL
- * and numbers/dates remain strictly LTR.
+ * Normalizes bidirectional text for PDF rendering with Arial Unicode font & @pdf-lib/fontkit.
+ *
+ * How fontkit shapes bidirectional strings:
+ * - When the first script letter in a string is Hebrew/Arabic (`[\u0590-\u05FF\u0600-\u06FF]`),
+ *   fontkit sets `plan.direction = 'rtl'` for the ENTIRE string and reverses the full glyph array
+ *   at the end of shaping (`glyphs.reverse()`). Without pre-reversing embedded LTR runs
+ *   (English words, Latin IDs, numbers, times) and mirroring parentheses, fontkit reverses
+ *   `"NaotHaTichon"` into `"nohciTaHtoaN"`, `GPS` into `SPG`, and `4638` into `8364`.
+ * - When the first script letter is Latin/Cyrillic (`[A-Za-z\u0400-\u04FF]`), fontkit keeps
+ *   `plan.direction = 'ltr'` for the entire string, so any embedded Hebrew phrases must have
+ *   their Hebrew words reversed into visual order.
  */
 export function formatBidiText(text: string | null | undefined): string {
   if (!text) return '';
-  return String(text).trim();
+  const trimmed = String(text).trim();
+  if (!trimmed) return '';
+
+  // Pure LTR text (no Hebrew or Arabic characters): return as-is
+  if (!/[\u0590-\u05FF\u0600-\u06FF]/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const firstScriptChar = trimmed.match(/[\u0590-\u05FF\u0600-\u06FF]|[A-Za-z\u0400-\u04FF]/);
+  const isFontkitRtl = firstScriptChar
+    ? /[\u0590-\u05FF\u0600-\u06FF]/.test(firstScriptChar[0]!)
+    : false;
+
+  if (isFontkitRtl) {
+    // Fontkit will reverse the entire string at the end of layout().
+    // 1. Mirror brackets/parentheses so they point inwards after fontkit reverses the string.
+    const mirrored = trimmed.replace(/[()[\]{}]/g, (ch) => BidiMirrorMap[ch] || ch);
+    // 2. Pre-reverse contiguous LTR runs (Latin, Cyrillic, digits, and internal separators)
+    //    so that after fontkit reverses the full string, all English/Russian words and numbers
+    //    are rendered left-to-right.
+    return mirrored.replace(
+      /[A-Za-z0-9\u0400-\u04FF]+(?:[\s.:/_+-]+[A-Za-z0-9\u0400-\u04FF]+)*/g,
+      (ltrRun) => Array.from(ltrRun).reverse().join('')
+    );
+  }
+
+  // Fontkit will NOT reverse the string because the first letter is Latin/Cyrillic.
+  // Reverse embedded Hebrew runs so they read right-to-left visually.
+  return trimmed.replace(
+    /[\u0590-\u05FF]+(?:[\s'"״׳,.:/-]+[\u0590-\u05FF]+)*/g,
+    (rtlRun) => Array.from(rtlRun).reverse().join('')
+  );
 }
 
 /**
@@ -275,8 +322,8 @@ export async function generatePdfReport(
 
   // Company, Period, and Employee info on right/center
   const rightEdge = startX + totalTableWidth - 16;
-  const safeClientName = clientName?.trim() || '';
-  const safePeriodTitle = periodTitle?.trim() || '';
+  const safeClientName = formatBidiText(clientName?.trim() || '');
+  const safePeriodTitle = formatBidiText(periodTitle?.trim() || '');
 
   if (isRtl) {
     // In RTL:
@@ -324,8 +371,9 @@ export async function generatePdfReport(
     const col2Right = rightEdge - col1Width - 32;
 
     if (singleEmployeeName) {
+      const safeEmpName = formatBidiText(singleEmployeeName);
       const empLabelW = fontBold.widthOfTextAtSize(t.employeeLabel, 10.5);
-      const empValW = fontBold.widthOfTextAtSize(singleEmployeeName, 10.5);
+      const empValW = fontBold.widthOfTextAtSize(safeEmpName, 10.5);
       page.drawText(t.employeeLabel, {
         x: col2Right - empLabelW,
         y: y + 16,
@@ -333,7 +381,7 @@ export async function generatePdfReport(
         font: fontBold,
         color: rgb(1, 1, 1),
       });
-      page.drawText(singleEmployeeName, {
+      page.drawText(safeEmpName, {
         x: col2Right - empLabelW - 6 - empValW,
         y: y + 16,
         size: 10.5,
@@ -341,7 +389,7 @@ export async function generatePdfReport(
         color: rgb(0.25, 0.9, 0.55), // emerald accent for the worker name
       });
 
-      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsText = formatBidiText(`${t.shiftsLabel} ${rows.length}`);
       const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
       page.drawText(shiftsText, {
         x: col2Right - shiftsW,
@@ -351,7 +399,7 @@ export async function generatePdfReport(
         color: rgb(0.75, 0.8, 0.9),
       });
     } else if (uniqueEmployees.length > 1) {
-      const multiEmpText = `${t.employeeLabel} ${uniqueEmployees.length}`;
+      const multiEmpText = formatBidiText(`${t.employeeLabel} ${uniqueEmployees.length}`);
       const multiEmpW = fontBold.widthOfTextAtSize(multiEmpText, 10.5);
       page.drawText(multiEmpText, {
         x: col2Right - multiEmpW,
@@ -361,7 +409,7 @@ export async function generatePdfReport(
         color: rgb(1, 1, 1),
       });
 
-      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsText = formatBidiText(`${t.shiftsLabel} ${rows.length}`);
       const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
       page.drawText(shiftsText, {
         x: col2Right - shiftsW,
@@ -373,7 +421,7 @@ export async function generatePdfReport(
     }
   } else {
     // In LTR:
-    const compStr = safeClientName ? `${t.companyLabel} ${safeClientName}` : t.companyLabel;
+    const compStr = formatBidiText(safeClientName ? `${t.companyLabel} ${safeClientName}` : t.companyLabel);
     const compW = fontBold.widthOfTextAtSize(compStr, 10.5);
     page.drawText(compStr, {
       x: rightEdge - compW,
@@ -383,7 +431,7 @@ export async function generatePdfReport(
       color: rgb(1, 1, 1),
     });
 
-    const periodStr = safePeriodTitle ? `${t.periodLabel} ${safePeriodTitle}` : t.periodLabel;
+    const periodStr = formatBidiText(safePeriodTitle ? `${t.periodLabel} ${safePeriodTitle}` : t.periodLabel);
     const periodW = font.widthOfTextAtSize(periodStr, 9);
     page.drawText(periodStr, {
       x: rightEdge - periodW,
@@ -397,7 +445,7 @@ export async function generatePdfReport(
     const col2Right = rightEdge - col1Width - 32;
 
     if (singleEmployeeName) {
-      const empStr = `${t.employeeLabel} ${singleEmployeeName}`;
+      const empStr = formatBidiText(`${t.employeeLabel} ${singleEmployeeName}`);
       const empW = fontBold.widthOfTextAtSize(empStr, 10.5);
       page.drawText(empStr, {
         x: col2Right - empW,
@@ -407,7 +455,7 @@ export async function generatePdfReport(
         color: rgb(0.25, 0.9, 0.55),
       });
 
-      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsText = formatBidiText(`${t.shiftsLabel} ${rows.length}`);
       const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
       page.drawText(shiftsText, {
         x: col2Right - shiftsW,
@@ -417,7 +465,7 @@ export async function generatePdfReport(
         color: rgb(0.75, 0.8, 0.9),
       });
     } else if (uniqueEmployees.length > 1) {
-      const empsStr = `${t.employeeLabel} ${uniqueEmployees.length}`;
+      const empsStr = formatBidiText(`${t.employeeLabel} ${uniqueEmployees.length}`);
       const empsW = fontBold.widthOfTextAtSize(empsStr, 10.5);
       page.drawText(empsStr, {
         x: col2Right - empsW,
@@ -427,7 +475,7 @@ export async function generatePdfReport(
         color: rgb(1, 1, 1),
       });
 
-      const shiftsText = `${t.shiftsLabel} ${rows.length}`;
+      const shiftsText = formatBidiText(`${t.shiftsLabel} ${rows.length}`);
       const shiftsW = font.widthOfTextAtSize(shiftsText, 9);
       page.drawText(shiftsText, {
         x: col2Right - shiftsW,
@@ -607,7 +655,7 @@ export async function generatePdfReport(
         color: rgb(0.12, 0.16, 0.24),
       });
 
-      const secTitle = `${t.employeeLabel} ${r.name} (${r.empId})`;
+      const secTitle = formatBidiText(`${t.employeeLabel} ${r.name} (${r.empId})`);
       const secW = fontBold.widthOfTextAtSize(secTitle, 8.5);
       const secX = isRtl ? startX + totalTableWidth - 10 - secW : startX + 10;
       page.drawText(secTitle, {
@@ -701,7 +749,8 @@ export async function generatePdfReport(
       const activeFont = isBold ? fontBold : font;
       const fontSize = 7.5;
       const maxW = rCol.width - 8;
-      const cellText = truncateToWidth(rawVal, maxW, activeFont, fontSize);
+      const truncated = truncateToWidth(rawVal, maxW, activeFont, fontSize);
+      const cellText = formatBidiText(truncated);
 
       if (cellText && cellText.trim() !== '') {
         const textW = activeFont.widthOfTextAtSize(cellText, fontSize);
@@ -732,7 +781,7 @@ export async function generatePdfReport(
   const totalPages = pages.length;
   for (let pIdx = 0; pIdx < totalPages; pIdx++) {
     const curP = pages[pIdx]!;
-    const footerText = `${t.page} ${pIdx + 1} ${t.of} ${totalPages}`;
+    const footerText = formatBidiText(`${t.page} ${pIdx + 1} ${t.of} ${totalPages}`);
     const fW = font.widthOfTextAtSize(footerText, 7.5);
 
     curP.drawText(footerText, {

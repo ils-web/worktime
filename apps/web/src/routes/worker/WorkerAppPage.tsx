@@ -18,6 +18,8 @@ import {
   Calendar,
   Smartphone,
   Share2,
+  ChevronsRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { api } from '../../lib/api';
@@ -96,6 +98,141 @@ interface DailyReportRow {
   isManual?: boolean;
 }
 
+interface SlideToConfirmProps {
+  label: string;
+  hintText: string;
+  variant: 'emerald' | 'rose';
+  disabled?: boolean;
+  isLoading?: boolean;
+  onConfirm: () => void;
+}
+
+function SlideToConfirm({
+  label,
+  hintText,
+  variant,
+  disabled = false,
+  isLoading = false,
+  onConfirm,
+}: SlideToConfirmProps) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startTimeRef = useRef(0);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isNudging, setIsNudging] = useState(false);
+
+  const getMaxDrag = () => {
+    const trackWidth = trackRef.current?.clientWidth || 260;
+    return Math.max(100, trackWidth - 60);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled || isLoading || e.isPrimary === false) return;
+    isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+    startTimeRef.current = Date.now();
+    setIsDragging(true);
+    setIsNudging(false);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || disabled || isLoading) return;
+    const maxDrag = getMaxDrag();
+    const delta = Math.max(0, Math.min(maxDrag, e.clientX - startXRef.current));
+    setDragX(delta);
+  };
+
+  const handlePointerUpOrCancel = () => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    setIsDragging(false);
+
+    const maxDrag = getMaxDrag();
+    const durationMs = Date.now() - startTimeRef.current;
+
+    if (dragX >= maxDrag * 0.75 && durationMs >= 60) {
+      setDragX(maxDrag);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(60);
+      }
+      onConfirm();
+      setTimeout(() => setDragX(0), 600);
+    } else {
+      const wasQuickTap = dragX < 25;
+      setDragX(0);
+      if (wasQuickTap) {
+        setIsNudging(true);
+        setTimeout(() => setIsNudging(false), 450);
+      }
+    }
+  };
+
+  const maxDrag = getMaxDrag();
+  const progress = Math.min(1, dragX / maxDrag);
+  const isEmerald = variant === 'emerald';
+
+  return (
+    <div className="space-y-1.5 select-none" dir="ltr">
+      <div
+        ref={trackRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUpOrCancel}
+        onPointerCancel={handlePointerUpOrCancel}
+        className={`relative w-full h-[60px] rounded-2xl p-1 flex items-center overflow-hidden touch-none cursor-pointer border transition-colors ${
+          isEmerald
+            ? 'bg-emerald-950/80 border-emerald-500/40 shadow-inner'
+            : 'bg-rose-950/80 border-rose-500/40 shadow-inner'
+        } ${disabled || isLoading ? 'opacity-60 pointer-events-none' : ''}`}
+      >
+        {/* Progress fill */}
+        <div
+          className={`absolute inset-y-0 left-0 rounded-2xl pointer-events-none ${
+            isEmerald ? 'bg-emerald-500/25' : 'bg-rose-500/25'
+          } ${isDragging ? '' : 'transition-all duration-200'}`}
+          style={{ width: `${Math.max(60, dragX + 56)}px` }}
+        />
+
+        {/* Center label */}
+        <div
+          className="w-full text-center pl-12 pr-4 font-extrabold text-xs sm:text-sm tracking-wide pointer-events-none transition-opacity"
+          style={{ opacity: Math.max(0.15, 1 - progress * 1.15) }}
+        >
+          <span className={isEmerald ? 'text-emerald-200' : 'text-rose-200'}>{label}</span>
+        </div>
+
+        {/* Draggable thumb */}
+        <div
+          className={`w-[52px] h-[52px] rounded-xl flex items-center justify-center shadow-lg shrink-0 z-10 ${
+            isEmerald
+              ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-slate-950 shadow-emerald-500/30'
+              : 'bg-gradient-to-br from-rose-500 to-rose-700 text-white shadow-rose-500/30'
+          } ${isDragging ? '' : 'transition-transform duration-200'}`}
+          style={{
+            transform: `translateX(${isNudging ? 18 : dragX}px)`,
+          }}
+        >
+          {isLoading ? (
+            <RefreshCw className="w-5 h-5 animate-spin" />
+          ) : (
+            <ChevronsRight className="w-6 h-6 stroke-[2.5]" />
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center gap-1 text-[11px] text-slate-400">
+        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+        <span>{hintText}</span>
+      </div>
+    </div>
+  );
+}
+
 export function WorkerAppPage() {
   const { empId } = useParams<{ empId: string }>();
   const { t, i18n } = useTranslation();
@@ -149,7 +286,8 @@ export function WorkerAppPage() {
   const [showInstallGuideModal, setShowInstallGuideModal] = useState(false);
   const [isInstallBannerDismissed, setIsInstallBannerDismissed] = useState(false);
 
-  // Clock Out Accidental Protection & Shift Completion Modal
+  // Clock In & Clock Out Accidental Pocket Protection & Shift Completion Modal
+  const [showClockInConfirm, setShowClockInConfirm] = useState(false);
   const [showClockOutConfirm, setShowClockOutConfirm] = useState(false);
   const [showShiftCompleteModal, setShowShiftCompleteModal] = useState(false);
   const [scheduledEndTime, setScheduledEndTime] = useState<string | null>(null);
@@ -160,6 +298,18 @@ export function WorkerAppPage() {
     minutes: number;
     text: string;
   } | null>(null);
+
+  // Auto-dismiss confirmation modals after 15 seconds of inactivity (anti-pocket safety)
+  useEffect(() => {
+    if (!showClockInConfirm && !showClockOutConfirm) return;
+    const timer = setTimeout(() => {
+      if (!isSubmittingAction) {
+        setShowClockInConfirm(false);
+        setShowClockOutConfirm(false);
+      }
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [showClockInConfirm, showClockOutConfirm, isSubmittingAction]);
 
   const playAlertChime = useCallback(() => {
     try {
@@ -454,21 +604,6 @@ export function WorkerAppPage() {
   const outOfZoneCountRef = useRef(0);
   const lastVisibilityResumeRef = useRef<number>(Date.now());
 
-  // Screen Wake Lock while on shift with strict GPS enabled to keep GPS updates active
-  useEffect(() => {
-    let wakeLock: any = null;
-    if (status.isOnShift && profile?.strictGps && !profile.isMobile && typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
-      (navigator as any).wakeLock?.request('screen').then((lock: any) => {
-        wakeLock = lock;
-      }).catch(() => {});
-    }
-    return () => {
-      if (wakeLock) {
-        wakeLock.release().catch(() => {});
-      }
-    };
-  }, [status.isOnShift, profile?.strictGps, profile?.isMobile]);
-
   // 7. Clock In / Out Action Handlers
   const handleClockAction = async (
     action: 'CLOCK_IN' | 'CLOCK_OUT' | 'AUTO_EXIT',
@@ -577,7 +712,9 @@ export function WorkerAppPage() {
         lastActionTime: actionTime,
       });
 
-      if (action === 'CLOCK_OUT') {
+      if (action === 'CLOCK_IN') {
+        setShowClockInConfirm(false);
+      } else if (action === 'CLOCK_OUT') {
         const msg = formatWorkedMessage(fallbackH, fallbackM, i18n.language);
         setCompletedShiftSummary({ hours: fallbackH, minutes: fallbackM, text: msg });
         setShowClockOutConfirm(false);
@@ -612,6 +749,7 @@ export function WorkerAppPage() {
         refreshLocation();
 
         if (action === 'CLOCK_IN') {
+          setShowClockInConfirm(false);
           fetchProfile();
         } else if (action === 'CLOCK_OUT') {
           const h = res.todaySummary?.hours ?? fallbackH;
@@ -648,7 +786,9 @@ export function WorkerAppPage() {
           lastActionTime: actionTime,
         });
 
-        if (action === 'CLOCK_OUT') {
+        if (action === 'CLOCK_IN') {
+          setShowClockInConfirm(false);
+        } else if (action === 'CLOCK_OUT') {
           const msg = formatWorkedMessage(fallbackH, fallbackM, i18n.language);
           setCompletedShiftSummary({ hours: fallbackH, minutes: fallbackM, text: msg });
           setShowClockOutConfirm(false);
@@ -1171,9 +1311,9 @@ export function WorkerAppPage() {
             {/* Giant Tactile Clock In / Out Buttons */}
             <div className="space-y-4 my-auto">
               {!status.isOnShift ? (
-                /* CLOCK IN BUTTON */
+                /* CLOCK IN BUTTON with POCKET PROTECTION */
                 <button
-                  onClick={() => handleClockAction('CLOCK_IN')}
+                  onClick={() => setShowClockInConfirm(true)}
                   disabled={isSubmittingAction}
                   className="w-full h-36 bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 active:scale-[0.98] text-white font-black text-3xl rounded-3xl shadow-2xl shadow-emerald-950/60 flex flex-col items-center justify-center transition border-t border-emerald-400/30 group"
                 >
@@ -1494,6 +1634,65 @@ export function WorkerAppPage() {
         </div>
       </Modal>
 
+      {/* 1.5 Modal: Protection against accidental Clock In */}
+      <Modal
+        isOpen={showClockInConfirm}
+        onClose={() => setShowClockInConfirm(false)}
+        title={t('worker.confirmClockInTitle')}
+      >
+        <div className="py-2 text-center space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 mx-auto flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/10">
+            <Clock className="w-8 h-8" />
+          </div>
+
+          <div>
+            <h4 className="text-base font-bold text-white mb-1">
+              {t('worker.confirmClockInTitle')}
+            </h4>
+            <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              {t('worker.confirmClockInDesc')}
+            </p>
+          </div>
+
+          {/* Current Location / Geofence Status in Confirmation */}
+          <div className="p-3 bg-slate-800/80 rounded-2xl border border-slate-700 flex items-center justify-between text-left">
+            <div className="flex items-center gap-2 min-w-0">
+              <MapPin
+                className={`w-4 h-4 shrink-0 ${
+                  profile.isMobile || geofenceEval?.isInside ? 'text-emerald-400' : 'text-amber-400'
+                }`}
+              />
+              <span className="text-xs font-semibold text-slate-200 truncate">
+                {profile.isMobile
+                  ? t('worker.mobileWorker')
+                  : geofenceEval?.targetName || t('worker.gpsActive')}
+              </span>
+            </div>
+            <span className="text-xs font-mono font-bold text-emerald-400 shrink-0 ml-2">
+              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+
+          <div className="pt-1">
+            <SlideToConfirm
+              label={t('worker.slideToClockIn')}
+              hintText={t('worker.pocketProtectionHint')}
+              variant="emerald"
+              disabled={isSubmittingAction}
+              isLoading={isSubmittingAction}
+              onConfirm={() => handleClockAction('CLOCK_IN')}
+            />
+          </div>
+
+          <button
+            onClick={() => setShowClockInConfirm(false)}
+            className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition active:scale-95"
+          >
+            {t('worker.cancel')}
+          </button>
+        </div>
+      </Modal>
+
       {/* 2. Modal: Protection against accidental Clock Out */}
       <Modal
         isOpen={showClockOutConfirm}
@@ -1539,26 +1738,23 @@ export function WorkerAppPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <button
-              onClick={() => setShowClockOutConfirm(false)}
-              className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition active:scale-95"
-            >
-              {t('worker.cancel')}
-            </button>
-            <button
-              onClick={() => handleClockAction('CLOCK_OUT')}
+          <div className="pt-1">
+            <SlideToConfirm
+              label={t('worker.slideToClockOut')}
+              hintText={t('worker.pocketProtectionHint')}
+              variant="rose"
               disabled={isSubmittingAction}
-              className="py-3 px-4 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-1.5"
-            >
-              {isSubmittingAction ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              )}
-              <span>{t('worker.confirmClockOutBtn')}</span>
-            </button>
+              isLoading={isSubmittingAction}
+              onConfirm={() => handleClockAction('CLOCK_OUT')}
+            />
           </div>
+
+          <button
+            onClick={() => setShowClockOutConfirm(false)}
+            className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition active:scale-95"
+          >
+            {t('worker.cancel')}
+          </button>
         </div>
       </Modal>
 

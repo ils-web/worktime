@@ -22,9 +22,17 @@ describe('PDF Report Service', () => {
     expect(formatBidiText('2026-10-04')).toBe('2026-10-04');
     expect(formatBidiText('19:10')).toBe('19:10');
 
-    // Hebrew with numbers preserves numbers
+    // Hebrew with embedded numbers/English/parentheses pre-reverses LTR runs and mirrors brackets
+    // so that when fontkit reverses the RTL run, numbers and English words appear in natural LTR order
     const mixed = formatBidiText('עובד 123');
-    expect(mixed).toContain('123');
+    expect(mixed).toBe('עובד 321');
+
+    const complexNote = formatBidiText('עזב את האתר "NaotHaTichon" (GPS קפדני, 4638 מ\')');
+    expect(complexNote).toContain('"nohciTaHtoaN"');
+    expect(complexNote).toContain(')SPG קפדני, 8364 מ\'(');
+
+    const shiftsHeader = formatBidiText('משמרות: 16');
+    expect(shiftsHeader).toBe('משמרות: 61');
   });
 
   it('generates a valid PDF with Hebrew RTL layout and Gross, Lunch, Net hours', async () => {
