@@ -30,6 +30,23 @@ export function calculateHaversineDistance(
 }
 
 /**
+ * Estimates realistic normative travel time in minutes between two locations in Israel.
+ * Takes straight-line distance, applies road curvature factor (1.3),
+ * assumes average travel speed of 45 km/h, and adds 5 minutes for traffic/parking/access.
+ */
+export function estimateNormativeTransitMinutes(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const distMeters = calculateHaversineDistance(lat1, lon1, lat2, lon2);
+  const distKm = distMeters / 1000;
+  const estimatedMin = Math.round(((distKm * 1.3) / 45) * 60) + 5;
+  return Math.max(5, estimatedMin);
+}
+
+/**
  * Checks if coordinates are within geofence radius.
  */
 export function checkGeofence(

@@ -75,6 +75,7 @@ interface WorkerStatus {
   isOnShift: boolean;
   lastAction: string | null;
   lastActionTime: string | null;
+  activeSiteName?: string | null;
   lastExitedSiteName?: string | null;
   scheduledEndTime?: string | null;
   scheduledShiftType?: string | null;
@@ -762,7 +763,14 @@ export function WorkerAppPage() {
           isOnShift: action === 'CLOCK_IN',
           lastAction: res.log?.action || action,
           lastActionTime: res.shiftStartTime || res.log.dateTime,
-          ...(action === 'CLOCK_IN' ? { lastExitedSiteName: null } : {}),
+          ...(action === 'CLOCK_IN'
+            ? {
+                lastExitedSiteName: null,
+                activeSiteName: res.transitResumed?.toSite || activeEval?.targetName || prev.activeSiteName,
+              }
+            : {
+                activeSiteName: null,
+              }),
         }));
         refreshLocation();
 
@@ -882,7 +890,34 @@ export function WorkerAppPage() {
     t,
   ]);
 
-  // Multi-Site Transit: Automatic timer restart upon GPS arrival at another assigned site
+  // Multi-Site Transit (Option B): Automatic timer restart upon GPS arrival at another assigned site
+  // 1. Direct site change while shift is running (phone was asleep in pocket during drive)
+  useEffect(() => {
+    if (
+      !profile?.multiSiteTransit ||
+      profile.isMobile ||
+      !status.isOnShift ||
+      !status.activeSiteName ||
+      !geofenceEval?.isInside ||
+      !geofenceEval.targetName ||
+      geofenceEval.targetName === status.activeSiteName ||
+      isSubmittingAction
+    ) {
+      return;
+    }
+
+    handleClockAction('CLOCK_IN');
+  }, [
+    profile?.multiSiteTransit,
+    profile?.isMobile,
+    status.isOnShift,
+    status.activeSiteName,
+    geofenceEval?.isInside,
+    geofenceEval?.targetName,
+    isSubmittingAction,
+  ]);
+
+  // 2. Automatic timer restart upon arrival after exit/pause from previous site
   useEffect(() => {
     if (
       !profile?.multiSiteTransit ||

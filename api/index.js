@@ -96847,6 +96847,12 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(EARTH_RADIUS_METERS * c * 100) / 100;
 }
+function estimateNormativeTransitMinutes(lat1, lon1, lat2, lon2) {
+  const distMeters = calculateHaversineDistance(lat1, lon1, lat2, lon2);
+  const distKm = distMeters / 1e3;
+  const estimatedMin = Math.round(distKm * 1.3 / 45 * 60) + 5;
+  return Math.max(5, estimatedMin);
+}
 function checkGeofence(workerLat, workerLng, fenceLat, fenceLng, radiusMeters) {
   const distanceMeters = calculateHaversineDistance(workerLat, workerLng, fenceLat, fenceLng);
   return {
@@ -100451,6 +100457,17 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         lastExitedSiteName = fromPrevCoords.insideSite?.siteName || fromPrevCoords.closestSite?.siteName || fromExitCoords.closestSite?.siteName || null;
       }
     }
+    let activeSiteName = null;
+    if (isOnShift) {
+      const allowedGeofences = buildAllowedGeofences(employee);
+      const lastActiveLog = employee.logs.find(
+        (l) => l.action === "CLOCK_IN" || l.action === "AUTO_RESUME"
+      );
+      if (lastActiveLog?.lat && lastActiveLog?.lng) {
+        const m = matchSiteByCoords(lastActiveLog.lat, lastActiveLog.lng, allowedGeofences);
+        activeSiteName = m.insideSite?.siteName || m.closestSite?.siteName || null;
+      }
+    }
     const sitesList = employee.sites.map((es) => es.site);
     let globalMonthlyStatus = null;
     if (employee.isGlobal && (employee.contractMonthlyHours ?? 0) > 0) {
@@ -100495,6 +100512,7 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         isOnShift,
         lastAction: lastLog?.action ?? null,
         lastActionTime: activeClockInTime ?? lastLog?.dateTime ?? null,
+        activeSiteName,
         scheduledEndTime: scheduledEndTimeStr,
         scheduledShiftType,
         autoClosedDueToShiftEnd,
@@ -100598,7 +100616,12 @@ workerRouter.post("/log", async (req, res) => {
               const fromExitCoords = matchSiteByCoords(lastLog.lat, lastLog.lng, allowedGeofences);
               const prevSiteName = fromPrevCoords.insideSite?.siteName || fromPrevCoords.closestSite?.siteName || fromExitCoords.closestSite?.siteName || null;
               if (prevSiteName && prevSiteName !== insideSite.siteName) {
-                const transitMinutes = Math.max(1, Math.round(transitMs / 6e4));
+                const prevLat = fromPrevCoords.closestSite?.lat || lastLog.lat;
+                const prevLng = fromPrevCoords.closestSite?.lng || lastLog.lng;
+                const normativeMinutes = prevLat && prevLng && insideSite.lat && insideSite.lng ? estimateNormativeTransitMinutes(prevLat, prevLng, insideSite.lat, insideSite.lng) : 20;
+                const maxAllowedTransitMinutes = Math.round(normativeMinutes * 1.4);
+                const rawTransitMinutes = Math.max(1, Math.round(transitMs / 6e4));
+                const transitMinutes = Math.min(rawTransitMinutes, maxAllowedTransitMinutes);
                 await prisma.timeLog.update({
                   where: { id: lastLog.id },
                   data: { action: "AUTO_PAUSE" }
@@ -100610,6 +100633,56 @@ workerRouter.post("/log", async (req, res) => {
                   toSite: insideSite.siteName
                 };
                 for (let i = 1; i < employee.logs.length; i++) {
+                  const l = employee.logs[i];
+                  if (l.action === "CLOCK_IN") {
+                    shiftStartTime = l.dateTime;
+                  } else if (l.action === "AUTO_RESUME" || l.action === "AUTO_PAUSE") {
+                    continue;
+                  } else {
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          if ((data.action === "CLOCK_IN" || data.action === "AUTO_RESUME") && employee.multiSiteTransit && insideSite && lastLog && (lastLog.action === "CLOCK_IN" || lastLog.action === "AUTO_RESUME")) {
+            const logDateStr = getJerusalemParts(logDateTime).dateStr;
+            const lastLogDateStr = getJerusalemParts(lastLog.dateTime).dateStr;
+            if (logDateStr === lastLogDateStr) {
+              const fromPrevCoords = matchSiteByCoords(
+                lastLog.lat,
+                lastLog.lng,
+                allowedGeofences
+              );
+              const prevSiteName = fromPrevCoords.insideSite?.siteName || fromPrevCoords.closestSite?.siteName || null;
+              if (prevSiteName && prevSiteName !== insideSite.siteName) {
+                const prevLat = fromPrevCoords.closestSite?.lat || lastLog.lat;
+                const prevLng = fromPrevCoords.closestSite?.lng || lastLog.lng;
+                const normativeMinutes = prevLat && prevLng && insideSite.lat && insideSite.lng ? estimateNormativeTransitMinutes(prevLat, prevLng, insideSite.lat, insideSite.lng) : 20;
+                const lastActiveTime = new Date(lastLog.dateTime).getTime();
+                const transitMs = normativeMinutes * 60 * 1e3;
+                const departDateTime = new Date(
+                  Math.max(lastActiveTime + 6e4, logDateTime.getTime() - transitMs)
+                );
+                const transitMinutes = Math.max(1, Math.round((logDateTime.getTime() - departDateTime.getTime()) / 6e4));
+                await prisma.timeLog.create({
+                  data: {
+                    empId: employee.empId,
+                    employeeId: employee.id,
+                    clientId: employee.clientId,
+                    action: "AUTO_PAUSE",
+                    lat: prevLat,
+                    lng: prevLng,
+                    dateTime: departDateTime
+                  }
+                });
+                effectiveAction = "AUTO_RESUME";
+                transitResumed = {
+                  transitMinutes,
+                  fromSite: prevSiteName,
+                  toSite: insideSite.siteName
+                };
+                for (let i = 0; i < employee.logs.length; i++) {
                   const l = employee.logs[i];
                   if (l.action === "CLOCK_IN") {
                     shiftStartTime = l.dateTime;

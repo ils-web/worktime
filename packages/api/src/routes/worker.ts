@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { prisma } from '@timetracker/db';
 import {
   checkGeofence,
+  calculateHaversineDistance,
+  estimateNormativeTransitMinutes,
   calculateDailyHours,
   getJerusalemParts,
   WorkSession,
@@ -352,6 +354,18 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
       }
     }
 
+    let activeSiteName: string | null = null;
+    if (isOnShift) {
+      const allowedGeofences = buildAllowedGeofences(employee);
+      const lastActiveLog = employee.logs.find(
+        (l) => l.action === 'CLOCK_IN' || l.action === 'AUTO_RESUME'
+      );
+      if (lastActiveLog?.lat && lastActiveLog?.lng) {
+        const m = matchSiteByCoords(lastActiveLog.lat, lastActiveLog.lng, allowedGeofences);
+        activeSiteName = m.insideSite?.siteName || m.closestSite?.siteName || null;
+      }
+    }
+
     const sitesList = employee.sites.map((es) => es.site);
 
     let globalMonthlyStatus: GlobalMonthlyEvaluation | null = null;
@@ -398,6 +412,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         isOnShift,
         lastAction: lastLog?.action ?? null,
         lastActionTime: activeClockInTime ?? lastLog?.dateTime ?? null,
+        activeSiteName,
         scheduledEndTime: scheduledEndTimeStr,
         scheduledShiftType,
         autoClosedDueToShiftEnd,
@@ -526,9 +541,10 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
             return;
           }
 
-          // Multi-Site Transit: If worker is marked as moving between fixed sites (`multiSiteTransit`),
-          // exited Site A earlier today (timer stopped), and now arrived by GPS at a different assigned Site B:
-          // automatically resume the shift timer, credit the GPS transit duration, and record the transit note.
+          // Multi-Site Transit (Option B):
+          // If worker is marked as moving between fixed sites (`multiSiteTransit`) and arrived by GPS at Site B:
+          // Case 1: Worker exited Site A earlier today (timer was stopped via AUTO_EXIT/CLOCK_OUT).
+          //         Cap credited transit duration by normative travel time (+40% buffer) to avoid paying for long personal stops.
           if (
             (data.action === 'CLOCK_IN' || data.action === 'AUTO_RESUME') &&
             employee.multiSiteTransit &&
@@ -557,7 +573,16 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
                 null;
 
               if (prevSiteName && prevSiteName !== insideSite.siteName) {
-                const transitMinutes = Math.max(1, Math.round(transitMs / 60000));
+                const prevLat = fromPrevCoords.closestSite?.lat || lastLog.lat;
+                const prevLng = fromPrevCoords.closestSite?.lng || lastLog.lng;
+                const normativeMinutes = (prevLat && prevLng && insideSite.lat && insideSite.lng)
+                  ? estimateNormativeTransitMinutes(prevLat, prevLng, insideSite.lat, insideSite.lng)
+                  : 20;
+
+                const maxAllowedTransitMinutes = Math.round(normativeMinutes * 1.4);
+                const rawTransitMinutes = Math.max(1, Math.round(transitMs / 60000));
+                // Cap credited transit time by normative road travel time (+40% traffic buffer)
+                const transitMinutes = Math.min(rawTransitMinutes, maxAllowedTransitMinutes);
 
                 await prisma.timeLog.update({
                   where: { id: lastLog.id },
@@ -573,6 +598,80 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
 
                 // Find the opening CLOCK_IN of the active shift so live timer shows full elapsed shift time
                 for (let i = 1; i < employee.logs.length; i++) {
+                  const l = employee.logs[i]!;
+                  if (l.action === 'CLOCK_IN') {
+                    shiftStartTime = l.dateTime;
+                  } else if (l.action === 'AUTO_RESUME' || l.action === 'AUTO_PAUSE') {
+                    continue;
+                  } else {
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          // Case 2 (Option B): Worker arrived at Site B while shift was STILL ACTIVE at Site A!
+          // (Phone was locked/asleep in pocket during the drive, so AUTO_EXIT never fired at Site A)
+          if (
+            (data.action === 'CLOCK_IN' || data.action === 'AUTO_RESUME') &&
+            employee.multiSiteTransit &&
+            insideSite &&
+            lastLog &&
+            (lastLog.action === 'CLOCK_IN' || lastLog.action === 'AUTO_RESUME')
+          ) {
+            const logDateStr = getJerusalemParts(logDateTime).dateStr;
+            const lastLogDateStr = getJerusalemParts(lastLog.dateTime).dateStr;
+
+            if (logDateStr === lastLogDateStr) {
+              const fromPrevCoords = matchSiteByCoords(
+                lastLog.lat,
+                lastLog.lng,
+                allowedGeofences
+              );
+              const prevSiteName =
+                fromPrevCoords.insideSite?.siteName ||
+                fromPrevCoords.closestSite?.siteName ||
+                null;
+
+              if (prevSiteName && prevSiteName !== insideSite.siteName) {
+                const prevLat = fromPrevCoords.closestSite?.lat || lastLog.lat;
+                const prevLng = fromPrevCoords.closestSite?.lng || lastLog.lng;
+                const normativeMinutes = (prevLat && prevLng && insideSite.lat && insideSite.lng)
+                  ? estimateNormativeTransitMinutes(prevLat, prevLng, insideSite.lat, insideSite.lng)
+                  : 20;
+
+                const lastActiveTime = new Date(lastLog.dateTime).getTime();
+                const transitMs = normativeMinutes * 60 * 1000;
+                // Departure from Site A was at (now - normativeTransitMinutes), but not earlier than the last active log + 1 min
+                const departDateTime = new Date(
+                  Math.max(lastActiveTime + 60000, logDateTime.getTime() - transitMs)
+                );
+                const transitMinutes = Math.max(1, Math.round((logDateTime.getTime() - departDateTime.getTime()) / 60000));
+
+                // 1. Record retroactive AUTO_PAUSE at departure from Site A
+                await prisma.timeLog.create({
+                  data: {
+                    empId: employee.empId,
+                    employeeId: employee.id,
+                    clientId: employee.clientId,
+                    action: 'AUTO_PAUSE',
+                    lat: prevLat,
+                    lng: prevLng,
+                    dateTime: departDateTime,
+                  },
+                });
+
+                // 2. This current entry becomes AUTO_RESUME at Site B
+                effectiveAction = 'AUTO_RESUME';
+                transitResumed = {
+                  transitMinutes,
+                  fromSite: prevSiteName,
+                  toSite: insideSite.siteName,
+                };
+
+                // 3. Find opening CLOCK_IN of the active shift
+                for (let i = 0; i < employee.logs.length; i++) {
                   const l = employee.logs[i]!;
                   if (l.action === 'CLOCK_IN') {
                     shiftStartTime = l.dateTime;

@@ -495,6 +495,89 @@ describe('TimeTracker API Endpoints', () => {
     );
   }, 15000);
 
+  it('14c. Multi-Site Transit (Option B): Direct transition while shift is active (phone in pocket) retroactively inserts AUTO_PAUSE and credits normative transit time', async () => {
+    // 1. Create 2 test sites
+    const site1Res = await request(app)
+      .post('/api/client/sites')
+      .set('Cookie', clientCookie)
+      .send({
+        name: 'База Восток',
+        address: 'Тель-Авив Восток',
+        lat: 32.08,
+        lng: 34.82,
+        radius: 150,
+      });
+    const site1Id = site1Res.body.site.id;
+
+    const site2Res = await request(app)
+      .post('/api/client/sites')
+      .set('Cookie', clientCookie)
+      .send({
+        name: 'База Запад',
+        address: 'Тель-Авив Запад',
+        lat: 32.07,
+        lng: 34.76,
+        radius: 150,
+      });
+    const site2Id = site2Res.body.site.id;
+
+    // 2. Create employee with multiSiteTransit
+    const directEmpId = `DIR_${Date.now()}`;
+    await request(app)
+      .post('/api/client/employees')
+      .set('Cookie', clientCookie)
+      .send({
+        empId: directEmpId,
+        name: 'Прямой Транзитник',
+        isMobile: false,
+        strictGps: true,
+        multiSiteTransit: true,
+        siteIds: [site1Id, site2Id],
+      });
+
+    // 3. Clock in at Site 1 (90 mins ago) - shift remains ACTIVE (no AUTO_EXIT)
+    const nowMs = Date.now();
+    const clockInAtSite1 = new Date(nowMs - 90 * 60 * 1000).toISOString();
+    await request(app)
+      .post('/api/worker/log')
+      .send({
+        empId: directEmpId,
+        action: 'CLOCK_IN',
+        lat: 32.08,
+        lng: 34.82,
+        dateTime: clockInAtSite1,
+      });
+
+    // Check profile shows active at 'База Восток'
+    const prof1 = await request(app).get(`/api/worker/profile/${directEmpId}`);
+    expect(prof1.body.status.isOnShift).toBe(true);
+    expect(prof1.body.status.activeSiteName).toBe('База Восток');
+
+    // 4. Worker arrives at Site 2 with shift still open (phone was asleep in pocket during drive)
+    // PWA detects GPS is now inside 'База Запад' and triggers CLOCK_IN
+    const arriveSite2Res = await request(app)
+      .post('/api/worker/log')
+      .send({
+        empId: directEmpId,
+        action: 'CLOCK_IN',
+        lat: 32.07,
+        lng: 34.76,
+      });
+
+    expect(arriveSite2Res.status).toBe(200);
+    expect(arriveSite2Res.body.success).toBe(true);
+    expect(arriveSite2Res.body.log.action).toBe('AUTO_RESUME');
+    expect(arriveSite2Res.body.transitResumed).toBeDefined();
+    expect(arriveSite2Res.body.transitResumed.fromSite).toBe('База Восток');
+    expect(arriveSite2Res.body.transitResumed.toSite).toBe('База Запад');
+    expect(arriveSite2Res.body.transitResumed.transitMinutes).toBeGreaterThanOrEqual(10);
+
+    // Profile at Site 2 should now be active at 'База Запад'
+    const prof2 = await request(app).get(`/api/worker/profile/${directEmpId}`);
+    expect(prof2.body.status.isOnShift).toBe(true);
+    expect(prof2.body.status.activeSiteName).toBe('База Запад');
+  }, 15000);
+
   it('15. Owner can delete client and cleanup test clients', async () => {
     const ownerToken = signSessionToken({ id: 'owner', role: 'owner', name: 'Master Owner' });
     const ownerCookie = `session=${ownerToken}`;

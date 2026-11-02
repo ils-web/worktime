@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateHaversineDistance, checkGeofence, evaluateWorkerGeofence } from './geo';
+import { calculateHaversineDistance, checkGeofence, evaluateWorkerGeofence, estimateNormativeTransitMinutes } from './geo';
 import {
   calculateSessionHours,
   calculateDailyHours,
@@ -22,6 +22,13 @@ describe('Geo Rules', () => {
     const dist = calculateHaversineDistance(32.0853, 34.7818, 31.7683, 35.2137);
     expect(dist).toBeGreaterThan(50000);
     expect(dist).toBeLessThan(60000);
+  });
+
+  it('estimates realistic normative travel time between sites in Israel', () => {
+    // Tel Aviv (32.0853, 34.7818) to Bat Yam (32.0238, 34.7508) ~ 7.5km
+    const timeMin = estimateNormativeTransitMinutes(32.0853, 34.7818, 32.0238, 34.7508);
+    expect(timeMin).toBeGreaterThanOrEqual(15);
+    expect(timeMin).toBeLessThanOrEqual(25);
   });
 
   it('determines inside and outside geofence', () => {
