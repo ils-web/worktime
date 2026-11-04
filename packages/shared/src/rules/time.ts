@@ -248,7 +248,9 @@ export function calculateDailyHours(
   }
 
   const netHours = Math.max(0, Math.round((grossHours - lunchDeductedHours) * 100) / 100);
-  const saturdayHours = Math.round((saturdayDurationMinutes / 60) * 100) / 100;
+  const rawSaturdayHours = Math.round((saturdayDurationMinutes / 60) * 100) / 100;
+  const saturdayHours = Math.min(netHours, rawSaturdayHours);
+  const nightHours = Math.min(netHours, Math.round(totalNightHours * 100) / 100);
 
   // Overtime rule: if netHours > 9, excess goes to overtime
   let overtimeHours = 0;
@@ -263,7 +265,7 @@ export function calculateDailyHours(
     grossHours,
     lunchDeductedHours,
     netHours,
-    nightHours: Math.round(totalNightHours * 100) / 100,
+    nightHours,
     saturdayHours,
     overtimeHours,
     regularHours,

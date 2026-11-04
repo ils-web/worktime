@@ -68,7 +68,7 @@ ownerRouter.post('/clients', async (req: Request, res: Response) => {
     const defaultShifts = {
       morning: { start: '07:00', end: '16:00' },
       evening: { start: '16:00', end: '00:00' },
-      night: { start: '00:00', end: '07:00' },
+      night: { start: '22:00', end: '06:00' },
     };
 
     const positions = data.positions
@@ -275,7 +275,7 @@ ownerRouter.get('/billing', async (req: Request, res: Response) => {
       let totalHours = 0;
       const lastInByEmp = new Map<string, Date>();
       for (const log of client.logs) {
-        if (log.action === 'CLOCK_IN') {
+        if (log.action === 'CLOCK_IN' || (log.action === 'AUTO_RESUME' && !lastInByEmp.has(log.empId))) {
           lastInByEmp.set(log.empId, log.dateTime);
         } else if (log.action === 'CLOCK_OUT' || log.action === 'AUTO_EXIT') {
           const lastInTime = lastInByEmp.get(log.empId);

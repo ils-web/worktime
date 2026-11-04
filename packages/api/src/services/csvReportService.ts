@@ -20,51 +20,186 @@ export interface ReportRow {
 
 import { formatIsoToDisplayDate, getDayOfWeek, localizeSystemNote } from '@timetracker/shared';
 
+const CSV_TRANSLATIONS: Record<
+  'he' | 'ru' | 'en' | 'ar',
+  {
+    reportTitle: string;
+    totalLabel: string;
+    headers: [
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string
+    ];
+  }
+> = {
+  he: {
+    reportTitle: 'דוח שעות נוכחות - חברה',
+    totalLabel: 'סה"כ',
+    headers: [
+      'קוד עובד',
+      'שם עובד',
+      'תאריך',
+      'יום בשבוע',
+      'כניסה ראשונה',
+      'יציאה אחרונה',
+      'שעות ברוטו',
+      'ניכוי הפסקה',
+      'סה"כ שעות נטו',
+      'שעות לילה',
+      'שעות שבת',
+      'שעות נוספות',
+      'הערות',
+    ],
+  },
+  ru: {
+    reportTitle: 'Отчет по часам компании',
+    totalLabel: 'ИТОГО',
+    headers: [
+      'ID Сотрудника',
+      'Имя',
+      'Дата',
+      'День недели',
+      'Первый вход',
+      'Последний выход',
+      'Общие часы',
+      'Обед (вычет)',
+      'Итого часы',
+      'Ночные часы',
+      'Субботние часы',
+      'Сверхурочные',
+      'Заметки',
+    ],
+  },
+  en: {
+    reportTitle: 'Company Attendance Report',
+    totalLabel: 'TOTAL',
+    headers: [
+      'Employee ID',
+      'Employee Name',
+      'Date',
+      'Day of Week',
+      'First In',
+      'Last Out',
+      'Gross Hours',
+      'Break Deducted',
+      'Net Hours',
+      'Night Hours',
+      'Saturday Hours',
+      'Overtime Hours',
+      'Notes',
+    ],
+  },
+  ar: {
+    reportTitle: 'تقرير ساعات حضور الشركة',
+    totalLabel: 'المجموع',
+    headers: [
+      'معرف الموظف',
+      'اسم الموظف',
+      'التاريخ',
+      'يوم الأسبوع',
+      'أول دخول',
+      'آخر خروج',
+      'إجمالي الساعات',
+      'خصم الاستراحة',
+      'صافي الساعات',
+      'ساعات ليلية',
+      'ساعات السبت',
+      'ساعات إضافية',
+      'ملاحظات',
+    ],
+  },
+};
+
+function escapeCsvCell(val: string): string {
+  return `"${(val || '').replace(/"/g, '""')}"`;
+}
+
 /**
- * Generates CSV string for report rows with UTF-8 BOM for Excel compatibility
+ * Generates localized CSV string for report rows with UTF-8 BOM for Excel compatibility.
+ * Defaults to Hebrew ('he') for Israeli payroll/attendance standard.
  */
-export function generateCsvReport(rows: ReportRow[], clientName: string, lang: string = 'ru'): string {
+export function generateCsvReport(rows: ReportRow[], clientName: string, lang: string = 'he'): string {
   const BOM = '\uFEFF';
-  const header = [
-    'ID Сотрудника',
-    'Имя',
-    'Дата',
-    'День недели',
-    'Первый вход',
-    'Последний выход',
-    'Общие часы',
-    'Обед (вычет)',
-    'Итого часы',
-    'Ночные часы',
-    'Субботние часы',
-    'Сверхурочные',
-    'Заметки',
-  ].join(',');
+  const norm = (lang || 'he').toLowerCase();
+  const targetLang: 'he' | 'ru' | 'en' | 'ar' = norm.startsWith('ru')
+    ? 'ru'
+    : norm.startsWith('en')
+    ? 'en'
+    : norm.startsWith('ar')
+    ? 'ar'
+    : 'he';
+
+  const dict = CSV_TRANSLATIONS[targetLang];
+  const header = dict.headers.map((h) => escapeCsvCell(h)).join(',');
+
+  let totalGross = 0;
+  let totalLunch = 0;
+  let totalNet = 0;
+  let totalNight = 0;
+  let totalSat = 0;
+  let totalOt = 0;
 
   const csvRows = rows.map((r) => {
     const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? ' *' : '');
-    const dayStr = getDayOfWeek(r.date, lang) || r.dayOfWeek || '';
-    const noteStr = localizeSystemNote(r.notes || '', lang);
+    const dayStr = getDayOfWeek(r.date, targetLang) || r.dayOfWeek || '';
+    const noteStr = localizeSystemNote(r.notes || '', targetLang);
+
+    totalGross += r.grossHours;
+    totalLunch += r.lunchDeducted;
+    totalNet += r.netHours;
+    totalNight += r.nightHours;
+    totalSat += r.saturdayHours;
+    totalOt += r.overtimeHours;
+
     return [
-      `"${r.empId}"`,
-      `"${r.name.replace(/"/g, '""')}"`,
-      `"${displayDate}"`,
-      `"${dayStr}"`,
-      `"${r.firstIn}"`,
-      `"${r.lastOut}"`,
+      escapeCsvCell(r.empId),
+      escapeCsvCell(r.name),
+      escapeCsvCell(displayDate),
+      escapeCsvCell(dayStr),
+      escapeCsvCell(r.firstIn),
+      escapeCsvCell(r.lastOut),
       r.grossHours.toFixed(2),
       r.lunchDeducted.toFixed(2),
       r.netHours.toFixed(2),
       r.nightHours.toFixed(2),
       r.saturdayHours.toFixed(2),
       r.overtimeHours.toFixed(2),
-      `"${noteStr.replace(/"/g, '""')}"`,
+      escapeCsvCell(noteStr),
     ].join(',');
   });
 
+  if (rows.length > 0) {
+    const totalRow = [
+      escapeCsvCell(dict.totalLabel),
+      '""',
+      '""',
+      '""',
+      '""',
+      '""',
+      totalGross.toFixed(2),
+      totalLunch.toFixed(2),
+      totalNet.toFixed(2),
+      totalNight.toFixed(2),
+      totalSat.toFixed(2),
+      totalOt.toFixed(2),
+      '""',
+    ].join(',');
+    csvRows.push(totalRow);
+  }
+
   return (
     BOM +
-    `"Отчет по часам компании: ${clientName.replace(/"/g, '""')}"\n` +
+    `${escapeCsvCell(`${dict.reportTitle}: ${clientName}`)}\n` +
     header +
     '\n' +
     csvRows.join('\n')

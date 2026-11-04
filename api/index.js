@@ -97010,7 +97010,9 @@ function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm =
     lunchDeductedHours = 0.5;
   }
   const netHours = Math.max(0, Math.round((grossHours - lunchDeductedHours) * 100) / 100);
-  const saturdayHours = Math.round(saturdayDurationMinutes / 60 * 100) / 100;
+  const rawSaturdayHours = Math.round(saturdayDurationMinutes / 60 * 100) / 100;
+  const saturdayHours = Math.min(netHours, rawSaturdayHours);
+  const nightHours = Math.min(netHours, Math.round(totalNightHours * 100) / 100);
   let overtimeHours = 0;
   if (netHours > 9) {
     overtimeHours = Math.round((netHours - 9) * 100) / 100;
@@ -97021,7 +97023,7 @@ function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm =
     grossHours,
     lunchDeductedHours,
     netHours,
-    nightHours: Math.round(totalNightHours * 100) / 100,
+    nightHours,
     saturdayHours,
     overtimeHours,
     regularHours
@@ -97696,7 +97698,7 @@ ownerRouter.post("/clients", async (req, res) => {
     const defaultShifts = {
       morning: { start: "07:00", end: "16:00" },
       evening: { start: "16:00", end: "00:00" },
-      night: { start: "00:00", end: "07:00" }
+      night: { start: "22:00", end: "06:00" }
     };
     const positions = data.positions ? normalizePositionsList(data.positions) : DEFAULT_COMPANY_POSITIONS;
     const client = await prisma.client.create({
@@ -97855,7 +97857,7 @@ ownerRouter.get("/billing", async (req, res) => {
       let totalHours = 0;
       const lastInByEmp = /* @__PURE__ */ new Map();
       for (const log of client.logs) {
-        if (log.action === "CLOCK_IN") {
+        if (log.action === "CLOCK_IN" || log.action === "AUTO_RESUME" && !lastInByEmp.has(log.empId)) {
           lastInByEmp.set(log.empId, log.dateTime);
         } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
           const lastInTime = lastInByEmp.get(log.empId);
@@ -98113,44 +98115,144 @@ var import_express4 = __toESM(require_express2());
 var import_bcryptjs4 = __toESM(require_bcryptjs());
 
 // packages/api/src/services/csvReportService.ts
-function generateCsvReport(rows, clientName, lang = "ru") {
+var CSV_TRANSLATIONS = {
+  he: {
+    reportTitle: "\u05D3\u05D5\u05D7 \u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05DB\u05D7\u05D5\u05EA - \u05D7\u05D1\u05E8\u05D4",
+    totalLabel: '\u05E1\u05D4"\u05DB',
+    headers: [
+      "\u05E7\u05D5\u05D3 \u05E2\u05D5\u05D1\u05D3",
+      "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3",
+      "\u05EA\u05D0\u05E8\u05D9\u05DA",
+      "\u05D9\u05D5\u05DD \u05D1\u05E9\u05D1\u05D5\u05E2",
+      "\u05DB\u05E0\u05D9\u05E1\u05D4 \u05E8\u05D0\u05E9\u05D5\u05E0\u05D4",
+      "\u05D9\u05E6\u05D9\u05D0\u05D4 \u05D0\u05D7\u05E8\u05D5\u05E0\u05D4",
+      "\u05E9\u05E2\u05D5\u05EA \u05D1\u05E8\u05D5\u05D8\u05D5",
+      "\u05E0\u05D9\u05DB\u05D5\u05D9 \u05D4\u05E4\u05E1\u05E7\u05D4",
+      '\u05E1\u05D4"\u05DB \u05E9\u05E2\u05D5\u05EA \u05E0\u05D8\u05D5',
+      "\u05E9\u05E2\u05D5\u05EA \u05DC\u05D9\u05DC\u05D4",
+      "\u05E9\u05E2\u05D5\u05EA \u05E9\u05D1\u05EA",
+      "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA",
+      "\u05D4\u05E2\u05E8\u05D5\u05EA"
+    ]
+  },
+  ru: {
+    reportTitle: "\u041E\u0442\u0447\u0435\u0442 \u043F\u043E \u0447\u0430\u0441\u0430\u043C \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438",
+    totalLabel: "\u0418\u0422\u041E\u0413\u041E",
+    headers: [
+      "ID \u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430",
+      "\u0418\u043C\u044F",
+      "\u0414\u0430\u0442\u0430",
+      "\u0414\u0435\u043D\u044C \u043D\u0435\u0434\u0435\u043B\u0438",
+      "\u041F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434",
+      "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0432\u044B\u0445\u043E\u0434",
+      "\u041E\u0431\u0449\u0438\u0435 \u0447\u0430\u0441\u044B",
+      "\u041E\u0431\u0435\u0434 (\u0432\u044B\u0447\u0435\u0442)",
+      "\u0418\u0442\u043E\u0433\u043E \u0447\u0430\u0441\u044B",
+      "\u041D\u043E\u0447\u043D\u044B\u0435 \u0447\u0430\u0441\u044B",
+      "\u0421\u0443\u0431\u0431\u043E\u0442\u043D\u0438\u0435 \u0447\u0430\u0441\u044B",
+      "\u0421\u0432\u0435\u0440\u0445\u0443\u0440\u043E\u0447\u043D\u044B\u0435",
+      "\u0417\u0430\u043C\u0435\u0442\u043A\u0438"
+    ]
+  },
+  en: {
+    reportTitle: "Company Attendance Report",
+    totalLabel: "TOTAL",
+    headers: [
+      "Employee ID",
+      "Employee Name",
+      "Date",
+      "Day of Week",
+      "First In",
+      "Last Out",
+      "Gross Hours",
+      "Break Deducted",
+      "Net Hours",
+      "Night Hours",
+      "Saturday Hours",
+      "Overtime Hours",
+      "Notes"
+    ]
+  },
+  ar: {
+    reportTitle: "\u062A\u0642\u0631\u064A\u0631 \u0633\u0627\u0639\u0627\u062A \u062D\u0636\u0648\u0631 \u0627\u0644\u0634\u0631\u0643\u0629",
+    totalLabel: "\u0627\u0644\u0645\u062C\u0645\u0648\u0639",
+    headers: [
+      "\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0648\u0638\u0641",
+      "\u0627\u0633\u0645 \u0627\u0644\u0645\u0648\u0638\u0641",
+      "\u0627\u0644\u062A\u0627\u0631\u064A\u062E",
+      "\u064A\u0648\u0645 \u0627\u0644\u0623\u0633\u0628\u0648\u0639",
+      "\u0623\u0648\u0644 \u062F\u062E\u0648\u0644",
+      "\u0622\u062E\u0631 \u062E\u0631\u0648\u062C",
+      "\u0625\u062C\u0645\u0627\u0644\u064A \u0627\u0644\u0633\u0627\u0639\u0627\u062A",
+      "\u062E\u0635\u0645 \u0627\u0644\u0627\u0633\u062A\u0631\u0627\u062D\u0629",
+      "\u0635\u0627\u0641\u064A \u0627\u0644\u0633\u0627\u0639\u0627\u062A",
+      "\u0633\u0627\u0639\u0627\u062A \u0644\u064A\u0644\u064A\u0629",
+      "\u0633\u0627\u0639\u0627\u062A \u0627\u0644\u0633\u0628\u062A",
+      "\u0633\u0627\u0639\u0627\u062A \u0625\u0636\u0627\u0641\u064A\u0629",
+      "\u0645\u0644\u0627\u062D\u0638\u0627\u062A"
+    ]
+  }
+};
+function escapeCsvCell(val) {
+  return `"${(val || "").replace(/"/g, '""')}"`;
+}
+function generateCsvReport(rows, clientName, lang = "he") {
   const BOM = "\uFEFF";
-  const header = [
-    "ID \u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430",
-    "\u0418\u043C\u044F",
-    "\u0414\u0430\u0442\u0430",
-    "\u0414\u0435\u043D\u044C \u043D\u0435\u0434\u0435\u043B\u0438",
-    "\u041F\u0435\u0440\u0432\u044B\u0439 \u0432\u0445\u043E\u0434",
-    "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0432\u044B\u0445\u043E\u0434",
-    "\u041E\u0431\u0449\u0438\u0435 \u0447\u0430\u0441\u044B",
-    "\u041E\u0431\u0435\u0434 (\u0432\u044B\u0447\u0435\u0442)",
-    "\u0418\u0442\u043E\u0433\u043E \u0447\u0430\u0441\u044B",
-    "\u041D\u043E\u0447\u043D\u044B\u0435 \u0447\u0430\u0441\u044B",
-    "\u0421\u0443\u0431\u0431\u043E\u0442\u043D\u0438\u0435 \u0447\u0430\u0441\u044B",
-    "\u0421\u0432\u0435\u0440\u0445\u0443\u0440\u043E\u0447\u043D\u044B\u0435",
-    "\u0417\u0430\u043C\u0435\u0442\u043A\u0438"
-  ].join(",");
+  const norm = (lang || "he").toLowerCase();
+  const targetLang = norm.startsWith("ru") ? "ru" : norm.startsWith("en") ? "en" : norm.startsWith("ar") ? "ar" : "he";
+  const dict = CSV_TRANSLATIONS[targetLang];
+  const header = dict.headers.map((h) => escapeCsvCell(h)).join(",");
+  let totalGross = 0;
+  let totalLunch = 0;
+  let totalNet = 0;
+  let totalNight = 0;
+  let totalSat = 0;
+  let totalOt = 0;
   const csvRows = rows.map((r) => {
     const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? " *" : "");
-    const dayStr = getDayOfWeek(r.date, lang) || r.dayOfWeek || "";
-    const noteStr = localizeSystemNote(r.notes || "", lang);
+    const dayStr = getDayOfWeek(r.date, targetLang) || r.dayOfWeek || "";
+    const noteStr = localizeSystemNote(r.notes || "", targetLang);
+    totalGross += r.grossHours;
+    totalLunch += r.lunchDeducted;
+    totalNet += r.netHours;
+    totalNight += r.nightHours;
+    totalSat += r.saturdayHours;
+    totalOt += r.overtimeHours;
     return [
-      `"${r.empId}"`,
-      `"${r.name.replace(/"/g, '""')}"`,
-      `"${displayDate}"`,
-      `"${dayStr}"`,
-      `"${r.firstIn}"`,
-      `"${r.lastOut}"`,
+      escapeCsvCell(r.empId),
+      escapeCsvCell(r.name),
+      escapeCsvCell(displayDate),
+      escapeCsvCell(dayStr),
+      escapeCsvCell(r.firstIn),
+      escapeCsvCell(r.lastOut),
       r.grossHours.toFixed(2),
       r.lunchDeducted.toFixed(2),
       r.netHours.toFixed(2),
       r.nightHours.toFixed(2),
       r.saturdayHours.toFixed(2),
       r.overtimeHours.toFixed(2),
-      `"${noteStr.replace(/"/g, '""')}"`
+      escapeCsvCell(noteStr)
     ].join(",");
   });
-  return BOM + `"\u041E\u0442\u0447\u0435\u0442 \u043F\u043E \u0447\u0430\u0441\u0430\u043C \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438: ${clientName.replace(/"/g, '""')}"
+  if (rows.length > 0) {
+    const totalRow = [
+      escapeCsvCell(dict.totalLabel),
+      '""',
+      '""',
+      '""',
+      '""',
+      '""',
+      totalGross.toFixed(2),
+      totalLunch.toFixed(2),
+      totalNet.toFixed(2),
+      totalNight.toFixed(2),
+      totalSat.toFixed(2),
+      totalOt.toFixed(2),
+      '""'
+    ].join(",");
+    csvRows.push(totalRow);
+  }
+  return BOM + `${escapeCsvCell(`${dict.reportTitle}: ${clientName}`)}
 ` + header + "\n" + csvRows.join("\n");
 }
 
@@ -98845,7 +98947,7 @@ clientRouter.get("/employees", async (req, res) => {
           sites: { include: { site: true } },
           schedules: true,
           logs: {
-            take: 1,
+            take: 10,
             orderBy: { dateTime: "desc" }
           }
         },
@@ -98886,6 +98988,18 @@ clientRouter.get("/employees", async (req, res) => {
     const enriched = employees.map((emp) => {
       const lastLog = emp.logs[0];
       const isOnShift = lastLog ? lastLog.action === "CLOCK_IN" || lastLog.action === "AUTO_RESUME" : false;
+      let activeClockInTime = lastLog?.dateTime ?? null;
+      if (isOnShift) {
+        for (const l of emp.logs) {
+          if (l.action === "CLOCK_IN") {
+            activeClockInTime = l.dateTime;
+          } else if (l.action === "AUTO_RESUME" || l.action === "AUTO_PAUSE") {
+            continue;
+          } else {
+            break;
+          }
+        }
+      }
       let globalMonthlyStatus = null;
       if (emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0) {
         globalMonthlyStatus = evaluateGlobalMonthlyStatus({
@@ -98900,7 +99014,7 @@ clientRouter.get("/employees", async (req, res) => {
         ...emp,
         isOnShift,
         lastLogAction: lastLog?.action ?? null,
-        lastLogTime: lastLog?.dateTime ?? null,
+        lastLogTime: activeClockInTime,
         globalMonthlyStatus
       };
     });
@@ -99715,7 +99829,7 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
     const sessions = [];
     let currentInLog = null;
     for (const log of emp.logs) {
-      if (log.action === "CLOCK_IN") {
+      if (log.action === "CLOCK_IN" || log.action === "AUTO_RESUME" && !currentInLog) {
         if (!currentInLog) {
           currentInLog = {
             id: log.id,
@@ -99774,12 +99888,15 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
         notesByDate[n.date] = clean;
       }
     }
+    const empShifts = emp.shifts || shiftsConfig;
+    const empNightStart = empShifts?.night?.start || nightStart;
+    const empNightEnd = empShifts?.night?.end || nightEnd;
     for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
       const dailyCalc = calculateDailyHours(
         daySessions,
         autoDeductLunch,
-        nightStart,
-        nightEnd
+        empNightStart,
+        empNightEnd
       );
       const firstInParts = getJerusalemParts(daySessions[0].clockIn);
       const lastOutParts = getJerusalemParts(daySessions[daySessions.length - 1].clockOut);
@@ -99886,7 +100003,7 @@ clientRouter.get("/reports/csv", async (req, res) => {
       foremanId,
       empId
     );
-    const lang = req.query["lang"] || "ru";
+    const lang = req.query["lang"] || "he";
     const csvData = generateCsvReport(rows, clientName, lang);
     const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, "_")}_${startDate.toISOString().slice(0, 10)}.csv`;
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -100264,17 +100381,38 @@ async function computeWorkerMonthData(empId, month, shiftsConfig, autoDeductLunc
   const monthEndStr = `${month}-${String(daysInMonth).padStart(2, "0")}`;
   const qStart = jerusalemDateTimeToDate(monthStartStr, "00:00");
   const qEnd = jerusalemDateTimeToDate(addDays(monthEndStr, 1), "23:59");
-  const logs = await prisma.timeLog.findMany({
-    where: {
-      empId,
-      dateTime: { gte: qStart, lte: qEnd }
-    },
-    orderBy: { dateTime: "asc" }
-  });
+  const [logs, dailyNotes] = await Promise.all([
+    prisma.timeLog.findMany({
+      where: {
+        empId,
+        dateTime: { gte: qStart, lte: qEnd }
+      },
+      orderBy: { dateTime: "asc" }
+    }),
+    prisma.dailyNote.findMany({
+      where: {
+        empId,
+        date: { gte: monthStartStr, lte: monthEndStr }
+      },
+      orderBy: { id: "asc" }
+    })
+  ]);
+  const notesByDate = {};
+  for (const n of dailyNotes) {
+    const clean = (n.noteText || "").trim();
+    if (!clean) continue;
+    if (notesByDate[n.date]) {
+      if (!notesByDate[n.date].includes(clean)) {
+        notesByDate[n.date] += " \u2022 " + clean;
+      }
+    } else {
+      notesByDate[n.date] = clean;
+    }
+  }
   const sessions = [];
   let currentInLog = null;
   for (const log of logs) {
-    if (log.action === "CLOCK_IN") {
+    if (log.action === "CLOCK_IN" || log.action === "AUTO_RESUME" && !currentInLog) {
       if (!currentInLog || log.isManual && !currentInLog.isManual) {
         currentInLog = log;
       }
@@ -100320,7 +100458,8 @@ async function computeWorkerMonthData(empId, month, shiftsConfig, autoDeductLunc
       nightHours: daily.nightHours,
       saturdayHours: daily.saturdayHours,
       overtimeHours: daily.overtimeHours,
-      isManual: daySessions.some((s) => s.isManual)
+      isManual: daySessions.some((s) => s.isManual),
+      notes: notesByDate[dateStr] || ""
     });
   }
   return {
@@ -100619,29 +100758,43 @@ workerRouter.post("/log", async (req, res) => {
                 const prevLat = fromPrevCoords.closestSite?.lat || lastLog.lat;
                 const prevLng = fromPrevCoords.closestSite?.lng || lastLog.lng;
                 const normativeMinutes = prevLat && prevLng && insideSite.lat && insideSite.lng ? estimateNormativeTransitMinutes(prevLat, prevLng, insideSite.lat, insideSite.lng) : 20;
-                const maxAllowedTransitMinutes = Math.round(normativeMinutes * 1.4);
+                const maxAllowedTransitMinutes = Math.max(45, Math.round(normativeMinutes * 1.5 + 15));
                 const rawTransitMinutes = Math.max(1, Math.round(transitMs / 6e4));
-                const transitMinutes = Math.min(rawTransitMinutes, maxAllowedTransitMinutes);
-                await prisma.timeLog.update({
-                  where: { id: lastLog.id },
-                  data: { action: "AUTO_PAUSE" }
-                });
+                const transitMinutes = rawTransitMinutes <= maxAllowedTransitMinutes ? rawTransitMinutes : normativeMinutes;
+                if (rawTransitMinutes <= maxAllowedTransitMinutes) {
+                  await prisma.timeLog.update({
+                    where: { id: lastLog.id },
+                    data: { action: "AUTO_PAUSE" }
+                  });
+                  for (let i = 1; i < employee.logs.length; i++) {
+                    const l = employee.logs[i];
+                    if (l.action === "CLOCK_IN") {
+                      shiftStartTime = l.dateTime;
+                    } else if (l.action === "AUTO_RESUME" || l.action === "AUTO_PAUSE") {
+                      continue;
+                    } else {
+                      break;
+                    }
+                  }
+                } else {
+                  const cappedExitTime = new Date(
+                    new Date(lastLog.dateTime).getTime() + transitMinutes * 60 * 1e3
+                  );
+                  await prisma.timeLog.update({
+                    where: { id: lastLog.id },
+                    data: {
+                      action: "AUTO_EXIT",
+                      dateTime: cappedExitTime
+                    }
+                  });
+                  shiftStartTime = logDateTime;
+                }
                 effectiveAction = "AUTO_RESUME";
                 transitResumed = {
                   transitMinutes,
                   fromSite: prevSiteName,
                   toSite: insideSite.siteName
                 };
-                for (let i = 1; i < employee.logs.length; i++) {
-                  const l = employee.logs[i];
-                  if (l.action === "CLOCK_IN") {
-                    shiftStartTime = l.dateTime;
-                  } else if (l.action === "AUTO_RESUME" || l.action === "AUTO_PAUSE") {
-                    continue;
-                  } else {
-                    break;
-                  }
-                }
               }
             }
           }
@@ -100781,7 +100934,7 @@ workerRouter.post("/log", async (req, res) => {
         const todaySessions = [];
         let cIn = null;
         for (const l of todayLogs) {
-          if (l.action === "CLOCK_IN") {
+          if (l.action === "CLOCK_IN" || l.action === "AUTO_RESUME" && !cIn) {
             cIn = l.dateTime;
           } else if (l.action === "CLOCK_OUT" || l.action === "AUTO_EXIT") {
             if (cIn) {
@@ -101010,6 +101163,7 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
   try {
     const empId = req.params["empId"];
     const month = req.query["month"] || getJerusalemParts(/* @__PURE__ */ new Date()).dateStr.slice(0, 7);
+    const lang = req.query["lang"] || "he";
     const employee = await prisma.employee.findUnique({
       where: { empId },
       include: { client: true }
@@ -101039,14 +101193,14 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
       saturdayHours: d.saturdayHours,
       overtimeHours: d.overtimeHours,
       isManual: d.isManual,
-      notes: ""
+      notes: d.notes || ""
     }));
     const pdfBytes = await generatePdfReport(
       rows,
       employee.client.name,
-      `Employee ${employee.name} - ${month}`,
+      `${employee.name} - ${month}`,
       employee.client.logoUrl,
-      "he",
+      lang,
       employee.name
     );
     res.setHeader("Content-Type", "application/pdf");
@@ -101055,6 +101209,51 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
   } catch (err) {
     console.error("Worker PDF report error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u0438 PDF" });
+  }
+});
+workerRouter.get("/report/:empId/csv", async (req, res) => {
+  try {
+    const empId = req.params["empId"];
+    const month = req.query["month"] || getJerusalemParts(/* @__PURE__ */ new Date()).dateStr.slice(0, 7);
+    const lang = req.query["lang"] || "he";
+    const employee = await prisma.employee.findUnique({
+      where: { empId },
+      include: { client: true }
+    });
+    if (!employee) {
+      res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    const shiftsConfig = employee.shifts || employee.client.defaultShifts;
+    const monthData = await computeWorkerMonthData(
+      empId,
+      month,
+      shiftsConfig,
+      employee.client.autoDeductLunch ?? false
+    );
+    const rows = monthData.days.map((d) => ({
+      empId: employee.empId,
+      name: employee.name,
+      date: d.date,
+      dayOfWeek: d.dayOfWeek,
+      firstIn: d.firstIn,
+      lastOut: d.lastOut,
+      grossHours: d.grossHours,
+      lunchDeducted: d.lunchDeducted,
+      netHours: d.netHours,
+      nightHours: d.nightHours,
+      saturdayHours: d.saturdayHours,
+      overtimeHours: d.overtimeHours,
+      isManual: d.isManual,
+      notes: d.notes || ""
+    }));
+    const csvData = generateCsvReport(rows, employee.client.name, lang);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="Worker_${employee.empId}_${month}.csv"`);
+    res.send(csvData);
+  } catch (err) {
+    console.error("Worker CSV report error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u0438 CSV" });
   }
 });
 workerRouter.post("/subscribe", async (req, res) => {

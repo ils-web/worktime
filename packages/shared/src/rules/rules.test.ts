@@ -136,6 +136,18 @@ describe('Time and Night Hours Rules', () => {
     expect(daily.netHours).toBe(6.5);
   });
 
+  it('caps saturdayHours and nightHours to netHours when lunch is auto-deducted', () => {
+    // 2026-10-03 is Saturday (Shabbat). 7h shift from 08:00 to 15:00 local
+    const satIn = jerusalemDateTimeToDate('2026-10-03', '08:00');
+    const satOut = jerusalemDateTimeToDate('2026-10-03', '15:00');
+
+    const satDaily = calculateDailyHours([{ clockIn: satIn, clockOut: satOut }], true);
+    expect(satDaily.grossHours).toBe(7);
+    expect(satDaily.lunchDeductedHours).toBe(0.5);
+    expect(satDaily.netHours).toBe(6.5);
+    expect(satDaily.saturdayHours).toBe(6.5);
+  });
+
   it('does NOT deduct lunch if there is a break >= 30 mins', () => {
     // Session 1: 08:00 to 12:00 (4h)
     const session1 = {

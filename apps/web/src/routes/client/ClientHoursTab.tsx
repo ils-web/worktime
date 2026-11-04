@@ -152,10 +152,12 @@ export function ClientHoursTab() {
     setEndDate(today);
   };
 
+  const [reportLang, setReportLang] = useState<'he' | 'ru' | 'en'>('he');
+
   // Download PDF
   const handleDownloadPdf = async (customLang?: string) => {
     try {
-      const lang = customLang || i18n.language || 'he';
+      const lang = customLang || reportLang || 'he';
       const empParam = selectedEmpId ? `&empId=${encodeURIComponent(selectedEmpId)}` : '';
       const blob = await apiRequest<Blob>(
         `/api/client/reports/pdf?startDate=${startDate}&endDate=${endDate}&lang=${encodeURIComponent(lang)}${empParam}`
@@ -176,9 +178,9 @@ export function ClientHoursTab() {
   };
 
   // Download CSV
-  const handleDownloadCsv = async () => {
+  const handleDownloadCsv = async (customLang?: string) => {
     try {
-      const lang = i18n.language || 'ru';
+      const lang = customLang || reportLang || 'he';
       const empParam = selectedEmpId ? `&empId=${encodeURIComponent(selectedEmpId)}` : '';
       const blob = await apiRequest<Blob>(
         `/api/client/reports/csv?startDate=${startDate}&endDate=${endDate}&lang=${encodeURIComponent(lang)}${empParam}`
@@ -301,10 +303,34 @@ export function ClientHoursTab() {
             {t('admin.addManualShift')}
           </button>
 
-          {/* Export Buttons */}
+          {/* Export Language Selector + CSV / PDF Buttons */}
+          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-xl text-[11px] font-bold">
+            {(
+              [
+                { code: 'he', label: 'עב' },
+                { code: 'ru', label: 'RU' },
+                { code: 'en', label: 'EN' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.code}
+                type="button"
+                onClick={() => setReportLang(opt.code)}
+                className={`px-2 py-0.5 rounded-lg transition ${
+                  reportLang === opt.code
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title={`Report language: ${opt.label}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
-            onClick={handleDownloadCsv}
+            onClick={() => handleDownloadCsv(reportLang)}
             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
@@ -313,7 +339,7 @@ export function ClientHoursTab() {
 
           <button
             type="button"
-            onClick={() => handleDownloadPdf(i18n.language)}
+            onClick={() => handleDownloadPdf(reportLang)}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-emerald-950"
           >
             <Download className="w-3.5 h-3.5" />

@@ -18,7 +18,7 @@ import {
   GlobalMonthlyEvaluation,
 } from '@timetracker/shared';
 import { generatePdfReport } from '../services/pdfReportService';
-import { ReportRow } from '../services/csvReportService';
+import { generateCsvReport, ReportRow } from '../services/csvReportService';
 
 interface TrackedSession extends WorkSession {
   isManual?: boolean;
@@ -126,18 +126,40 @@ async function computeWorkerMonthData(
   const qStart = jerusalemDateTimeToDate(monthStartStr, '00:00');
   const qEnd = jerusalemDateTimeToDate(addDays(monthEndStr, 1), '23:59');
 
-  const logs = await prisma.timeLog.findMany({
-    where: {
-      empId,
-      dateTime: { gte: qStart, lte: qEnd },
-    },
-    orderBy: { dateTime: 'asc' },
-  });
+  const [logs, dailyNotes] = await Promise.all([
+    prisma.timeLog.findMany({
+      where: {
+        empId,
+        dateTime: { gte: qStart, lte: qEnd },
+      },
+      orderBy: { dateTime: 'asc' },
+    }),
+    prisma.dailyNote.findMany({
+      where: {
+        empId,
+        date: { gte: monthStartStr, lte: monthEndStr },
+      },
+      orderBy: { id: 'asc' },
+    }),
+  ]);
+
+  const notesByDate: Record<string, string> = {};
+  for (const n of dailyNotes) {
+    const clean = (n.noteText || '').trim();
+    if (!clean) continue;
+    if (notesByDate[n.date]) {
+      if (!notesByDate[n.date]!.includes(clean)) {
+        notesByDate[n.date] += ' • ' + clean;
+      }
+    } else {
+      notesByDate[n.date] = clean;
+    }
+  }
 
   const sessions: TrackedSession[] = [];
   let currentInLog: (typeof logs)[0] | null = null;
   for (const log of logs) {
-    if (log.action === 'CLOCK_IN') {
+    if (log.action === 'CLOCK_IN' || (log.action === 'AUTO_RESUME' && !currentInLog)) {
       if (!currentInLog || (log.isManual && !currentInLog.isManual)) {
         currentInLog = log;
       }
@@ -189,6 +211,7 @@ async function computeWorkerMonthData(
       saturdayHours: daily.saturdayHours,
       overtimeHours: daily.overtimeHours,
       isManual: daySessions.some((s) => s.isManual),
+      notes: notesByDate[dateStr] || '',
     });
   }
 
@@ -579,15 +602,46 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
                   ? estimateNormativeTransitMinutes(prevLat, prevLng, insideSite.lat, insideSite.lng)
                   : 20;
 
-                const maxAllowedTransitMinutes = Math.round(normativeMinutes * 1.4);
+                const maxAllowedTransitMinutes = Math.max(45, Math.round(normativeMinutes * 1.5 + 15));
                 const rawTransitMinutes = Math.max(1, Math.round(transitMs / 60000));
-                // Cap credited transit time by normative road travel time (+40% traffic buffer)
-                const transitMinutes = Math.min(rawTransitMinutes, maxAllowedTransitMinutes);
+                // If within allowed transit window, credit actual transit minutes; if excessive gap, credit normative road time
+                const transitMinutes =
+                  rawTransitMinutes <= maxAllowedTransitMinutes ? rawTransitMinutes : normativeMinutes;
 
-                await prisma.timeLog.update({
-                  where: { id: lastLog.id },
-                  data: { action: 'AUTO_PAUSE' },
-                });
+                if (rawTransitMinutes <= maxAllowedTransitMinutes) {
+                  // Normal drive between sites: convert previous exit into AUTO_PAUSE so shift continues seamlessly
+                  await prisma.timeLog.update({
+                    where: { id: lastLog.id },
+                    data: { action: 'AUTO_PAUSE' },
+                  });
+
+                  // Find the opening CLOCK_IN of the active shift so live timer shows full elapsed shift time
+                  for (let i = 1; i < employee.logs.length; i++) {
+                    const l = employee.logs[i]!;
+                    if (l.action === 'CLOCK_IN') {
+                      shiftStartTime = l.dateTime;
+                    } else if (l.action === 'AUTO_RESUME' || l.action === 'AUTO_PAUSE') {
+                      continue;
+                    } else {
+                      break;
+                    }
+                  }
+                } else {
+                  // Worker had a long gap exceeding normative travel time:
+                  // Credit only the normative transitMinutes onto the first session's end time,
+                  // leaving the excess personal gap unpaid and starting a second session at Site B.
+                  const cappedExitTime = new Date(
+                    new Date(lastLog.dateTime).getTime() + transitMinutes * 60 * 1000
+                  );
+                  await prisma.timeLog.update({
+                    where: { id: lastLog.id },
+                    data: {
+                      action: 'AUTO_EXIT',
+                      dateTime: cappedExitTime,
+                    },
+                  });
+                  shiftStartTime = logDateTime;
+                }
 
                 effectiveAction = 'AUTO_RESUME';
                 transitResumed = {
@@ -595,18 +649,6 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
                   fromSite: prevSiteName,
                   toSite: insideSite.siteName,
                 };
-
-                // Find the opening CLOCK_IN of the active shift so live timer shows full elapsed shift time
-                for (let i = 1; i < employee.logs.length; i++) {
-                  const l = employee.logs[i]!;
-                  if (l.action === 'CLOCK_IN') {
-                    shiftStartTime = l.dateTime;
-                  } else if (l.action === 'AUTO_RESUME' || l.action === 'AUTO_PAUSE') {
-                    continue;
-                  } else {
-                    break;
-                  }
-                }
               }
             }
           }
@@ -792,7 +834,7 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
         const todaySessions: WorkSession[] = [];
         let cIn: Date | null = null;
         for (const l of todayLogs) {
-          if (l.action === 'CLOCK_IN') {
+          if (l.action === 'CLOCK_IN' || (l.action === 'AUTO_RESUME' && !cIn)) {
             cIn = l.dateTime;
           } else if (l.action === 'CLOCK_OUT' || l.action === 'AUTO_EXIT') {
             if (cIn) {
@@ -1069,6 +1111,7 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
   try {
     const empId = req.params['empId'] as string;
     const month = (req.query['month'] as string) || getJerusalemParts(new Date()).dateStr.slice(0, 7);
+    const lang = (req.query['lang'] as string) || 'he';
 
     const employee = await prisma.employee.findUnique({
       where: { empId },
@@ -1102,15 +1145,15 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
       saturdayHours: d.saturdayHours,
       overtimeHours: d.overtimeHours,
       isManual: d.isManual,
-      notes: '',
+      notes: d.notes || '',
     }));
 
     const pdfBytes = await generatePdfReport(
       rows,
       employee.client.name,
-      `Employee ${employee.name} - ${month}`,
+      `${employee.name} - ${month}`,
       employee.client.logoUrl,
-      'he',
+      lang,
       employee.name
     );
 
@@ -1120,6 +1163,60 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Worker PDF report error:', err);
     res.status(500).json({ error: 'Ошибка генерации PDF' });
+  }
+});
+
+/**
+ * 7.1 Worker Monthly CSV Report
+ */
+workerRouter.get('/report/:empId/csv', async (req: Request, res: Response) => {
+  try {
+    const empId = req.params['empId'] as string;
+    const month = (req.query['month'] as string) || getJerusalemParts(new Date()).dateStr.slice(0, 7);
+    const lang = (req.query['lang'] as string) || 'he';
+
+    const employee = await prisma.employee.findUnique({
+      where: { empId },
+      include: { client: true },
+    });
+
+    if (!employee) {
+      res.status(404).json({ error: 'Сотрудник не найден' });
+      return;
+    }
+
+    const shiftsConfig = (employee.shifts || employee.client.defaultShifts) as unknown as ClientShiftsConfig;
+    const monthData = await computeWorkerMonthData(
+      empId,
+      month,
+      shiftsConfig,
+      employee.client.autoDeductLunch ?? false
+    );
+
+    const rows: ReportRow[] = monthData.days.map((d: any) => ({
+      empId: employee.empId,
+      name: employee.name,
+      date: d.date,
+      dayOfWeek: d.dayOfWeek,
+      firstIn: d.firstIn,
+      lastOut: d.lastOut,
+      grossHours: d.grossHours,
+      lunchDeducted: d.lunchDeducted,
+      netHours: d.netHours,
+      nightHours: d.nightHours,
+      saturdayHours: d.saturdayHours,
+      overtimeHours: d.overtimeHours,
+      isManual: d.isManual,
+      notes: d.notes || '',
+    }));
+
+    const csvData = generateCsvReport(rows, employee.client.name, lang);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Worker_${employee.empId}_${month}.csv"`);
+    res.send(csvData);
+  } catch (err) {
+    console.error('Worker CSV report error:', err);
+    res.status(500).json({ error: 'Ошибка генерации CSV' });
   }
 });
 

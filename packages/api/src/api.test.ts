@@ -225,14 +225,29 @@ describe('TimeTracker API Endpoints', () => {
     expect(todayRow.notes).toContain('строгий GPS');
   });
 
-  it('11. Client can fetch server-generated CSV and PDF reports', async () => {
-    const csvRes = await request(app)
+  it('11. Client and Worker can fetch server-generated localized CSV (Hebrew default + Russian) and PDF reports', async () => {
+    const csvHeRes = await request(app)
       .get('/api/client/reports/csv')
       .set('Cookie', clientCookie);
 
-    expect(csvRes.status).toBe(200);
-    expect(csvRes.headers['content-type']).toContain('text/csv');
-    expect(csvRes.text).toContain(testEmpId);
+    expect(csvHeRes.status).toBe(200);
+    expect(csvHeRes.headers['content-type']).toContain('text/csv');
+    expect(csvHeRes.text).toContain(testEmpId);
+    expect(csvHeRes.text).toContain('דוח שעות נוכחות - חברה');
+    expect(csvHeRes.text).toContain('קוד עובד');
+
+    const csvRuRes = await request(app)
+      .get('/api/client/reports/csv?lang=ru')
+      .set('Cookie', clientCookie);
+
+    expect(csvRuRes.status).toBe(200);
+    expect(csvRuRes.text).toContain('Отчет по часам компании');
+    expect(csvRuRes.text).toContain('ID Сотрудника');
+
+    const workerCsvRes = await request(app)
+      .get(`/api/worker/report/${testEmpId}/csv?lang=he`);
+    expect(workerCsvRes.status).toBe(200);
+    expect(workerCsvRes.text).toContain('דוח שעות נוכחות - חברה');
 
     const pdfRes = await request(app)
       .get('/api/client/reports/pdf')

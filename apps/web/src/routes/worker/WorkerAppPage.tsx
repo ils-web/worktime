@@ -1473,18 +1473,36 @@ export function WorkerAppPage() {
         {/* ================= TAB 2: MY HOURS & REPORTS ================= */}
         {activeTab === 'history' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-emerald-400" />
                 {t('worker.tabHistory')}
               </h2>
 
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded-xl border border-slate-700 font-medium"
-              />
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={`/api/worker/report/${encodeURIComponent(profile.empId)}/csv?month=${encodeURIComponent(selectedMonth)}&lang=he`}
+                  download={`Worker_${profile.empId}_${selectedMonth}.csv`}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition"
+                >
+                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>CSV</span>
+                </a>
+                <a
+                  href={`/api/worker/report/${encodeURIComponent(profile.empId)}/pdf?month=${encodeURIComponent(selectedMonth)}&lang=he`}
+                  download={`Worker_${profile.empId}_${selectedMonth}.pdf`}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>PDF</span>
+                </a>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="bg-slate-900 text-white text-xs px-3 py-1.5 rounded-xl border border-slate-700 font-medium"
+                />
+              </div>
             </div>
 
             {/* Global Contract Card on History Tab */}

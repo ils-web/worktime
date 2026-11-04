@@ -75,7 +75,7 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
           sites: { include: { site: true } },
           schedules: true,
           logs: {
-            take: 1,
+            take: 10,
             orderBy: { dateTime: 'desc' },
           },
         },
@@ -120,6 +120,18 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
     const enriched = employees.map((emp) => {
       const lastLog = emp.logs[0];
       const isOnShift = lastLog ? lastLog.action === 'CLOCK_IN' || lastLog.action === 'AUTO_RESUME' : false;
+      let activeClockInTime = lastLog?.dateTime ?? null;
+      if (isOnShift) {
+        for (const l of emp.logs) {
+          if (l.action === 'CLOCK_IN') {
+            activeClockInTime = l.dateTime;
+          } else if (l.action === 'AUTO_RESUME' || l.action === 'AUTO_PAUSE') {
+            continue;
+          } else {
+            break;
+          }
+        }
+      }
 
       let globalMonthlyStatus: GlobalMonthlyEvaluation | null = null;
       if (emp.isGlobal && (emp.contractMonthlyHours ?? 0) > 0) {
@@ -136,7 +148,7 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
         ...emp,
         isOnShift,
         lastLogAction: lastLog?.action ?? null,
-        lastLogTime: lastLog?.dateTime ?? null,
+        lastLogTime: activeClockInTime,
         globalMonthlyStatus,
       };
     });
@@ -1128,7 +1140,7 @@ async function computeClientReportRows(
     let currentInLog: { id: number; dateTime: Date; isManual: boolean; allLogIds: number[] } | null = null;
 
     for (const log of emp.logs) {
-      if (log.action === 'CLOCK_IN') {
+      if (log.action === 'CLOCK_IN' || (log.action === 'AUTO_RESUME' && !currentInLog)) {
         if (!currentInLog) {
           currentInLog = {
             id: log.id,
@@ -1195,13 +1207,17 @@ async function computeClientReportRows(
       }
     }
 
+    const empShifts = (emp.shifts as unknown as ClientShiftsConfig) || shiftsConfig;
+    const empNightStart = empShifts?.night?.start || nightStart;
+    const empNightEnd = empShifts?.night?.end || nightEnd;
+
     // 4. Calculate for each date
     for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
       const dailyCalc = calculateDailyHours(
         daySessions,
         autoDeductLunch,
-        nightStart,
-        nightEnd
+        empNightStart,
+        empNightEnd
       );
 
       const firstInParts = getJerusalemParts(daySessions[0]!.clockIn);
@@ -1336,7 +1352,7 @@ clientRouter.get('/reports/csv', async (req: Request, res: Response) => {
       empId
     );
 
-    const lang = (req.query['lang'] as string) || 'ru';
+    const lang = (req.query['lang'] as string) || 'he';
     const csvData = generateCsvReport(rows, clientName, lang);
     const filename = `Report_${clientName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${startDate.toISOString().slice(0, 10)}.csv`;
 
