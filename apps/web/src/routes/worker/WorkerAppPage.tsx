@@ -1481,17 +1481,9 @@ export function WorkerAppPage() {
 
               <div className="flex items-center gap-1.5">
                 <a
-                  href={`/api/worker/report/${encodeURIComponent(profile.empId)}/csv?month=${encodeURIComponent(selectedMonth)}&lang=he`}
-                  download={`Worker_${profile.empId}_${selectedMonth}.csv`}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition"
-                >
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>CSV</span>
-                </a>
-                <a
                   href={`/api/worker/report/${encodeURIComponent(profile.empId)}/pdf?month=${encodeURIComponent(selectedMonth)}&lang=he`}
                   download={`Worker_${profile.empId}_${selectedMonth}.pdf`}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>PDF</span>

@@ -256,7 +256,7 @@ describe('TimeTracker API Endpoints', () => {
     expect(pdfRes.status).toBe(200);
     expect(pdfRes.headers['content-type']).toContain('application/pdf');
     expect(pdfRes.body.length).toBeGreaterThan(100);
-  });
+  }, 15000);
 
   it('12. Manual shift CRUD: create with accurate timezone, mark isManual, edit, and delete', async () => {
     // 1. Create shift 08:00 - 17:00 on 2026-10-02

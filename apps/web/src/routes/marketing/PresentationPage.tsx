@@ -496,12 +496,11 @@ const UI_LABELS: Record<
     recordingVideo: string;
     slideOf: string;
     tryNowBtn: string;
-    workerDemoBtn: string;
   }
 > = {
   ru: {
     topBadge: 'Видео-презентация и инструкция',
-    backToApp: 'Назад в систему',
+    backToApp: 'Назад на главную',
     playBtn: 'Авто-показ (Видео)',
     pauseBtn: 'Пауза',
     voiceOn: 'Озвучка ВКЛ',
@@ -509,12 +508,11 @@ const UI_LABELS: Record<
     downloadVideoBtn: 'Скачать видео (.WEBM)',
     recordingVideo: 'Генерация видео-файла...',
     slideOf: 'Карточка',
-    tryNowBtn: 'Войти в панель компании',
-    workerDemoBtn: 'Открыть вход работника',
+    tryNowBtn: 'Войти в систему',
   },
   he: {
     topBadge: 'מצגת וידאו ומדריך למשתמש',
-    backToApp: 'חזרה למערכת',
+    backToApp: 'חזרה לדף הבית',
     playBtn: 'ניגון אוטומטי (וידאו)',
     pauseBtn: 'השהה',
     voiceOn: 'קריינות פעילה',
@@ -522,12 +520,11 @@ const UI_LABELS: Record<
     downloadVideoBtn: 'הורד סרטון מצגת (.WEBM)',
     recordingVideo: 'מייצר קובץ וידאו...',
     slideOf: 'כרטיסייה',
-    tryNowBtn: 'כניסה לפאנל ניהול',
-    workerDemoBtn: 'מסך כניסת עובד',
+    tryNowBtn: 'כניסה למערכת',
   },
   en: {
     topBadge: 'Video Presentation & User Guide',
-    backToApp: 'Back to System',
+    backToApp: 'Back to Home',
     playBtn: 'Auto-Play (Video)',
     pauseBtn: 'Pause',
     voiceOn: 'Voiceover ON',
@@ -535,8 +532,7 @@ const UI_LABELS: Record<
     downloadVideoBtn: 'Download Video (.WEBM)',
     recordingVideo: 'Rendering Video File...',
     slideOf: 'Card',
-    tryNowBtn: 'Open Manager Portal',
-    workerDemoBtn: 'Open Worker App',
+    tryNowBtn: 'Open System',
   },
 };
 
@@ -555,7 +551,7 @@ export function PresentationPage() {
   const labels = UI_LABELS[lang];
   const isRtl = lang === 'he';
 
-  const SLIDE_DURATION_MS = 7500;
+  const SLIDE_DURATION_MS = 13000; // 13 seconds per slide allows comfortable reading
   const progressIntervalRef = useRef<number | null>(null);
 
   const speakSlide = useCallback(
@@ -695,7 +691,7 @@ export function PresentationPage() {
         return curY;
       };
 
-      const framesPerSlide = 60; // ~2 seconds per slide while rendering so export finishes in ~15s
+      const framesPerSlide = 180; // 6 seconds per slide in the video at 30fps
       const totalFrames = slides.length * framesPerSlide;
 
       for (let sIdx = 0; sIdx < slides.length; sIdx++) {
@@ -855,20 +851,20 @@ export function PresentationPage() {
 
       case 'sites':
         return (
-          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 space-y-3">
-            <div className="relative h-36 rounded-xl bg-gradient-to-br from-slate-900 via-teal-950/50 to-slate-900 border border-cyan-500/30 flex items-center justify-center overflow-hidden">
-              <div className="w-28 h-28 rounded-full bg-emerald-500/15 border-2 border-dashed border-emerald-400/70 flex items-center justify-center animate-pulse">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/30 flex items-center justify-center text-emerald-300 shadow-lg">
-                  <MapPin className="w-5 h-5" />
+          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
+            <div className="relative h-28 rounded-xl bg-gradient-to-br from-slate-900 via-teal-950/50 to-slate-900 border border-cyan-500/30 flex items-center justify-center overflow-hidden">
+              <div className="w-24 h-24 rounded-full bg-emerald-500/15 border-2 border-dashed border-emerald-400/70 flex items-center justify-center animate-pulse">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/30 flex items-center justify-center text-emerald-300 shadow-lg">
+                  <MapPin className="w-4 h-4" />
                 </div>
               </div>
-              <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-[11px] bg-slate-950/90 px-2.5 py-1 rounded-lg border border-slate-800">
-                <span className="text-white font-semibold">📍 נאות התיכון / Объект Центр</span>
-                <span className="text-emerald-400 font-mono font-bold">R = 150m</span>
+              <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[11px] bg-slate-950/90 px-2 py-0.5 rounded-lg border border-slate-800">
+                <span className="text-white font-semibold truncate">📍 נאות התיכון / Объект Центр</span>
+                <span className="text-emerald-400 font-mono font-bold shrink-0">R = 150m</span>
               </div>
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-300 bg-slate-900 px-3 py-2 rounded-xl border border-slate-800">
-              <span>Статус геозоны работника:</span>
+            <div className="flex items-center justify-between text-xs text-slate-300 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+              <span>Статус геозоны:</span>
               <span className="text-emerald-400 font-bold">Внутри зоны (12м) ✓</span>
             </div>
           </div>
@@ -1123,9 +1119,9 @@ export function PresentationPage() {
       </header>
 
       {/* 2. Main Animated Video Card Stage */}
-      <main className="relative z-10 flex-1 flex flex-col justify-center max-w-6xl w-full mx-auto px-4 sm:px-8 py-6">
+      <main className="relative z-10 flex-1 flex flex-col justify-start pt-3 sm:pt-5 pb-6 max-w-6xl w-full mx-auto px-4 sm:px-8">
         {/* Top Segmented Video Story Progress Bar */}
-        <div className="grid grid-cols-8 gap-1.5 mb-6" dir="ltr">
+        <div className="grid grid-cols-8 gap-1.5 mb-5 shrink-0" dir="ltr">
           {slides.map((s, idx) => {
             const pct =
               idx < currentIdx ? 100 : idx === currentIdx ? slideProgress : 0;
@@ -1155,29 +1151,35 @@ export function PresentationPage() {
         </div>
 
         {/* Main Card */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden min-h-[580px] lg:min-h-[610px] flex flex-col justify-between transition-all duration-200">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start flex-1">
             {/* Left / Main Text Column */}
-            <div className="lg:col-span-7 space-y-5">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-extrabold tracking-wider uppercase">
-                <span>{currentSlide.badge}</span>
+            <div className="lg:col-span-7 flex flex-col space-y-3.5">
+              <div className="h-7 flex items-center">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-extrabold tracking-wider uppercase">
+                  <span>{currentSlide.badge}</span>
+                </div>
               </div>
 
-              <h1 className="text-2xl sm:text-4xl font-black text-white leading-tight">
-                {currentSlide.title}
-              </h1>
+              <div className="min-h-[4.25rem] sm:min-h-[5rem] flex items-center">
+                <h1 className="text-2xl sm:text-3xl lg:text-3xl font-black text-white leading-tight">
+                  {currentSlide.title}
+                </h1>
+              </div>
 
-              <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-                {currentSlide.subtitle}
-              </p>
+              <div className="min-h-[2.5rem] sm:min-h-[3rem] flex items-center">
+                <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+                  {currentSlide.subtitle}
+                </p>
+              </div>
 
-              <ul className="space-y-3 pt-1">
+              <ul className="space-y-2.5 pt-1 min-h-[210px] sm:min-h-[230px] flex flex-col justify-start">
                 {currentSlide.bullets.map((b, i) => (
                   <li
                     key={i}
-                    className="flex items-start gap-3 text-xs sm:text-sm text-slate-200 bg-slate-950/60 border border-slate-800/80 p-3 rounded-2xl"
+                    className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200 bg-slate-950/60 border border-slate-800/80 p-2.5 sm:p-3 rounded-2xl"
                   >
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 shrink-0 mt-0.5" />
                     <span className="leading-relaxed">{b}</span>
                   </li>
                 ))}
@@ -1185,19 +1187,21 @@ export function PresentationPage() {
             </div>
 
             {/* Right / Visual Card & KPI Highlight */}
-            <div className="lg:col-span-5 space-y-4">
-              {/* Interactive UI Mockup */}
-              {renderVisualMockup(currentSlide.mockupType)}
+            <div className="lg:col-span-5 flex flex-col space-y-4">
+              {/* Interactive UI Mockup Container */}
+              <div className="h-[210px] flex flex-col justify-center">
+                {renderVisualMockup(currentSlide.mockupType)}
+              </div>
 
               {/* Key Metric Highlight Card */}
-              <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-950/80 via-slate-900 to-slate-950 border border-emerald-500/30 text-center shadow-lg">
+              <div className="h-[155px] p-5 rounded-2xl bg-gradient-to-br from-emerald-950/80 via-slate-900 to-slate-950 border border-emerald-500/30 text-center shadow-lg flex flex-col justify-center items-center">
                 <div className="text-xs font-bold uppercase tracking-wider text-emerald-300">
                   {currentSlide.highlightTitle}
                 </div>
-                <div className="text-3xl sm:text-4xl font-black text-white my-2">
+                <div className="text-3xl sm:text-4xl font-black text-white my-1.5 font-mono">
                   {currentSlide.highlightValue}
                 </div>
-                <p className="text-xs text-slate-300 max-w-xs mx-auto leading-relaxed">
+                <p className="text-xs text-slate-300 max-w-xs mx-auto leading-relaxed line-clamp-2">
                   {currentSlide.highlightDesc}
                 </p>
               </div>
@@ -1205,7 +1209,7 @@ export function PresentationPage() {
           </div>
 
           {/* Bottom Card Navigation Controls */}
-          <div className="mt-8 pt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-4">
+          <div className="mt-6 pt-5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1213,7 +1217,7 @@ export function PresentationPage() {
                 className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition"
                 title="Previous"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5 rtl:rotate-180" />
               </button>
               <span className="text-xs font-mono font-bold text-slate-300 px-3">
                 {labels.slideOf} {currentIdx + 1} / {slides.length}
@@ -1224,23 +1228,15 @@ export function PresentationPage() {
                 className="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition shadow"
                 title="Next"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-5 h-5 rtl:rotate-180" />
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => navigate('/worker')}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition"
-              >
-                <Smartphone className="w-4 h-4 text-emerald-400" />
-                <span>{labels.workerDemoBtn}</span>
-              </button>
+            <div className="flex items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => navigate('/login')}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-950 transition"
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-950 transition active:scale-95"
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span>{labels.tryNowBtn}</span>

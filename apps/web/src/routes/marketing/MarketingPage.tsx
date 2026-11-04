@@ -57,9 +57,6 @@ export function MarketingPage() {
   const [workerCount, setWorkerCount] = useState(15);
   const [hourlyRate, setHourlyRate] = useState(45); // in ILS/hour
 
-  // Saved worker on this device
-  const savedWorkerEmpId = typeof window !== 'undefined' ? localStorage.getItem('worktime_last_worker_empid') : null;
-
   // Calculated estimates: Average wasted hours prevented = 3.5 hrs / worker / week
   const monthlySavings = Math.round(workerCount * 3.5 * 4.33 * hourlyRate);
 
@@ -180,23 +177,6 @@ export function MarketingPage() {
               ))}
             </div>
 
-            {savedWorkerEmpId ? (
-              <button
-                onClick={() => navigate(`/w/${savedWorkerEmpId}`)}
-                className="px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-xl font-bold text-xs hover:bg-emerald-500/30 transition flex items-center gap-1.5"
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{t('marketing.nav.myShift')}</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate('/worker')}
-                className="hidden sm:flex px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 rounded-xl font-medium text-xs transition items-center gap-1.5"
-              >
-                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{t('marketing.nav.worker')}</span>
-              </button>
-            )}
             <button
               onClick={() => navigate('/login')}
               className="px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition whitespace-nowrap"
@@ -212,22 +192,6 @@ export function MarketingPage() {
           </div>
         </div>
       </header>
-
-      {/* Saved Worker Quick Notification Banner */}
-      {savedWorkerEmpId && (
-        <div className="bg-emerald-950/80 border-b border-emerald-600/40 px-6 py-2.5 text-xs text-emerald-200 flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-2">
-            <Smartphone className="w-4 h-4 text-emerald-400" />
-            <span>{t('marketing.banner.savedWorker')}</span>
-          </div>
-          <button
-            onClick={() => navigate(`/w/${savedWorkerEmpId}`)}
-            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-lg text-xs transition"
-          >
-            {t('marketing.banner.goToShifts')}
-          </button>
-        </div>
-      )}
 
       {/* 2. Hero Section */}
       <section className="relative overflow-hidden pt-16 pb-24 md:pt-24 md:pb-32 px-6">
