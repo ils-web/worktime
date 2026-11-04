@@ -43,6 +43,8 @@ export function ClientSettingsTab() {
     morning: { start: '07:00', end: '16:00' },
     evening: { start: '16:00', end: '00:00' },
     night: { start: '22:00', end: '06:00' },
+    shabbatEnter: '16:00',
+    overtimeThreshold: 9,
   });
   const [positions, setPositions] = useState<string[]>([...DEFAULT_COMPANY_POSITIONS]);
   const [newPositionInput, setNewPositionInput] = useState('');
@@ -76,7 +78,13 @@ export function ClientSettingsTab() {
       setAutoDeductLunch(!!s.autoDeductLunch);
       setLogoUrl(s.logoUrl || '');
       if (s.defaultShifts) {
-        setShifts(s.defaultShifts);
+        setShifts({
+          morning: s.defaultShifts.morning || { start: '07:00', end: '16:00' },
+          evening: s.defaultShifts.evening || { start: '16:00', end: '00:00' },
+          night: s.defaultShifts.night || { start: '22:00', end: '06:00' },
+          shabbatEnter: s.defaultShifts.shabbatEnter || '16:00',
+          overtimeThreshold: Number(s.defaultShifts.overtimeThreshold) > 0 ? Number(s.defaultShifts.overtimeThreshold) : 9,
+        });
       }
       setPositions(normalizePositionsList(s.positions));
       setLegalName(s.legalName || '');
@@ -405,6 +413,62 @@ export function ClientSettingsTab() {
                         }
                       />
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Israeli Labor Law: Friday Shabbat Entrance & Overtime 125% / 150% Threshold */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="p-4 bg-slate-950/70 border border-slate-800 hover:border-slate-700/80 rounded-2xl flex items-center justify-between gap-4 transition shadow-sm">
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Sunset className="w-4 h-4 text-amber-400" />
+                      <span>Вход Шаббата в пятницу (כניסת שבת)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Часы работы в пятницу после указанного времени автоматически начисляются по субботнему тарифу (150%).
+                    </p>
+                  </div>
+                  <div className="w-28 shrink-0">
+                    <TimeInput24
+                      value={shifts.shabbatEnter || '16:00'}
+                      align="right"
+                      onChange={(val) =>
+                        setShifts({
+                          ...shifts,
+                          shabbatEnter: val,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-950/70 border border-slate-800 hover:border-slate-700/80 rounded-2xl flex items-center justify-between gap-4 transition shadow-sm">
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-emerald-400" />
+                      <span>Порог сверхурочных (125% / 150%)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Первые 2 ч сверх дневной нормы считаются по тарифу <b className="text-amber-300">125%</b>, последующие часы — <b className="text-rose-300">150%</b>.
+                    </p>
+                  </div>
+                  <div className="w-32 shrink-0">
+                    <select
+                      value={String(shifts.overtimeThreshold || 9)}
+                      onChange={(e) =>
+                        setShifts({
+                          ...shifts,
+                          overtimeThreshold: parseFloat(e.target.value) || 9,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs font-mono font-bold focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="9">9.0 ч (Стандарт)</option>
+                      <option value="8.6">8.6 ч (5-дневка)</option>
+                      <option value="8.5">8.5 ч</option>
+                      <option value="8">8.0 ч</option>
+                    </select>
                   </div>
                 </div>
               </div>

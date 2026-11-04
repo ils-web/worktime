@@ -1093,6 +1093,8 @@ async function computeClientReportRows(
 
   const nightStart = shiftsConfig.night?.start || '22:00';
   const nightEnd = shiftsConfig.night?.end || '06:00';
+  const shabbatEnter = shiftsConfig.shabbatEnter || '16:00';
+  const overtimeThreshold = Number(shiftsConfig.overtimeThreshold) > 0 ? Number(shiftsConfig.overtimeThreshold) : 9;
   const autoDeductLunch = client?.autoDeductLunch ?? false;
 
   const whereEmp: any = { clientId };
@@ -1210,6 +1212,11 @@ async function computeClientReportRows(
     const empShifts = (emp.shifts as unknown as ClientShiftsConfig) || shiftsConfig;
     const empNightStart = empShifts?.night?.start || nightStart;
     const empNightEnd = empShifts?.night?.end || nightEnd;
+    const empShabbatEnter = empShifts?.shabbatEnter || shabbatEnter;
+    const empOvertimeThreshold =
+      Number(empShifts?.overtimeThreshold) > 0
+        ? Number(empShifts.overtimeThreshold)
+        : overtimeThreshold;
 
     // 4. Calculate for each date
     for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
@@ -1217,7 +1224,9 @@ async function computeClientReportRows(
         daySessions,
         autoDeductLunch,
         empNightStart,
-        empNightEnd
+        empNightEnd,
+        empShabbatEnter,
+        empOvertimeThreshold
       );
 
       const firstInParts = getJerusalemParts(daySessions[0]!.clockIn);
@@ -1241,6 +1250,8 @@ async function computeClientReportRows(
         nightHours: dailyCalc.nightHours,
         saturdayHours: dailyCalc.saturdayHours,
         overtimeHours: dailyCalc.overtimeHours,
+        overtime125Hours: dailyCalc.overtime125Hours,
+        overtime150Hours: dailyCalc.overtime150Hours,
         notes: notesByDate[dateStr] || '',
         isManual: hasManual,
         logIds: allLogIds,

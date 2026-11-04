@@ -114,16 +114,30 @@ describe('Time and Night Hours Rules', () => {
     expect(result.nightHours).toBe(6);
   });
 
-  it('calculates daily overtime (> 9h)', () => {
-    // 10 hour day shift
+  it('calculates daily overtime (> 9h) and splits into 125% (first 2h) and 150% (rest)', () => {
+    // 12 hour day shift (08:00 to 20:00 local) -> 9h regular + 2h @ 125% + 1h @ 150%
     const clockIn = new Date('2026-10-04T05:00:00Z'); // 08:00 local
-    const clockOut = new Date('2026-10-04T15:00:00Z'); // 18:00 local (10h)
+    const clockOut = new Date('2026-10-04T17:00:00Z'); // 20:00 local (12h)
 
     const daily = calculateDailyHours([{ clockIn, clockOut }], false);
-    expect(daily.grossHours).toBe(10);
-    expect(daily.netHours).toBe(10);
-    expect(daily.overtimeHours).toBe(1);
+    expect(daily.grossHours).toBe(12);
+    expect(daily.netHours).toBe(12);
+    expect(daily.overtimeHours).toBe(3);
+    expect(daily.overtime125Hours).toBe(2);
+    expect(daily.overtime150Hours).toBe(1);
     expect(daily.regularHours).toBe(9);
+  });
+
+  it('calculates Friday Shabbat entrance hours (כניסת שבת) from configured Friday time', () => {
+    // 2026-10-02 is Friday. Shift from 13:00 to 19:00 local (6h total).
+    // With Shabbat entrance at 16:00, hours from 16:00 to 19:00 (3h) count as saturdayHours.
+    const friIn = jerusalemDateTimeToDate('2026-10-02', '13:00');
+    const friOut = jerusalemDateTimeToDate('2026-10-02', '19:00');
+
+    const friDaily = calculateDailyHours([{ clockIn: friIn, clockOut: friOut }], false, '22:00', '06:00', '16:00', 8.6);
+    expect(friDaily.grossHours).toBe(6);
+    expect(friDaily.netHours).toBe(6);
+    expect(friDaily.saturdayHours).toBe(3);
   });
 
   it('applies auto lunch deduction when gross >= 6 and no 30m break', () => {

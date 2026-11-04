@@ -10,6 +10,8 @@ export interface ReportRow {
   nightHours: number;
   saturdayHours: number;
   overtimeHours: number;
+  overtime125Hours?: number;
+  overtime150Hours?: number;
   notes: string;
   isManual?: boolean;
   logIds?: number[];
@@ -25,21 +27,7 @@ const CSV_TRANSLATIONS: Record<
   {
     reportTitle: string;
     totalLabel: string;
-    headers: [
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      string
-    ];
+    headers: string[];
   }
 > = {
   he: {
@@ -57,7 +45,9 @@ const CSV_TRANSLATIONS: Record<
       'סה"כ שעות נטו',
       'שעות לילה',
       'שעות שבת',
-      'שעות נוספות',
+      'שעות נוספות (סה"כ)',
+      'שעות 125%',
+      'שעות 150%',
       'הערות',
     ],
   },
@@ -76,7 +66,9 @@ const CSV_TRANSLATIONS: Record<
       'Итого часы',
       'Ночные часы',
       'Субботние часы',
-      'Сверхурочные',
+      'Сверхурочные (всего)',
+      'Сверхурочные 125%',
+      'Сверхурочные 150%',
       'Заметки',
     ],
   },
@@ -95,7 +87,9 @@ const CSV_TRANSLATIONS: Record<
       'Net Hours',
       'Night Hours',
       'Saturday Hours',
-      'Overtime Hours',
+      'Overtime (Total)',
+      'Overtime 125%',
+      'Overtime 150%',
       'Notes',
     ],
   },
@@ -115,6 +109,8 @@ const CSV_TRANSLATIONS: Record<
       'ساعات ليلية',
       'ساعات السبت',
       'ساعات إضافية',
+      'إضافي 125%',
+      'إضافي 150%',
       'ملاحظات',
     ],
   },
@@ -148,11 +144,15 @@ export function generateCsvReport(rows: ReportRow[], clientName: string, lang: s
   let totalNight = 0;
   let totalSat = 0;
   let totalOt = 0;
+  let totalOt125 = 0;
+  let totalOt150 = 0;
 
   const csvRows = rows.map((r) => {
     const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? ' *' : '');
     const dayStr = getDayOfWeek(r.date, targetLang) || r.dayOfWeek || '';
     const noteStr = localizeSystemNote(r.notes || '', targetLang);
+    const ot125 = r.overtime125Hours ?? Math.round(Math.min(2, r.overtimeHours || 0) * 100) / 100;
+    const ot150 = r.overtime150Hours ?? Math.max(0, Math.round(((r.overtimeHours || 0) - ot125) * 100) / 100);
 
     totalGross += r.grossHours;
     totalLunch += r.lunchDeducted;
@@ -160,6 +160,8 @@ export function generateCsvReport(rows: ReportRow[], clientName: string, lang: s
     totalNight += r.nightHours;
     totalSat += r.saturdayHours;
     totalOt += r.overtimeHours;
+    totalOt125 += ot125;
+    totalOt150 += ot150;
 
     return [
       escapeCsvCell(r.empId),
@@ -174,6 +176,8 @@ export function generateCsvReport(rows: ReportRow[], clientName: string, lang: s
       r.nightHours.toFixed(2),
       r.saturdayHours.toFixed(2),
       r.overtimeHours.toFixed(2),
+      ot125.toFixed(2),
+      ot150.toFixed(2),
       escapeCsvCell(noteStr),
     ].join(',');
   });
@@ -192,6 +196,8 @@ export function generateCsvReport(rows: ReportRow[], clientName: string, lang: s
       totalNight.toFixed(2),
       totalSat.toFixed(2),
       totalOt.toFixed(2),
+      totalOt125.toFixed(2),
+      totalOt150.toFixed(2),
       '""',
     ].join(',');
     csvRows.push(totalRow);

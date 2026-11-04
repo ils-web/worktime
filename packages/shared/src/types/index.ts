@@ -28,6 +28,8 @@ export interface ClientShiftsConfig {
   morning: ShiftTimeWindow;
   evening: ShiftTimeWindow;
   night: ShiftTimeWindow;
+  shabbatEnter?: string; // Friday Shabbat start time in HH:mm, e.g. "16:00"
+  overtimeThreshold?: number; // Daily net hours threshold before overtime, e.g. 9 or 8.6
 }
 
 export interface GeofenceConfig {

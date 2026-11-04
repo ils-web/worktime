@@ -126,6 +126,17 @@ export function ClientHoursTab() {
   const totalNight = hoursList.reduce((acc, h) => acc + (h.nightHours || 0), 0);
   const totalSaturday = hoursList.reduce((acc, h) => acc + (h.saturdayHours || 0), 0);
   const totalOvertime = hoursList.reduce((acc, h) => acc + (h.overtimeHours || 0), 0);
+  const totalOvertime125 = hoursList.reduce(
+    (acc, h) => acc + (h.overtime125Hours ?? Math.min(2, h.overtimeHours || 0)),
+    0
+  );
+  const totalOvertime150 = hoursList.reduce(
+    (acc, h) =>
+      acc +
+      (h.overtime150Hours ??
+        Math.max(0, (h.overtimeHours || 0) - Math.min(2, h.overtimeHours || 0))),
+    0
+  );
 
   // Quick date presets (in Asia/Jerusalem calendar)
   const handleThisMonth = () => {
@@ -388,6 +399,13 @@ export function ClientHoursTab() {
           <div className="text-2xl font-black text-rose-400 mt-2">
             {totalOvertime.toFixed(1)} <span className="text-xs font-normal text-slate-400">{t('admin.hourUnit')}</span>
           </div>
+          {totalOvertime > 0 && (
+            <div className="flex items-center gap-2 mt-1 text-[10px] font-mono">
+              <span className="text-amber-300">125%: {totalOvertime125.toFixed(1)}</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-rose-300">150%: {totalOvertime150.toFixed(1)}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -543,8 +561,19 @@ export function ClientHoursTab() {
                       <td className="p-3.5 text-xs text-amber-400">
                         {row.saturdayHours > 0 ? `${row.saturdayHours.toFixed(2)} ${t('admin.hourUnit')}` : '—'}
                       </td>
-                      <td className="p-3.5 text-xs text-rose-400">
-                        {row.overtimeHours > 0 ? `${row.overtimeHours.toFixed(2)} ${t('admin.hourUnit')}` : '—'}
+                      <td className="p-3.5 text-xs text-rose-400 whitespace-nowrap">
+                        {row.overtimeHours > 0 ? (
+                          <div>
+                            <span className="font-semibold">
+                              {row.overtimeHours.toFixed(2)} {t('admin.hourUnit')}
+                            </span>
+                            <span className="block text-[10px] font-mono text-slate-400 mt-0.5">
+                              125%: {(row.overtime125Hours ?? Math.min(2, row.overtimeHours)).toFixed(1)} | 150%: {(row.overtime150Hours ?? Math.max(0, row.overtimeHours - 2)).toFixed(1)}
+                            </span>
+                          </div>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td
                         className="p-3.5 text-xs text-slate-400 max-w-xs truncate"

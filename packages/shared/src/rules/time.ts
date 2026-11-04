@@ -107,6 +107,7 @@ export interface SessionHoursBreakdown {
   durationMinutes: number;
   totalHours: number;
   nightHours: number;
+  saturdayMinutes: number;
   isSaturday: boolean;
   dateStr: string; // Clock-in calendar date in Jerusalem timezone
 }
@@ -114,12 +115,13 @@ export interface SessionHoursBreakdown {
 /**
  * Calculates hours breakdown for a single WorkSession (clockIn to clockOut).
  * Night hours are evaluated minute-by-minute in Asia/Jerusalem.
- * Saturday is detected if clockIn OR clockOut is Saturday (dayOfWeek === 6).
+ * Saturday hours include full Saturday sessions AND Friday minutes at or after shabbatEnterHHmm (default "16:00").
  */
 export function calculateSessionHours(
   session: WorkSession,
   nightStartHHmm = '22:00',
-  nightEndHHmm = '06:00'
+  nightEndHHmm = '06:00',
+  shabbatEnterHHmm = '16:00'
 ): SessionHoursBreakdown {
   const inMs = session.clockIn.getTime();
   const outMs = session.clockOut.getTime();
@@ -130,6 +132,7 @@ export function calculateSessionHours(
       durationMinutes: 0,
       totalHours: 0,
       nightHours: 0,
+      saturdayMinutes: 0,
       isSaturday: parts.dayOfWeek === 6,
       dateStr: parts.dateStr,
     };
@@ -141,13 +144,15 @@ export function calculateSessionHours(
 
   const inParts = getJerusalemParts(session.clockIn);
   const outParts = getJerusalemParts(session.clockOut);
-  const isSaturday = inParts.dayOfWeek === 6 || outParts.dayOfWeek === 6;
+  const touchesSaturday = inParts.dayOfWeek === 6 || outParts.dayOfWeek === 6;
 
   const nightStartMin = parseTimeToMinutes(nightStartHHmm);
   const nightEndMin = parseTimeToMinutes(nightEndHHmm);
+  const shabbatEnterMin = shabbatEnterHHmm ? parseTimeToMinutes(shabbatEnterHHmm) : 16 * 60;
 
-  // Minute-by-minute check for night hours in Asia/Jerusalem
+  // Minute-by-minute check for night hours and Friday Shabbat entrance in Asia/Jerusalem
   let nightMinutesCount = 0;
+  let shabbatMinutesCount = 0;
   // Step by 1 minute (60,000 ms) from clockIn to clockOut
   for (let t = inMs; t < outMs; t += 60000) {
     const curParts = getJerusalemParts(new Date(t));
@@ -155,14 +160,23 @@ export function calculateSessionHours(
     if (isMinuteInNightWindow(curMinuteOfDay, nightStartMin, nightEndMin)) {
       nightMinutesCount++;
     }
+    if (
+      curParts.dayOfWeek === 6 ||
+      (curParts.dayOfWeek === 5 && curMinuteOfDay >= shabbatEnterMin)
+    ) {
+      shabbatMinutesCount++;
+    }
   }
 
   const nightHours = Math.round((nightMinutesCount / 60) * 100) / 100;
+  const saturdayMinutes = touchesSaturday ? durationMinutes : shabbatMinutesCount;
+  const isSaturday = saturdayMinutes > 0;
 
   return {
     durationMinutes,
     totalHours,
     nightHours,
+    saturdayMinutes,
     isSaturday,
     dateStr: inParts.dateStr,
   };
@@ -176,6 +190,8 @@ export interface DailyCalculationResult {
   nightHours: number;
   saturdayHours: number;
   overtimeHours: number;
+  overtime125Hours: number;
+  overtime150Hours: number;
   regularHours: number;
 }
 
@@ -183,14 +199,16 @@ export interface DailyCalculationResult {
  * Calculates daily totals for a group of sessions belonging to the same calendar day.
  * Applies:
  * 1. Auto lunch deduction (if enabled, gross >= 6, and no gap >= 30 mins)
- * 2. Saturday hours (if any session touches Saturday, entire session hours go to Saturday)
- * 3. Overtime hours (net hours > 9)
+ * 2. Saturday / Shabbat hours (Saturday sessions + Friday hours after shabbatEnterHHmm)
+ * 3. Overtime hours (net hours > overtimeThresholdHours, split into first 2h @ 125% and remaining @ 150%)
  */
 export function calculateDailyHours(
   sessions: WorkSession[],
   autoDeductLunch = false,
   nightStartHHmm = '22:00',
-  nightEndHHmm = '06:00'
+  nightEndHHmm = '06:00',
+  shabbatEnterHHmm = '16:00',
+  overtimeThresholdHours = 9
 ): DailyCalculationResult {
   if (sessions.length === 0) {
     return {
@@ -201,6 +219,8 @@ export function calculateDailyHours(
       nightHours: 0,
       saturdayHours: 0,
       overtimeHours: 0,
+      overtime125Hours: 0,
+      overtime150Hours: 0,
       regularHours: 0,
     };
   }
@@ -219,12 +239,12 @@ export function calculateDailyHours(
 
   for (let i = 0; i < sorted.length; i++) {
     const cur = sorted[i]!;
-    const breakdown = calculateSessionHours(cur, nightStartHHmm, nightEndHHmm);
+    const breakdown = calculateSessionHours(cur, nightStartHHmm, nightEndHHmm, shabbatEnterHHmm);
     totalDurationMinutes += breakdown.durationMinutes;
     totalNightHours += breakdown.nightHours;
 
-    if (breakdown.isSaturday) {
-      saturdayDurationMinutes += breakdown.durationMinutes;
+    if (breakdown.saturdayMinutes > 0) {
+      saturdayDurationMinutes += breakdown.saturdayMinutes;
     }
 
     // Check gap with previous session
@@ -252,11 +272,15 @@ export function calculateDailyHours(
   const saturdayHours = Math.min(netHours, rawSaturdayHours);
   const nightHours = Math.min(netHours, Math.round(totalNightHours * 100) / 100);
 
-  // Overtime rule: if netHours > 9, excess goes to overtime
+  // Overtime rule: if netHours > threshold (default 9h), excess goes to overtime (first 2h @ 125%, rest @ 150%)
+  const threshold = overtimeThresholdHours > 0 ? overtimeThresholdHours : 9;
   let overtimeHours = 0;
-  if (netHours > 9) {
-    overtimeHours = Math.round((netHours - 9) * 100) / 100;
+  if (netHours > threshold) {
+    overtimeHours = Math.round((netHours - threshold) * 100) / 100;
   }
+
+  const overtime125Hours = Math.round(Math.min(2, overtimeHours) * 100) / 100;
+  const overtime150Hours = Math.max(0, Math.round((overtimeHours - overtime125Hours) * 100) / 100);
 
   const regularHours = Math.round((netHours - overtimeHours) * 100) / 100;
 
@@ -268,6 +292,8 @@ export function calculateDailyHours(
     nightHours,
     saturdayHours,
     overtimeHours,
+    overtime125Hours,
+    overtime150Hours,
     regularHours,
   };
 }

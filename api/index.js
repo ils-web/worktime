@@ -96926,7 +96926,7 @@ function isMinuteInNightWindow(minuteOfDay, nightStartMinutes, nightEndMinutes) 
     return minuteOfDay >= nightStartMinutes || minuteOfDay < nightEndMinutes;
   }
 }
-function calculateSessionHours(session, nightStartHHmm = "22:00", nightEndHHmm = "06:00") {
+function calculateSessionHours(session, nightStartHHmm = "22:00", nightEndHHmm = "06:00", shabbatEnterHHmm = "16:00") {
   const inMs = session.clockIn.getTime();
   const outMs = session.clockOut.getTime();
   if (outMs <= inMs) {
@@ -96935,6 +96935,7 @@ function calculateSessionHours(session, nightStartHHmm = "22:00", nightEndHHmm =
       durationMinutes: 0,
       totalHours: 0,
       nightHours: 0,
+      saturdayMinutes: 0,
       isSaturday: parts.dayOfWeek === 6,
       dateStr: parts.dateStr
     };
@@ -96944,27 +96945,35 @@ function calculateSessionHours(session, nightStartHHmm = "22:00", nightEndHHmm =
   const totalHours = Math.round(durationMinutes / 60 * 100) / 100;
   const inParts = getJerusalemParts(session.clockIn);
   const outParts = getJerusalemParts(session.clockOut);
-  const isSaturday = inParts.dayOfWeek === 6 || outParts.dayOfWeek === 6;
+  const touchesSaturday = inParts.dayOfWeek === 6 || outParts.dayOfWeek === 6;
   const nightStartMin = parseTimeToMinutes(nightStartHHmm);
   const nightEndMin = parseTimeToMinutes(nightEndHHmm);
+  const shabbatEnterMin = shabbatEnterHHmm ? parseTimeToMinutes(shabbatEnterHHmm) : 16 * 60;
   let nightMinutesCount = 0;
+  let shabbatMinutesCount = 0;
   for (let t = inMs; t < outMs; t += 6e4) {
     const curParts = getJerusalemParts(new Date(t));
     const curMinuteOfDay = curParts.hour * 60 + curParts.minute;
     if (isMinuteInNightWindow(curMinuteOfDay, nightStartMin, nightEndMin)) {
       nightMinutesCount++;
     }
+    if (curParts.dayOfWeek === 6 || curParts.dayOfWeek === 5 && curMinuteOfDay >= shabbatEnterMin) {
+      shabbatMinutesCount++;
+    }
   }
   const nightHours = Math.round(nightMinutesCount / 60 * 100) / 100;
+  const saturdayMinutes = touchesSaturday ? durationMinutes : shabbatMinutesCount;
+  const isSaturday = saturdayMinutes > 0;
   return {
     durationMinutes,
     totalHours,
     nightHours,
+    saturdayMinutes,
     isSaturday,
     dateStr: inParts.dateStr
   };
 }
-function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm = "22:00", nightEndHHmm = "06:00") {
+function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm = "22:00", nightEndHHmm = "06:00", shabbatEnterHHmm = "16:00", overtimeThresholdHours = 9) {
   if (sessions.length === 0) {
     return {
       dateStr: "",
@@ -96974,6 +96983,8 @@ function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm =
       nightHours: 0,
       saturdayHours: 0,
       overtimeHours: 0,
+      overtime125Hours: 0,
+      overtime150Hours: 0,
       regularHours: 0
     };
   }
@@ -96988,11 +96999,11 @@ function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm =
   const dateStr = firstSessionParts.dateStr;
   for (let i = 0; i < sorted.length; i++) {
     const cur = sorted[i];
-    const breakdown = calculateSessionHours(cur, nightStartHHmm, nightEndHHmm);
+    const breakdown = calculateSessionHours(cur, nightStartHHmm, nightEndHHmm, shabbatEnterHHmm);
     totalDurationMinutes += breakdown.durationMinutes;
     totalNightHours += breakdown.nightHours;
-    if (breakdown.isSaturday) {
-      saturdayDurationMinutes += breakdown.durationMinutes;
+    if (breakdown.saturdayMinutes > 0) {
+      saturdayDurationMinutes += breakdown.saturdayMinutes;
     }
     if (i > 0) {
       const prev = sorted[i - 1];
@@ -97013,10 +97024,13 @@ function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm =
   const rawSaturdayHours = Math.round(saturdayDurationMinutes / 60 * 100) / 100;
   const saturdayHours = Math.min(netHours, rawSaturdayHours);
   const nightHours = Math.min(netHours, Math.round(totalNightHours * 100) / 100);
+  const threshold = overtimeThresholdHours > 0 ? overtimeThresholdHours : 9;
   let overtimeHours = 0;
-  if (netHours > 9) {
-    overtimeHours = Math.round((netHours - 9) * 100) / 100;
+  if (netHours > threshold) {
+    overtimeHours = Math.round((netHours - threshold) * 100) / 100;
   }
+  const overtime125Hours = Math.round(Math.min(2, overtimeHours) * 100) / 100;
+  const overtime150Hours = Math.max(0, Math.round((overtimeHours - overtime125Hours) * 100) / 100);
   const regularHours = Math.round((netHours - overtimeHours) * 100) / 100;
   return {
     dateStr,
@@ -97026,6 +97040,8 @@ function calculateDailyHours(sessions, autoDeductLunch = false, nightStartHHmm =
     nightHours,
     saturdayHours,
     overtimeHours,
+    overtime125Hours,
+    overtime150Hours,
     regularHours
   };
 }
@@ -98131,7 +98147,9 @@ var CSV_TRANSLATIONS = {
       '\u05E1\u05D4"\u05DB \u05E9\u05E2\u05D5\u05EA \u05E0\u05D8\u05D5',
       "\u05E9\u05E2\u05D5\u05EA \u05DC\u05D9\u05DC\u05D4",
       "\u05E9\u05E2\u05D5\u05EA \u05E9\u05D1\u05EA",
-      "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA",
+      '\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA (\u05E1\u05D4"\u05DB)',
+      "\u05E9\u05E2\u05D5\u05EA 125%",
+      "\u05E9\u05E2\u05D5\u05EA 150%",
       "\u05D4\u05E2\u05E8\u05D5\u05EA"
     ]
   },
@@ -98150,7 +98168,9 @@ var CSV_TRANSLATIONS = {
       "\u0418\u0442\u043E\u0433\u043E \u0447\u0430\u0441\u044B",
       "\u041D\u043E\u0447\u043D\u044B\u0435 \u0447\u0430\u0441\u044B",
       "\u0421\u0443\u0431\u0431\u043E\u0442\u043D\u0438\u0435 \u0447\u0430\u0441\u044B",
-      "\u0421\u0432\u0435\u0440\u0445\u0443\u0440\u043E\u0447\u043D\u044B\u0435",
+      "\u0421\u0432\u0435\u0440\u0445\u0443\u0440\u043E\u0447\u043D\u044B\u0435 (\u0432\u0441\u0435\u0433\u043E)",
+      "\u0421\u0432\u0435\u0440\u0445\u0443\u0440\u043E\u0447\u043D\u044B\u0435 125%",
+      "\u0421\u0432\u0435\u0440\u0445\u0443\u0440\u043E\u0447\u043D\u044B\u0435 150%",
       "\u0417\u0430\u043C\u0435\u0442\u043A\u0438"
     ]
   },
@@ -98169,7 +98189,9 @@ var CSV_TRANSLATIONS = {
       "Net Hours",
       "Night Hours",
       "Saturday Hours",
-      "Overtime Hours",
+      "Overtime (Total)",
+      "Overtime 125%",
+      "Overtime 150%",
       "Notes"
     ]
   },
@@ -98189,6 +98211,8 @@ var CSV_TRANSLATIONS = {
       "\u0633\u0627\u0639\u0627\u062A \u0644\u064A\u0644\u064A\u0629",
       "\u0633\u0627\u0639\u0627\u062A \u0627\u0644\u0633\u0628\u062A",
       "\u0633\u0627\u0639\u0627\u062A \u0625\u0636\u0627\u0641\u064A\u0629",
+      "\u0625\u0636\u0627\u0641\u064A 125%",
+      "\u0625\u0636\u0627\u0641\u064A 150%",
       "\u0645\u0644\u0627\u062D\u0638\u0627\u062A"
     ]
   }
@@ -98208,16 +98232,22 @@ function generateCsvReport(rows, clientName, lang = "he") {
   let totalNight = 0;
   let totalSat = 0;
   let totalOt = 0;
+  let totalOt125 = 0;
+  let totalOt150 = 0;
   const csvRows = rows.map((r) => {
     const displayDate = formatIsoToDisplayDate(r.date) + (r.isManual ? " *" : "");
     const dayStr = getDayOfWeek(r.date, targetLang) || r.dayOfWeek || "";
     const noteStr = localizeSystemNote(r.notes || "", targetLang);
+    const ot125 = r.overtime125Hours ?? Math.round(Math.min(2, r.overtimeHours || 0) * 100) / 100;
+    const ot150 = r.overtime150Hours ?? Math.max(0, Math.round(((r.overtimeHours || 0) - ot125) * 100) / 100);
     totalGross += r.grossHours;
     totalLunch += r.lunchDeducted;
     totalNet += r.netHours;
     totalNight += r.nightHours;
     totalSat += r.saturdayHours;
     totalOt += r.overtimeHours;
+    totalOt125 += ot125;
+    totalOt150 += ot150;
     return [
       escapeCsvCell(r.empId),
       escapeCsvCell(r.name),
@@ -98231,6 +98261,8 @@ function generateCsvReport(rows, clientName, lang = "he") {
       r.nightHours.toFixed(2),
       r.saturdayHours.toFixed(2),
       r.overtimeHours.toFixed(2),
+      ot125.toFixed(2),
+      ot150.toFixed(2),
       escapeCsvCell(noteStr)
     ].join(",");
   });
@@ -98248,6 +98280,8 @@ function generateCsvReport(rows, clientName, lang = "he") {
       totalNight.toFixed(2),
       totalSat.toFixed(2),
       totalOt.toFixed(2),
+      totalOt125.toFixed(2),
+      totalOt150.toFixed(2),
       '""'
     ].join(",");
     csvRows.push(totalRow);
@@ -98338,8 +98372,10 @@ var LOCALES = {
       { key: "netHours", title: "\u05E0\u05D8\u05D5", width: 52, align: "center", bold: true },
       { key: "nightHours", title: "\u05DC\u05D9\u05DC\u05D4", width: 48, align: "center" },
       { key: "saturdayHours", title: "\u05E9\u05D1\u05EA", width: 48, align: "center" },
-      { key: "overtimeHours", title: "\u05E0\u05D5\u05E1\u05E4\u05D5\u05EA", width: 50, align: "center" },
-      { key: "notes", title: "\u05D4\u05E2\u05E8\u05D5\u05EA", width: 258, align: "right" }
+      { key: "overtimeHours", title: "\u05E0\u05D5\u05E1\u05E4\u05D5\u05EA", width: 44, align: "center" },
+      { key: "overtime125Hours", title: "125%", width: 42, align: "center" },
+      { key: "overtime150Hours", title: "150%", width: 42, align: "center" },
+      { key: "notes", title: "\u05D4\u05E2\u05E8\u05D5\u05EA", width: 180, align: "right" }
     ]
   },
   ru: {
@@ -98371,8 +98407,10 @@ var LOCALES = {
       { key: "netHours", title: "\u041D\u0435\u0442\u0442\u043E", width: 52, align: "center", bold: true },
       { key: "nightHours", title: "\u041D\u043E\u0447\u043D\u044B\u0435", width: 48, align: "center" },
       { key: "saturdayHours", title: "\u0421\u0443\u0431\u0431\u043E\u0442\u0430", width: 48, align: "center" },
-      { key: "overtimeHours", title: "\u041E\u0432\u0435\u0440\u0442\u0430\u0439\u043C", width: 50, align: "center" },
-      { key: "notes", title: "\u0417\u0430\u043C\u0435\u0442\u043A\u0438", width: 258, align: "left" }
+      { key: "overtimeHours", title: "\u041E\u0432\u0435\u0440\u0442\u0430\u0439\u043C", width: 44, align: "center" },
+      { key: "overtime125Hours", title: "125%", width: 42, align: "center" },
+      { key: "overtime150Hours", title: "150%", width: 42, align: "center" },
+      { key: "notes", title: "\u0417\u0430\u043C\u0435\u0442\u043A\u0438", width: 180, align: "left" }
     ]
   },
   en: {
@@ -98404,8 +98442,10 @@ var LOCALES = {
       { key: "netHours", title: "Net", width: 52, align: "center", bold: true },
       { key: "nightHours", title: "Night", width: 48, align: "center" },
       { key: "saturdayHours", title: "Sat", width: 48, align: "center" },
-      { key: "overtimeHours", title: "OT", width: 50, align: "center" },
-      { key: "notes", title: "Notes", width: 258, align: "left" }
+      { key: "overtimeHours", title: "OT", width: 44, align: "center" },
+      { key: "overtime125Hours", title: "125%", width: 42, align: "center" },
+      { key: "overtime150Hours", title: "150%", width: 42, align: "center" },
+      { key: "notes", title: "Notes", width: 180, align: "left" }
     ]
   }
 };
@@ -98849,6 +98889,19 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
           rawVal = r.overtimeHours > 0 ? r.overtimeHours.toFixed(2) : "0.00";
           if (r.overtimeHours > 0) cellColor = (0, import_pdf_lib.rgb)(0.75, 0.45, 0.05);
           break;
+        case "overtime125Hours": {
+          const ot125 = r.overtime125Hours ?? Math.round(Math.min(2, r.overtimeHours || 0) * 100) / 100;
+          rawVal = ot125 > 0 ? ot125.toFixed(2) : "0.00";
+          if (ot125 > 0) cellColor = (0, import_pdf_lib.rgb)(0.75, 0.45, 0.05);
+          break;
+        }
+        case "overtime150Hours": {
+          const ot125 = r.overtime125Hours ?? Math.round(Math.min(2, r.overtimeHours || 0) * 100) / 100;
+          const ot150 = r.overtime150Hours ?? Math.max(0, Math.round(((r.overtimeHours || 0) - ot125) * 100) / 100);
+          rawVal = ot150 > 0 ? ot150.toFixed(2) : "0.00";
+          if (ot150 > 0) cellColor = (0, import_pdf_lib.rgb)(0.75, 0.25, 0.15);
+          break;
+        }
         case "notes":
           rawVal = localizeSystemNote(r.notes || "", normLang);
           cellColor = (0, import_pdf_lib.rgb)(0.35, 0.4, 0.48);
@@ -99797,6 +99850,8 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
   };
   const nightStart = shiftsConfig.night?.start || "22:00";
   const nightEnd = shiftsConfig.night?.end || "06:00";
+  const shabbatEnter = shiftsConfig.shabbatEnter || "16:00";
+  const overtimeThreshold = Number(shiftsConfig.overtimeThreshold) > 0 ? Number(shiftsConfig.overtimeThreshold) : 9;
   const autoDeductLunch = client?.autoDeductLunch ?? false;
   const whereEmp = { clientId };
   if (foremanId) whereEmp.foremanId = foremanId;
@@ -99891,12 +99946,16 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
     const empShifts = emp.shifts || shiftsConfig;
     const empNightStart = empShifts?.night?.start || nightStart;
     const empNightEnd = empShifts?.night?.end || nightEnd;
+    const empShabbatEnter = empShifts?.shabbatEnter || shabbatEnter;
+    const empOvertimeThreshold = Number(empShifts?.overtimeThreshold) > 0 ? Number(empShifts.overtimeThreshold) : overtimeThreshold;
     for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
       const dailyCalc = calculateDailyHours(
         daySessions,
         autoDeductLunch,
         empNightStart,
-        empNightEnd
+        empNightEnd,
+        empShabbatEnter,
+        empOvertimeThreshold
       );
       const firstInParts = getJerusalemParts(daySessions[0].clockIn);
       const lastOutParts = getJerusalemParts(daySessions[daySessions.length - 1].clockOut);
@@ -99916,6 +99975,8 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
         nightHours: dailyCalc.nightHours,
         saturdayHours: dailyCalc.saturdayHours,
         overtimeHours: dailyCalc.overtimeHours,
+        overtime125Hours: dailyCalc.overtime125Hours,
+        overtime150Hours: dailyCalc.overtime150Hours,
         notes: notesByDate[dateStr] || "",
         isManual: hasManual,
         logIds: allLogIds,
@@ -100436,17 +100497,30 @@ async function computeWorkerMonthData(empId, month, shiftsConfig, autoDeductLunc
   }
   const nightStart = shiftsConfig?.night?.start || "22:00";
   const nightEnd = shiftsConfig?.night?.end || "06:00";
+  const shabbatEnter = shiftsConfig?.shabbatEnter || "16:00";
+  const overtimeThreshold = Number(shiftsConfig?.overtimeThreshold) > 0 ? Number(shiftsConfig?.overtimeThreshold) : 9;
   let totalNet = 0;
   let totalNight = 0;
   let totalSat = 0;
   let totalOt = 0;
+  let totalOt125 = 0;
+  let totalOt150 = 0;
   const days = [];
   for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
-    const daily = calculateDailyHours(daySessions, autoDeductLunch, nightStart, nightEnd);
+    const daily = calculateDailyHours(
+      daySessions,
+      autoDeductLunch,
+      nightStart,
+      nightEnd,
+      shabbatEnter,
+      overtimeThreshold
+    );
     totalNet += daily.netHours;
     totalNight += daily.nightHours;
     totalSat += daily.saturdayHours;
     totalOt += daily.overtimeHours;
+    totalOt125 += daily.overtime125Hours;
+    totalOt150 += daily.overtime150Hours;
     days.push({
       date: dateStr,
       dayOfWeek: getDayOfWeek(dateStr, "he"),
@@ -100458,6 +100532,8 @@ async function computeWorkerMonthData(empId, month, shiftsConfig, autoDeductLunc
       nightHours: daily.nightHours,
       saturdayHours: daily.saturdayHours,
       overtimeHours: daily.overtimeHours,
+      overtime125Hours: daily.overtime125Hours,
+      overtime150Hours: daily.overtime150Hours,
       isManual: daySessions.some((s) => s.isManual),
       notes: notesByDate[dateStr] || ""
     });
@@ -100467,6 +100543,8 @@ async function computeWorkerMonthData(empId, month, shiftsConfig, autoDeductLunc
     totalNight: Math.round(totalNight * 100) / 100,
     totalSaturday: Math.round(totalSat * 100) / 100,
     totalOvertime: Math.round(totalOt * 100) / 100,
+    totalOvertime125: Math.round(totalOt125 * 100) / 100,
+    totalOvertime150: Math.round(totalOt150 * 100) / 100,
     days
   };
 }
@@ -100949,7 +101027,16 @@ workerRouter.post("/log", async (req, res) => {
         const shiftsConfig = employee.shifts || employee.client.defaultShifts;
         const nightStart = shiftsConfig?.night?.start || "22:00";
         const nightEnd = shiftsConfig?.night?.end || "06:00";
-        const daily = calculateDailyHours(sameDaySessions, employee.client.autoDeductLunch, nightStart, nightEnd);
+        const shabbatEnter = shiftsConfig?.shabbatEnter || "16:00";
+        const overtimeThreshold = Number(shiftsConfig?.overtimeThreshold) > 0 ? Number(shiftsConfig?.overtimeThreshold) : 9;
+        const daily = calculateDailyHours(
+          sameDaySessions,
+          employee.client.autoDeductLunch,
+          nightStart,
+          nightEnd,
+          shabbatEnter,
+          overtimeThreshold
+        );
         const totalMinutes = Math.round(daily.netHours * 60);
         todaySummary = {
           totalNetHours: daily.netHours,
@@ -101149,7 +101236,9 @@ workerRouter.get("/report/:empId", async (req, res) => {
         totalNet: monthData.totalNet,
         totalNight: monthData.totalNight,
         totalSaturday: monthData.totalSaturday,
-        totalOvertime: monthData.totalOvertime
+        totalOvertime: monthData.totalOvertime,
+        totalOvertime125: monthData.totalOvertime125,
+        totalOvertime150: monthData.totalOvertime150
       },
       globalMonthlyStatus,
       days: monthData.days
@@ -101192,6 +101281,8 @@ workerRouter.get("/report/:empId/pdf", async (req, res) => {
       nightHours: d.nightHours,
       saturdayHours: d.saturdayHours,
       overtimeHours: d.overtimeHours,
+      overtime125Hours: d.overtime125Hours,
+      overtime150Hours: d.overtime150Hours,
       isManual: d.isManual,
       notes: d.notes || ""
     }));
@@ -101244,6 +101335,8 @@ workerRouter.get("/report/:empId/csv", async (req, res) => {
       nightHours: d.nightHours,
       saturdayHours: d.saturdayHours,
       overtimeHours: d.overtimeHours,
+      overtime125Hours: d.overtime125Hours,
+      overtime150Hours: d.overtime150Hours,
       isManual: d.isManual,
       notes: d.notes || ""
     }));

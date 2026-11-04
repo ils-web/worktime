@@ -129,8 +129,10 @@ const LOCALES: Record<string, LocaleStrings> = {
       { key: 'netHours', title: 'נטו', width: 52, align: 'center', bold: true },
       { key: 'nightHours', title: 'לילה', width: 48, align: 'center' },
       { key: 'saturdayHours', title: 'שבת', width: 48, align: 'center' },
-      { key: 'overtimeHours', title: 'נוספות', width: 50, align: 'center' },
-      { key: 'notes', title: 'הערות', width: 258, align: 'right' },
+      { key: 'overtimeHours', title: 'נוספות', width: 44, align: 'center' },
+      { key: 'overtime125Hours', title: '125%', width: 42, align: 'center' },
+      { key: 'overtime150Hours', title: '150%', width: 42, align: 'center' },
+      { key: 'notes', title: 'הערות', width: 180, align: 'right' },
     ],
   },
   ru: {
@@ -162,8 +164,10 @@ const LOCALES: Record<string, LocaleStrings> = {
       { key: 'netHours', title: 'Нетто', width: 52, align: 'center', bold: true },
       { key: 'nightHours', title: 'Ночные', width: 48, align: 'center' },
       { key: 'saturdayHours', title: 'Суббота', width: 48, align: 'center' },
-      { key: 'overtimeHours', title: 'Овертайм', width: 50, align: 'center' },
-      { key: 'notes', title: 'Заметки', width: 258, align: 'left' },
+      { key: 'overtimeHours', title: 'Овертайм', width: 44, align: 'center' },
+      { key: 'overtime125Hours', title: '125%', width: 42, align: 'center' },
+      { key: 'overtime150Hours', title: '150%', width: 42, align: 'center' },
+      { key: 'notes', title: 'Заметки', width: 180, align: 'left' },
     ],
   },
   en: {
@@ -195,8 +199,10 @@ const LOCALES: Record<string, LocaleStrings> = {
       { key: 'netHours', title: 'Net', width: 52, align: 'center', bold: true },
       { key: 'nightHours', title: 'Night', width: 48, align: 'center' },
       { key: 'saturdayHours', title: 'Sat', width: 48, align: 'center' },
-      { key: 'overtimeHours', title: 'OT', width: 50, align: 'center' },
-      { key: 'notes', title: 'Notes', width: 258, align: 'left' },
+      { key: 'overtimeHours', title: 'OT', width: 44, align: 'center' },
+      { key: 'overtime125Hours', title: '125%', width: 42, align: 'center' },
+      { key: 'overtime150Hours', title: '150%', width: 42, align: 'center' },
+      { key: 'notes', title: 'Notes', width: 180, align: 'left' },
     ],
   },
 };
@@ -738,6 +744,19 @@ export async function generatePdfReport(
           rawVal = r.overtimeHours > 0 ? r.overtimeHours.toFixed(2) : '0.00';
           if (r.overtimeHours > 0) cellColor = rgb(0.75, 0.45, 0.05);
           break;
+        case 'overtime125Hours': {
+          const ot125 = r.overtime125Hours ?? Math.round(Math.min(2, r.overtimeHours || 0) * 100) / 100;
+          rawVal = ot125 > 0 ? ot125.toFixed(2) : '0.00';
+          if (ot125 > 0) cellColor = rgb(0.75, 0.45, 0.05);
+          break;
+        }
+        case 'overtime150Hours': {
+          const ot125 = r.overtime125Hours ?? Math.round(Math.min(2, r.overtimeHours || 0) * 100) / 100;
+          const ot150 = r.overtime150Hours ?? Math.max(0, Math.round(((r.overtimeHours || 0) - ot125) * 100) / 100);
+          rawVal = ot150 > 0 ? ot150.toFixed(2) : '0.00';
+          if (ot150 > 0) cellColor = rgb(0.75, 0.25, 0.15);
+          break;
+        }
         case 'notes':
           rawVal = localizeSystemNote(r.notes || '', normLang);
           cellColor = rgb(0.35, 0.4, 0.48);

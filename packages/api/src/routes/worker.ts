@@ -185,19 +185,33 @@ async function computeWorkerMonthData(
 
   const nightStart = shiftsConfig?.night?.start || '22:00';
   const nightEnd = shiftsConfig?.night?.end || '06:00';
+  const shabbatEnter = shiftsConfig?.shabbatEnter || '16:00';
+  const overtimeThreshold =
+    Number(shiftsConfig?.overtimeThreshold) > 0 ? Number(shiftsConfig?.overtimeThreshold) : 9;
 
   let totalNet = 0;
   let totalNight = 0;
   let totalSat = 0;
   let totalOt = 0;
+  let totalOt125 = 0;
+  let totalOt150 = 0;
   const days: any[] = [];
 
   for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
-    const daily = calculateDailyHours(daySessions, autoDeductLunch, nightStart, nightEnd);
+    const daily = calculateDailyHours(
+      daySessions,
+      autoDeductLunch,
+      nightStart,
+      nightEnd,
+      shabbatEnter,
+      overtimeThreshold
+    );
     totalNet += daily.netHours;
     totalNight += daily.nightHours;
     totalSat += daily.saturdayHours;
     totalOt += daily.overtimeHours;
+    totalOt125 += daily.overtime125Hours;
+    totalOt150 += daily.overtime150Hours;
 
     days.push({
       date: dateStr,
@@ -210,6 +224,8 @@ async function computeWorkerMonthData(
       nightHours: daily.nightHours,
       saturdayHours: daily.saturdayHours,
       overtimeHours: daily.overtimeHours,
+      overtime125Hours: daily.overtime125Hours,
+      overtime150Hours: daily.overtime150Hours,
       isManual: daySessions.some((s) => s.isManual),
       notes: notesByDate[dateStr] || '',
     });
@@ -220,6 +236,8 @@ async function computeWorkerMonthData(
     totalNight: Math.round(totalNight * 100) / 100,
     totalSaturday: Math.round(totalSat * 100) / 100,
     totalOvertime: Math.round(totalOt * 100) / 100,
+    totalOvertime125: Math.round(totalOt125 * 100) / 100,
+    totalOvertime150: Math.round(totalOt150 * 100) / 100,
     days,
   };
 }
@@ -851,7 +869,17 @@ workerRouter.post('/log', async (req: Request, res: Response) => {
         const shiftsConfig = (employee.shifts || employee.client.defaultShifts) as unknown as ClientShiftsConfig;
         const nightStart = shiftsConfig?.night?.start || '22:00';
         const nightEnd = shiftsConfig?.night?.end || '06:00';
-        const daily = calculateDailyHours(sameDaySessions, employee.client.autoDeductLunch, nightStart, nightEnd);
+        const shabbatEnter = shiftsConfig?.shabbatEnter || '16:00';
+        const overtimeThreshold =
+          Number(shiftsConfig?.overtimeThreshold) > 0 ? Number(shiftsConfig?.overtimeThreshold) : 9;
+        const daily = calculateDailyHours(
+          sameDaySessions,
+          employee.client.autoDeductLunch,
+          nightStart,
+          nightEnd,
+          shabbatEnter,
+          overtimeThreshold
+        );
 
         const totalMinutes = Math.round(daily.netHours * 60);
         todaySummary = {
@@ -1094,6 +1122,8 @@ workerRouter.get('/report/:empId', async (req: Request, res: Response) => {
         totalNight: monthData.totalNight,
         totalSaturday: monthData.totalSaturday,
         totalOvertime: monthData.totalOvertime,
+        totalOvertime125: monthData.totalOvertime125,
+        totalOvertime150: monthData.totalOvertime150,
       },
       globalMonthlyStatus,
       days: monthData.days,
@@ -1144,6 +1174,8 @@ workerRouter.get('/report/:empId/pdf', async (req: Request, res: Response) => {
       nightHours: d.nightHours,
       saturdayHours: d.saturdayHours,
       overtimeHours: d.overtimeHours,
+      overtime125Hours: d.overtime125Hours,
+      overtime150Hours: d.overtime150Hours,
       isManual: d.isManual,
       notes: d.notes || '',
     }));
@@ -1206,6 +1238,8 @@ workerRouter.get('/report/:empId/csv', async (req: Request, res: Response) => {
       nightHours: d.nightHours,
       saturdayHours: d.saturdayHours,
       overtimeHours: d.overtimeHours,
+      overtime125Hours: d.overtime125Hours,
+      overtime150Hours: d.overtime150Hours,
       isManual: d.isManual,
       notes: d.notes || '',
     }));

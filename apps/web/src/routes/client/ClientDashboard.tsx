@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/authStore';
 import { changeLanguage } from '../../lib/i18n';
@@ -21,10 +22,12 @@ import {
   Settings,
   LogOut,
   Globe,
+  Play,
 } from 'lucide-react';
 
 export function ClientDashboard() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
     'dashboard' | 'employees' | 'sites' | 'foremen' | 'schedule' | 'hours' | 'notes' | 'settings'
   >('dashboard');
@@ -75,6 +78,22 @@ export function ClientDashboard() {
 
         {/* Right Header Actions: Language Switcher & Logout */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/presentation')}
+            className="hidden sm:flex px-3 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold items-center gap-1.5 transition"
+            title="Интерактивная видео-презентация и инструкция"
+          >
+            <Play className="w-3.5 h-3.5 fill-current text-indigo-400" />
+            <span>
+              {i18n.language === 'he'
+                ? 'מצגת / הדרכה'
+                : i18n.language === 'en'
+                  ? 'Presentation'
+                  : 'Презентация'}
+            </span>
+          </button>
+
           <div className="flex items-center gap-0.5 bg-slate-800/90 p-1 rounded-xl border border-slate-700/60">
             <Globe className="w-3.5 h-3.5 text-slate-400 ml-1 mr-0.5" />
             {(['ru', 'he', 'en', 'ar'] as const).map((lang) => (

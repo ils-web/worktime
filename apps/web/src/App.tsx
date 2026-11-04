@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { MarketingPage } from './routes/marketing/MarketingPage';
+import { PresentationPage } from './routes/marketing/PresentationPage';
 import { LoginPage } from './routes/auth/LoginPage';
 import { OwnerDashboard } from './routes/owner/OwnerDashboard';
 import { ClientDashboard } from './routes/client/ClientDashboard';
@@ -11,6 +12,17 @@ function StandaloneWorkerEntry() {
   const [empIdInput, setEmpIdInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const queryEmpId = searchParams.get('empId')?.trim();
+    if (queryEmpId) {
+      try {
+        localStorage.setItem('worktime_last_worker_empid', queryEmpId);
+      } catch {}
+      navigate(`/w/${queryEmpId}`, { replace: true });
+    }
+  }, [searchParams, navigate]);
 
   const handleGo = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +165,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
+        <Route path="/presentation" element={<PresentationPage />} />
         <Route path="/worker" element={<StandaloneWorkerEntry />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/owner/*" element={<OwnerDashboard />} />

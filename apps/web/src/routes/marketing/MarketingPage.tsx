@@ -16,6 +16,7 @@ import {
   User,
   Check,
   Globe,
+  Play,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { changeLanguage } from '../../lib/i18n';
@@ -255,6 +256,20 @@ export function MarketingPage() {
             >
               <span>{t('marketing.hero.tryTrial')}</span>
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1 transition transform" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/presentation')}
+              className="w-full sm:w-auto px-7 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-bold text-base rounded-2xl border border-indigo-500/40 flex items-center justify-center gap-2.5 transition active:scale-95 shadow-lg shadow-indigo-500/10"
+            >
+              <Play className="w-4 h-4 fill-current text-indigo-400" />
+              <span>
+                {currentLang === 'he'
+                  ? 'מצגת וידאו והדרכה'
+                  : currentLang === 'en'
+                    ? 'Video Guide & Presentation'
+                    : 'Видео-презентация и инструкция'}
+              </span>
             </button>
             <a
               href="#contact"

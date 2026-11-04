@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   CalendarCheck,
   Briefcase,
+  Share2,
 } from 'lucide-react';
 import { normalizePositionsList } from '@timetracker/shared';
 
@@ -177,6 +178,12 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const shareWhatsAppLink = (emp: { empId: string; name: string }) => {
+    const url = `${window.location.origin}/w/${emp.empId}`;
+    const text = `שלום ${emp.name}! הנה הקישור האישי שלך לדיווח שעות ב-TickWork:\nЗдравствуйте, ${emp.name}! Ваша персональная ссылка для отметки смен:\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -440,6 +447,13 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                             className="p-1.5 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-slate-800 transition"
                           >
                             <QrCode className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => shareWhatsAppLink(emp)}
+                            title="Отправить прямую ссылку в WhatsApp / שלח בוואטסאפ"
+                            className="p-1.5 text-emerald-400 hover:text-emerald-300 rounded-lg hover:bg-emerald-500/10 transition"
+                          >
+                            <Share2 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => toggleMobileMutation.mutate(emp.empId)}
@@ -1369,6 +1383,15 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 {copied ? t('admin.copied') : t('admin.copy')}
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => shareWhatsAppLink(qrEmployee)}
+              className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-950"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Отправить ссылку в WhatsApp / שלח קישור בוואטסאפ</span>
+            </button>
           </div>
         )}
       </Modal>
