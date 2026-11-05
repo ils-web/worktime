@@ -13,7 +13,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'icons/*.png'],
       manifest: {
         id: 'worktime-pwa',
-        name: 'TimeTracker WorkTime PWA',
+        name: 'TimeTracker • WorkTime',
         short_name: 'WorkTime',
         description: 'GPS Time Tracking for Field Workers',
         start_url: '/',
@@ -36,7 +36,7 @@ export default defineConfig({
             purpose: 'any',
           },
           {
-            src: '/icons/icon-512.png',
+            src: '/icons/icon-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

@@ -101591,7 +101591,7 @@ app.get(["/api/manifest", "/manifest", "/manifest.json"], (req, res) => {
   res.setHeader("Content-Type", "application/manifest+json");
   res.setHeader("Cache-Control", "no-cache");
   res.json({
-    name: "TimeTracker WorkTime PWA",
+    name: "TimeTracker \u2022 WorkTime",
     short_name: "WorkTime",
     description: "GPS Time Tracking for Field Workers",
     start_url: startUrl,
@@ -101615,7 +101615,7 @@ app.get(["/api/manifest", "/manifest", "/manifest.json"], (req, res) => {
         purpose: "any"
       },
       {
-        src: "/icons/icon-512.png",
+        src: "/icons/icon-maskable-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable"
