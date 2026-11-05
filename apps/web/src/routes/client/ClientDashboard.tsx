@@ -11,6 +11,7 @@ import { ClientHoursTab } from './ClientHoursTab';
 import { ClientNotesTab } from './ClientNotesTab';
 import { ClientSettingsTab } from './ClientSettingsTab';
 import { ClientSitesTab } from './ClientSitesTab';
+import { ClientIntegrationsTab } from './ClientIntegrationsTab';
 import {
   LayoutDashboard,
   Users,
@@ -23,13 +24,22 @@ import {
   LogOut,
   Globe,
   Play,
+  Layers,
 } from 'lucide-react';
 
 export function ClientDashboard() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'employees' | 'sites' | 'foremen' | 'schedule' | 'hours' | 'notes' | 'settings'
+    | 'dashboard'
+    | 'employees'
+    | 'sites'
+    | 'foremen'
+    | 'schedule'
+    | 'hours'
+    | 'notes'
+    | 'integrations'
+    | 'settings'
   >('dashboard');
 
   const { user, checkAuth, logout } = useAuthStore();
@@ -40,6 +50,15 @@ export function ClientDashboard() {
 
   const isForeman = user?.role === 'foreman';
 
+  const integrationsLabel =
+    i18n.language === 'he'
+      ? 'ממשקי שכר ו-API'
+      : i18n.language === 'en'
+        ? 'Payroll & API'
+        : i18n.language === 'ar'
+          ? 'تكامل الرواتب'
+          : 'Зарплата и API';
+
   const navItems = [
     { id: 'dashboard', label: t('admin.dashboard'), icon: LayoutDashboard },
     { id: 'employees', label: t('admin.employees'), icon: Users },
@@ -48,6 +67,9 @@ export function ClientDashboard() {
     { id: 'schedule', label: t('admin.schedule'), icon: Calendar },
     { id: 'hours', label: t('admin.hours'), icon: Clock },
     { id: 'notes', label: t('admin.notes'), icon: StickyNote },
+    ...(!isForeman
+      ? [{ id: 'integrations', label: integrationsLabel, icon: Layers }]
+      : []),
     ...(!isForeman ? [{ id: 'settings', label: t('admin.settings'), icon: Settings }] : []),
   ] as const;
 
@@ -157,6 +179,7 @@ export function ClientDashboard() {
           {activeTab === 'schedule' && <ClientScheduleTab />}
           {activeTab === 'hours' && <ClientHoursTab />}
           {activeTab === 'notes' && <ClientNotesTab />}
+          {activeTab === 'integrations' && !isForeman && <ClientIntegrationsTab />}
           {activeTab === 'settings' && !isForeman && <ClientSettingsTab />}
         </div>
       </div>

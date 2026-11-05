@@ -352,6 +352,128 @@ export function MarketingPage() {
         </div>
       </section>
 
+      {/* 3.5 Payroll & Accounting 1-Click Integrations Section */}
+      <section
+        id="integrations"
+        className="py-20 px-6 bg-gradient-to-b from-slate-950 via-emerald-950/20 to-slate-950 border-b border-slate-800/80"
+      >
+        <div className="max-w-6xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold mb-4">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>
+              {currentLang === 'he'
+                ? 'ממשקי שכר והנהלת חשבונות מובנים'
+                : currentLang === 'en'
+                  ? 'Native Israeli Payroll & ERP Connectors'
+                  : 'Прямая выгрузка для бухгалтерии и роэ-хешбона'}
+            </span>
+          </div>
+
+          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
+            {currentLang === 'he'
+              ? 'מתממשקת לתוכנת השכר ולכל מערכת בקליק אחד!'
+              : currentLang === 'en'
+                ? 'Integrates with Your Payroll & ERP System in 1 Click!'
+                : 'Интеграция с программами зарплаты и бухгалтерией в 1 клик!'}
+          </h2>
+
+          <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto mb-12">
+            {currentLang === 'he'
+              ? 'ייצוא קבצי קליטה תקניים עם סמלי שכר מותאמים (100%, 125%, 150%, שבת, לילה והוצאות) לכל תוכנות השכר המובילות בישראל או בחיבור API ישיר.'
+              : currentLang === 'en'
+                ? 'Export ready-to-import payroll files with custom salary codes (100%, 125%, 150%, Shabbat, Night & Expenses) to all major Israeli payroll systems.'
+                : 'Готовые файлы импорта с кодами начислений (100%, 125%, 150%, Шаббат, ночные и расходы) для всех популярных зарплатных программ Израиля + прямое API.'}
+          </p>
+
+          {/* Visual Hub + 9 System Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 items-stretch max-w-5xl mx-auto">
+            {/* 1. Michpal */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1.5 hover:-translate-y-1 transition">
+              <div className="text-xl font-black text-sky-900 tracking-tight">מיכפל</div>
+              <div className="h-1 w-10 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500" />
+              <span className="text-[11px] font-bold text-slate-500">Michpal שכר</span>
+            </div>
+
+            {/* 2. Shiklolit TML */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1 hover:-translate-y-1 transition">
+              <div className="text-sm font-black text-blue-700 border-2 border-blue-600 rounded-md px-2 py-0.5 leading-none">
+                ט.מ.ל
+              </div>
+              <div className="text-sm font-extrabold text-slate-800">שיקלולית</div>
+            </div>
+
+            {/* 3. Priority */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1.5 hover:-translate-y-1 transition">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 rounded bg-indigo-600 inline-block" />
+                <span className="text-lg font-black text-slate-900">Priority</span>
+              </div>
+              <span className="text-[11px] font-bold text-slate-500">פריוריטי ERP</span>
+            </div>
+
+            {/* 4. Rivhit */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1.5 hover:-translate-y-1 transition">
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg font-black text-slate-900">ריווחית</span>
+                <span className="w-3.5 h-3.5 rounded bg-amber-500 inline-block" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-500">Rivhit הנה״ח</span>
+            </div>
+
+            {/* 5. Center Hub Badge */}
+            <div className="col-span-2 sm:col-span-3 lg:col-span-1 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 shadow-xl shadow-emerald-500/20 flex flex-col items-center justify-center text-slate-950">
+              <div className="text-xs font-black uppercase tracking-widest opacity-80">HUB</div>
+              <div className="text-lg font-black tracking-tight">TimeTracker</div>
+              <div className="text-[11px] font-bold">1-Click Sync</div>
+            </div>
+
+            {/* 6. Hilan */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1 hover:-translate-y-1 transition">
+              <div className="text-lg font-black text-emerald-800">חילן • HILAN</div>
+              <span className="text-[11px] font-bold text-slate-500">מערכת שכר ונוכחות</span>
+            </div>
+
+            {/* 7. Har-Gal */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1 hover:-translate-y-1 transition">
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg font-black text-slate-800">הר-גל</span>
+                <span className="w-4 h-4 rounded-full border-2 border-orange-500 inline-block" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-500">Har-Gal שכר</span>
+            </div>
+
+            {/* 8. Okez */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1 hover:-translate-y-1 transition">
+              <div className="text-lg font-black text-rose-700">עוקץ</div>
+              <div className="h-1 w-8 rounded-full bg-rose-600" />
+              <span className="text-[11px] font-bold text-slate-500">עוקץ מערכות</span>
+            </div>
+
+            {/* 9. Excel */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1 hover:-translate-y-1 transition">
+              <div className="flex items-center gap-1.5">
+                <span className="w-6 h-6 rounded bg-emerald-700 text-white font-black text-xs flex items-center justify-center">
+                  X
+                </span>
+                <span className="text-base font-black text-emerald-900">Excel</span>
+              </div>
+              <span className="text-[11px] font-bold text-slate-500">דוח שכר מרוכז</span>
+            </div>
+
+            {/* 10. REST API */}
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-slate-200 flex flex-col items-center justify-center gap-1 hover:-translate-y-1 transition">
+              <div className="flex items-center gap-1.5">
+                <span className="w-6 h-6 rounded-full bg-sky-600 text-white font-mono font-black text-[10px] flex items-center justify-center">
+                  {'</>'}
+                </span>
+                <span className="text-base font-black text-slate-900">API</span>
+              </div>
+              <span className="text-[11px] font-bold text-slate-500">JSON & Webhooks</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 4. How It Works Section */}
       <section id="how-it-works" className="py-20 px-6">
         <div className="max-w-5xl mx-auto">

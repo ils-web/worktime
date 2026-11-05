@@ -24,12 +24,41 @@ export interface ShiftTimeWindow {
   end: string;   // HH:mm format, e.g. "16:00"
 }
 
+export type PayrollSystemId =
+  | 'michpal'
+  | 'shiklolit'
+  | 'hargal'
+  | 'okez'
+  | 'hilan'
+  | 'priority'
+  | 'rivhit'
+  | 'excel'
+  | 'api';
+
+export interface PayrollCodesConfig {
+  companyCode: string;     // מספר מפעל / תיק ניכויים (e.g. "001")
+  codeRegular100: string;  // סמל שכר שעות רגילות 100% (default "101")
+  codeOvertime125: string; // סמל שכר שעות 125% (default "125")
+  codeOvertime150: string; // סמל שכר שעות 150% (default "150")
+  codeShabbat150: string;  // סמל שכר שעות שבת (default "160")
+  codeNight: string;       // סמל שכר שעות לילה (default "170")
+  codeWorkDays: string;    // סמל שכר ימי עבודה (default "100")
+  codeExpenses: string;    // סמל שכר החזר הוצאות / נסיעות (default "200")
+  accountantEmail?: string;
+  accountantPhone?: string;
+  apiKey?: string;
+  webhookUrl?: string;
+  rivhitApiToken?: string;
+}
+
 export interface ClientShiftsConfig {
   morning: ShiftTimeWindow;
   evening: ShiftTimeWindow;
   night: ShiftTimeWindow;
   shabbatEnter?: string; // Friday Shabbat start time in HH:mm, e.g. "16:00"
   overtimeThreshold?: number; // Daily net hours threshold before overtime, e.g. 9 or 8.6
+  activePayrollSystem?: PayrollSystemId;
+  payrollConfig?: PayrollCodesConfig;
 }
 
 export interface GeofenceConfig {

@@ -20071,14 +20071,14 @@ var require_etag = __commonJS({
   "node_modules/etag/index.js"(exports2, module2) {
     "use strict";
     module2.exports = etag;
-    var crypto = require("crypto");
+    var crypto3 = require("crypto");
     var Stats = require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash = crypto.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash = crypto3.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash + '"';
     }
@@ -22987,11 +22987,11 @@ var require_request = __commonJS({
 // node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "node_modules/cookie-signature/index.js"(exports2) {
-    var crypto = require("crypto");
+    var crypto3 = require("crypto");
     exports2.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if ("string" != typeof secret) throw new TypeError("Secret string must be provided.");
-      return val + "." + crypto.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto3.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports2.unsign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Signed cookie string must be provided.");
@@ -23000,7 +23000,7 @@ var require_cookie_signature = __commonJS({
       return sha1(mac) == sha1(val) ? str : false;
     };
     function sha1(str) {
-      return crypto.createHash("sha1").update(str).digest("hex");
+      return crypto3.createHash("sha1").update(str).digest("hex");
     }
   }
 });
@@ -30253,14 +30253,14 @@ var require_buffer_equal_constant_time = __commonJS({
 var require_jwa = __commonJS({
   "node_modules/jwa/index.js"(exports2, module2) {
     var Buffer2 = require_safe_buffer().Buffer;
-    var crypto = require("crypto");
+    var crypto3 = require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
     var util2 = require("util");
     var MSG_INVALID_ALGORITHM = '"%s" is not a valid algorithm.\n  Supported algorithms are:\n  "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512" and "none".';
     var MSG_INVALID_SECRET = "secret must be a string or buffer";
     var MSG_INVALID_VERIFIER_KEY = "key must be a string or a buffer";
     var MSG_INVALID_SIGNER_KEY = "key must be a string, a buffer or an object";
-    var supportsKeyObjects = typeof crypto.createPublicKey === "function";
+    var supportsKeyObjects = typeof crypto3.createPublicKey === "function";
     if (supportsKeyObjects) {
       MSG_INVALID_VERIFIER_KEY += " or a KeyObject";
       MSG_INVALID_SECRET += "or a KeyObject";
@@ -30350,17 +30350,17 @@ var require_jwa = __commonJS({
       return function sign(thing, secret) {
         checkIsSecretKey(secret);
         thing = normalizeInput(thing);
-        var hmac = crypto.createHmac("sha" + bits, secret);
+        var hmac = crypto3.createHmac("sha" + bits, secret);
         var sig = (hmac.update(thing), hmac.digest("base64"));
         return fromBase64(sig);
       };
     }
     var bufferEqual;
-    var timingSafeEqual = "timingSafeEqual" in crypto ? function timingSafeEqual2(a, b) {
+    var timingSafeEqual = "timingSafeEqual" in crypto3 ? function timingSafeEqual2(a, b) {
       if (a.byteLength !== b.byteLength) {
         return false;
       }
-      return crypto.timingSafeEqual(a, b);
+      return crypto3.timingSafeEqual(a, b);
     } : function timingSafeEqual2(a, b) {
       if (!bufferEqual) {
         bufferEqual = require_buffer_equal_constant_time();
@@ -30377,7 +30377,7 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto.createSign("RSA-SHA" + bits);
+        var signer = crypto3.createSign("RSA-SHA" + bits);
         var sig = (signer.update(thing), signer.sign(privateKey, "base64"));
         return fromBase64(sig);
       };
@@ -30387,7 +30387,7 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto.createVerify("RSA-SHA" + bits);
+        var verifier = crypto3.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify(publicKey, signature, "base64");
       };
@@ -30396,11 +30396,11 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto.createSign("RSA-SHA" + bits);
+        var signer = crypto3.createSign("RSA-SHA" + bits);
         var sig = (signer.update(thing), signer.sign({
           key: privateKey,
-          padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto3.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto3.constants.RSA_PSS_SALTLEN_DIGEST
         }, "base64"));
         return fromBase64(sig);
       };
@@ -30410,12 +30410,12 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto.createVerify("RSA-SHA" + bits);
+        var verifier = crypto3.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify({
           key: publicKey,
-          padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto3.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto3.constants.RSA_PSS_SALTLEN_DIGEST
         }, signature, "base64");
       };
     }
@@ -96799,8 +96799,9 @@ authRouter.get("/me", authRequired, (req, res) => {
 });
 
 // packages/api/src/routes/public.ts
-var import_express2 = __toESM(require_express2());
-var import_bcryptjs2 = __toESM(require_bcryptjs());
+var import_express3 = __toESM(require_express2());
+var import_crypto2 = __toESM(require("crypto"));
+var import_bcryptjs3 = __toESM(require_bcryptjs());
 
 // packages/shared/src/types/index.ts
 var DEFAULT_COMPANY_POSITIONS = [
@@ -97307,828 +97308,10 @@ function calculateClientBilling(params) {
   }
 }
 
-// packages/api/src/routes/public.ts
-var publicRouter = (0, import_express2.Router)();
-var contactSchema = external_exports.object({
-  name: external_exports.string().min(1),
-  company: external_exports.string().optional(),
-  phone: external_exports.string().min(1),
-  email: external_exports.string().email().optional().or(external_exports.literal("")),
-  message: external_exports.string().optional()
-});
-publicRouter.post("/contact", async (req, res) => {
-  try {
-    const data = contactSchema.parse(req.body);
-    const contact = await prisma.contactRequest.create({
-      data: {
-        name: data.name,
-        company: data.company || null,
-        phone: data.phone,
-        email: data.email || null,
-        message: data.message || null
-      }
-    });
-    res.json({ success: true, id: contact.id });
-  } catch (err) {
-    if (err instanceof external_exports.ZodError) {
-      res.status(400).json({ error: "\u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0437\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043F\u043E\u043B\u044F (\u0438\u043C\u044F \u0438 \u0442\u0435\u043B\u0435\u0444\u043E\u043D)" });
-      return;
-    }
-    console.error("Contact error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043A\u0438" });
-  }
-});
-var registerSchema = external_exports.object({
-  username: external_exports.string().min(3),
-  password: external_exports.string().min(6),
-  name: external_exports.string().min(2),
-  phone: external_exports.string().optional()
-});
-publicRouter.post("/register", async (req, res) => {
-  try {
-    const data = registerSchema.parse(req.body);
-    const existing = await prisma.client.findUnique({
-      where: { username: data.username }
-    });
-    if (existing) {
-      res.status(400).json({ error: "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u0441 \u0442\u0430\u043A\u0438\u043C \u043B\u043E\u0433\u0438\u043D\u043E\u043C \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442" });
-      return;
-    }
-    const salt = await import_bcryptjs2.default.genSalt(10);
-    const passwordHash = await import_bcryptjs2.default.hash(data.password, salt);
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1e3);
-    const defaultShifts = {
-      morning: { start: "07:00", end: "16:00" },
-      evening: { start: "16:00", end: "00:00" },
-      night: { start: "00:00", end: "07:00" }
-    };
-    const client = await prisma.client.create({
-      data: {
-        username: data.username,
-        passwordHash,
-        name: data.name,
-        trialEndsAt,
-        defaultShifts,
-        positions: DEFAULT_COMPANY_POSITIONS
-      }
-    });
-    const token = signSessionToken({
-      id: client.id,
-      role: "client",
-      name: client.name,
-      clientId: client.id
-    });
-    const isProd = process.env["NODE_ENV"] === "production";
-    res.cookie("session", token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60 * 1e3
-    });
-    res.json({
-      success: true,
-      role: "client",
-      clientId: client.id,
-      name: client.name
-    });
-  } catch (err) {
-    if (err instanceof external_exports.ZodError) {
-      res.status(400).json({ error: "\u041B\u043E\u0433\u0438\u043D \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0442 3 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432, \u043F\u0430\u0440\u043E\u043B\u044C \u043E\u0442 6 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432" });
-      return;
-    }
-    console.error("Registration error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438" });
-  }
-});
-
-// packages/api/src/routes/owner.ts
-var import_express3 = __toESM(require_express2());
-var import_bcryptjs3 = __toESM(require_bcryptjs());
-
-// packages/api/src/services/israeliInvoiceService.ts
-var IsraeliInvoiceService = class {
-  /**
-   * Get Morning (Green Invoice) API base URL based on sandbox flag
-   */
-  static getMorningBaseUrl(isSandbox) {
-    return isSandbox ? "https://sandbox.greeninvoice.co.il/api/v1" : "https://api.greeninvoice.co.il/api/v1";
-  }
-  /**
-   * Acquire JWT token from Morning API
-   */
-  static async getMorningToken(apiKey, apiSecret, isSandbox) {
-    const baseUrl = this.getMorningBaseUrl(isSandbox);
-    const res = await fetch(`${baseUrl}/account/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: apiKey, secret: apiSecret })
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Morning authentication failed (${res.status}): ${errText}`);
-    }
-    const data = await res.json();
-    return data.token;
-  }
-  /**
-   * Generate an online payment link for a specific invoice
-   */
-  static async createPaymentLink(invoiceId, originUrl) {
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      include: { client: true }
-    });
-    if (!invoice) {
-      throw new Error("Invoice not found");
-    }
-    const settings = await prisma.saaSSettings.findFirst();
-    const vatRate = settings?.vatRate ?? 17;
-    const totalWithVat = Math.round(invoice.amount * (1 + vatRate / 100) * 100) / 100;
-    const hasKeys = settings?.invoiceApiKey && settings?.invoiceApiSecret && settings.invoiceProvider === "morning";
-    if (!hasKeys) {
-      const host = originUrl || "http://localhost:4000";
-      const simUrl = `${host}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`;
-      return {
-        paymentUrl: simUrl,
-        isSimulated: true,
-        invoiceId: invoice.id,
-        amount: invoice.amount,
-        vatRate,
-        totalWithVat
-      };
-    }
-    try {
-      const token = await this.getMorningToken(
-        settings.invoiceApiKey,
-        settings.invoiceApiSecret,
-        !!settings.invoiceSandbox
-      );
-      const baseUrl = this.getMorningBaseUrl(!!settings.invoiceSandbox);
-      const appHost = originUrl || process.env["FRONTEND_URL"] || "https://timetracker-saas.vercel.app";
-      const payload = {
-        description: `\u05D3\u05DE\u05D9 \u05DE\u05E0\u05D5\u05D9 \u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
-        amount: totalWithVat,
-        currency: "ILS",
-        client: {
-          name: invoice.client.legalName || invoice.client.name,
-          taxId: invoice.client.taxId || void 0,
-          emails: invoice.client.billingEmail ? [invoice.client.billingEmail] : [],
-          phone: invoice.client.billingPhone || void 0,
-          address: invoice.client.billingAddress || void 0
-        },
-        document: {
-          type: 320,
-          // 320 = חשבונית מס קבלה (Tax Invoice Receipt)
-          description: `\u05D3\u05DE\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`
-        },
-        custom: invoice.id,
-        successUrl: `${appHost}/client?payment=success&invoiceId=${invoice.id}`,
-        failureUrl: `${appHost}/client?payment=failed&invoiceId=${invoice.id}`,
-        notifyUrl: `${process.env["API_URL"] || appHost}/api/webhooks/morning`
-      };
-      const res = await fetch(`${baseUrl}/payments/form`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn("Morning create payment form warning:", errText);
-        const simUrl = `${appHost}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`;
-        return {
-          paymentUrl: simUrl,
-          isSimulated: true,
-          invoiceId: invoice.id,
-          amount: invoice.amount,
-          vatRate,
-          totalWithVat
-        };
-      }
-      const resData = await res.json();
-      return {
-        paymentUrl: resData.url,
-        isSimulated: false,
-        invoiceId: invoice.id,
-        amount: invoice.amount,
-        vatRate,
-        totalWithVat
-      };
-    } catch (err) {
-      console.error("Failed to create Morning payment link, falling back to simulated:", err);
-      const host = originUrl || "http://localhost:4000";
-      return {
-        paymentUrl: `${host}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`,
-        isSimulated: true,
-        invoiceId: invoice.id,
-        amount: invoice.amount,
-        vatRate,
-        totalWithVat
-      };
-    }
-  }
-  /**
-   * Issues official חשבונית מס קבלה (Tax Invoice Receipt) for an invoice
-   */
-  static async generateTaxInvoiceReceipt(invoiceId, paymentDetails) {
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      include: { client: true }
-    });
-    if (!invoice) {
-      throw new Error("Invoice not found");
-    }
-    const settings = await prisma.saaSSettings.findFirst();
-    const vatRate = settings?.vatRate ?? 17;
-    const totalWithVat = Math.round(invoice.amount * (1 + vatRate / 100) * 100) / 100;
-    let receiptNumber = invoice.receiptNumber;
-    let receiptUrl = invoice.receiptUrl;
-    let docId = invoice.paymentDocId;
-    const hasKeys = settings?.invoiceApiKey && settings?.invoiceApiSecret && settings.invoiceProvider === "morning";
-    if (hasKeys) {
-      try {
-        const token = await this.getMorningToken(
-          settings.invoiceApiKey,
-          settings.invoiceApiSecret,
-          !!settings.invoiceSandbox
-        );
-        const baseUrl = this.getMorningBaseUrl(!!settings.invoiceSandbox);
-        const methodCode = paymentDetails?.method === "bit" ? 12 : paymentDetails?.method === "bank_transfer" ? 4 : 1;
-        const docPayload = {
-          type: 320,
-          // חשבונית מס קבלה
-          description: `\u05D3\u05DE\u05D9 \u05DE\u05E0\u05D5\u05D9 \u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
-          lang: "he",
-          currency: "ILS",
-          vatRate,
-          client: {
-            name: invoice.client.legalName || invoice.client.name,
-            taxId: invoice.client.taxId || void 0,
-            emails: invoice.client.billingEmail ? [invoice.client.billingEmail] : [],
-            phone: invoice.client.billingPhone || void 0,
-            address: invoice.client.billingAddress || void 0
-          },
-          income: [
-            {
-              description: `\u05D3\u05DE\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 \u05D1\u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
-              quantity: 1,
-              price: invoice.amount,
-              vatType: 0
-              // Standard VAT rate
-            }
-          ],
-          payment: [
-            {
-              type: methodCode,
-              price: totalWithVat,
-              date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
-            }
-          ]
-        };
-        const res = await fetch(`${baseUrl}/documents`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(docPayload)
-        });
-        if (res.ok) {
-          const docData = await res.json();
-          receiptNumber = String(docData.number || docData.documentNumber || "");
-          receiptUrl = docData.url?.pdf || docData.url?.origin || "";
-          docId = docData.id || "";
-        } else {
-          console.warn("Morning document creation response not ok:", await res.text());
-        }
-      } catch (e) {
-        console.error("Failed to issue Morning document directly:", e);
-      }
-    }
-    if (!receiptNumber) {
-      const randomNum = Math.floor(1e5 + Math.random() * 9e5);
-      receiptNumber = `REC-${randomNum}`;
-    }
-    if (!receiptUrl) {
-      receiptUrl = `https://morning.co.il/receipt/${receiptNumber}.pdf`;
-    }
-    const updated = await prisma.invoice.update({
-      where: { id: invoice.id },
-      data: {
-        status: "paid",
-        paidAt: /* @__PURE__ */ new Date(),
-        receiptNumber,
-        receiptUrl,
-        paymentMethod: paymentDetails?.method || "credit_card",
-        paymentDocId: docId || paymentDetails?.transactionId || `sim_${Date.now()}`
-      }
-    });
-    return {
-      invoiceId: updated.id,
-      receiptNumber: updated.receiptNumber,
-      receiptUrl: updated.receiptUrl,
-      status: updated.status,
-      paidAt: updated.paidAt
-    };
-  }
-  /**
-   * Handle incoming Morning (Green Invoice) webhook
-   */
-  static async handleMorningWebhook(payload) {
-    const invoiceId = payload?.custom || payload?.invoiceId;
-    if (!invoiceId) {
-      console.warn("Morning webhook received without custom invoiceId:", payload);
-      return false;
-    }
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: invoiceId }
-    });
-    if (!invoice) {
-      console.warn(`Morning webhook invoiceId not found: ${invoiceId}`);
-      return false;
-    }
-    const docNumber = payload?.document?.number || payload?.documentNumber || payload?.number || `REC-${Math.floor(1e5 + Math.random() * 9e5)}`;
-    const docUrl = payload?.document?.url?.pdf || payload?.document?.url?.origin || payload?.receiptUrl || `https://morning.co.il/receipt/${docNumber}.pdf`;
-    const docId = payload?.document?.id || payload?.transactionId || payload?.id;
-    const method = payload?.payment?.method || payload?.paymentMethod || "credit_card";
-    await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: {
-        status: "paid",
-        paidAt: /* @__PURE__ */ new Date(),
-        receiptNumber: String(docNumber),
-        receiptUrl: docUrl,
-        paymentMethod: method,
-        paymentDocId: docId ? String(docId) : null
-      }
-    });
-    return true;
-  }
-};
-
-// packages/api/src/routes/owner.ts
-var ownerRouter = (0, import_express3.Router)();
-ownerRouter.use(authRequired, requireRole("owner"));
-ownerRouter.get("/clients", async (_req, res) => {
-  try {
-    const clients = await prisma.client.findMany({
-      include: {
-        _count: {
-          select: { employees: true, foremen: true }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
-    res.json({ success: true, clients });
-  } catch (err) {
-    console.error("Owner list clients error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0441\u043F\u0438\u0441\u043A\u0430 \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432" });
-  }
-});
-var createClientSchema = external_exports.object({
-  username: external_exports.string().min(3),
-  password: external_exports.string().min(6),
-  name: external_exports.string().min(2),
-  tariffMode: external_exports.enum(["PER_USER", "PER_HOUR"]).default("PER_USER"),
-  pricePerUser: external_exports.number().default(0),
-  pricePerHour: external_exports.number().default(0),
-  trialDays: external_exports.number().default(14),
-  positions: external_exports.array(external_exports.string()).optional()
-});
-ownerRouter.post("/clients", async (req, res) => {
-  try {
-    const data = createClientSchema.parse(req.body);
-    const existing = await prisma.client.findUnique({
-      where: { username: data.username }
-    });
-    if (existing) {
-      res.status(400).json({ error: "\u041A\u043B\u0438\u0435\u043D\u0442 \u0441 \u0442\u0430\u043A\u0438\u043C \u043B\u043E\u0433\u0438\u043D\u043E\u043C \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442" });
-      return;
-    }
-    const salt = await import_bcryptjs3.default.genSalt(10);
-    const passwordHash = await import_bcryptjs3.default.hash(data.password, salt);
-    const trialEndsAt = data.trialDays > 0 ? new Date(Date.now() + data.trialDays * 24 * 60 * 60 * 1e3) : null;
-    const defaultShifts = {
-      morning: { start: "07:00", end: "16:00" },
-      evening: { start: "16:00", end: "00:00" },
-      night: { start: "22:00", end: "06:00" }
-    };
-    const positions = data.positions ? normalizePositionsList(data.positions) : DEFAULT_COMPANY_POSITIONS;
-    const client = await prisma.client.create({
-      data: {
-        username: data.username,
-        passwordHash,
-        name: data.name,
-        tariffMode: data.tariffMode,
-        pricePerUser: data.pricePerUser,
-        pricePerHour: data.pricePerHour,
-        trialEndsAt,
-        defaultShifts,
-        positions
-      }
-    });
-    res.json({ success: true, client });
-  } catch (err) {
-    if (err instanceof external_exports.ZodError) {
-      res.status(400).json({ error: "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0432\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435" });
-      return;
-    }
-    console.error("Owner create client error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u0430" });
-  }
-});
-ownerRouter.post("/clients/:id/toggle", async (req, res) => {
-  try {
-    const id = req.params["id"];
-    const client = await prisma.client.findUnique({ where: { id } });
-    if (!client) {
-      res.status(404).json({ error: "\u041A\u043B\u0438\u0435\u043D\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
-      return;
-    }
-    const updated = await prisma.client.update({
-      where: { id },
-      data: { isActive: !client.isActive }
-    });
-    res.json({ success: true, isActive: updated.isActive });
-  } catch (err) {
-    console.error("Owner toggle client error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0441\u0442\u0430\u0442\u0443\u0441\u0430" });
-  }
-});
-ownerRouter.post("/clients/:id/reset-password", async (req, res) => {
-  try {
-    const id = req.params["id"];
-    const { newPassword } = req.body;
-    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
-      res.status(400).json({ error: "\u041F\u0430\u0440\u043E\u043B\u044C \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0442 6 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432" });
-      return;
-    }
-    const salt = await import_bcryptjs3.default.genSalt(10);
-    const passwordHash = await import_bcryptjs3.default.hash(newPassword, salt);
-    await prisma.client.update({
-      where: { id },
-      data: { passwordHash }
-    });
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Owner reset password error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0431\u0440\u043E\u0441\u0430 \u043F\u0430\u0440\u043E\u043B\u044F" });
-  }
-});
-ownerRouter.post("/clients/:id/tariff", async (req, res) => {
-  try {
-    const id = req.params["id"];
-    const { tariffMode, pricePerUser, pricePerHour, trialEndsAt } = req.body;
-    const updated = await prisma.client.update({
-      where: { id },
-      data: {
-        ...tariffMode ? { tariffMode } : {},
-        ...typeof pricePerUser === "number" ? { pricePerUser } : {},
-        ...typeof pricePerHour === "number" ? { pricePerHour } : {},
-        ...trialEndsAt !== void 0 ? { trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null } : {}
-      }
-    });
-    res.json({ success: true, client: updated });
-  } catch (err) {
-    console.error("Owner update tariff error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0442\u0430\u0440\u0438\u0444\u0430" });
-  }
-});
-ownerRouter.post("/clients/:id/billing-details", async (req, res) => {
-  try {
-    const id = req.params["id"];
-    const { legalName, taxId, billingAddress, billingEmail, billingPhone, externalCustId } = req.body;
-    const updated = await prisma.client.update({
-      where: { id },
-      data: {
-        legalName: legalName !== void 0 ? legalName?.trim() || null : void 0,
-        taxId: taxId !== void 0 ? taxId?.trim() || null : void 0,
-        billingAddress: billingAddress !== void 0 ? billingAddress?.trim() || null : void 0,
-        billingEmail: billingEmail !== void 0 ? billingEmail?.trim() || null : void 0,
-        billingPhone: billingPhone !== void 0 ? billingPhone?.trim() || null : void 0,
-        externalCustId: externalCustId !== void 0 ? externalCustId?.trim() || null : void 0
-      }
-    });
-    res.json({ success: true, client: updated });
-  } catch (err) {
-    console.error("Owner update billing details error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0440\u0435\u043A\u0432\u0438\u0437\u0438\u0442\u043E\u0432 \u043A\u043B\u0438\u0435\u043D\u0442\u0430" });
-  }
-});
-ownerRouter.delete("/clients/:id", async (req, res) => {
-  try {
-    const id = req.params["id"];
-    const client = await prisma.client.findUnique({ where: { id } });
-    if (!client) {
-      res.status(404).json({ error: "\u041A\u043E\u043C\u043F\u0430\u043D\u0438\u044F \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430" });
-      return;
-    }
-    await prisma.client.delete({ where: { id } });
-    res.json({ success: true, message: `\u041A\u043E\u043C\u043F\u0430\u043D\u0438\u044F "${client.name}" \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u0443\u0434\u0430\u043B\u0435\u043D\u0430` });
-  } catch (err) {
-    console.error("Owner delete client error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438" });
-  }
-});
-ownerRouter.post("/clients/cleanup-test", async (_req, res) => {
-  try {
-    const result = await prisma.client.deleteMany({
-      where: {
-        OR: [
-          { username: { startsWith: "testclient_" } },
-          { name: { contains: "\u0422\u0435\u0441\u0442\u043E\u0432\u0430\u044F" } }
-        ]
-      }
-    });
-    res.json({ success: true, count: result.count });
-  } catch (err) {
-    console.error("Owner cleanup test clients error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0447\u0438\u0441\u0442\u043A\u0438 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0445 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0439" });
-  }
-});
-ownerRouter.get("/billing", async (req, res) => {
-  try {
-    const startDateStr = req.query["startDate"];
-    const endDateStr = req.query["endDate"];
-    const startDate = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 30 * 864e5);
-    const endDate = endDateStr ? new Date(endDateStr) : /* @__PURE__ */ new Date();
-    const clients = await prisma.client.findMany({
-      include: {
-        employees: {
-          select: { empId: true, createdAt: true }
-        },
-        logs: {
-          where: {
-            dateTime: { gte: startDate, lte: endDate }
-          },
-          select: { empId: true, action: true, dateTime: true },
-          orderBy: { dateTime: "asc" }
-        }
-      }
-    });
-    const billingData = clients.map((client) => {
-      let totalHours = 0;
-      const lastInByEmp = /* @__PURE__ */ new Map();
-      for (const log of client.logs) {
-        if (log.action === "CLOCK_IN" || log.action === "AUTO_RESUME" && !lastInByEmp.has(log.empId)) {
-          lastInByEmp.set(log.empId, log.dateTime);
-        } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
-          const lastInTime = lastInByEmp.get(log.empId);
-          if (lastInTime) {
-            const diff = (log.dateTime.getTime() - lastInTime.getTime()) / 36e5;
-            if (diff > 0 && diff < 24) {
-              totalHours += diff;
-            }
-            lastInByEmp.delete(log.empId);
-          }
-        }
-      }
-      const calculated = calculateClientBilling({
-        tariffMode: client.tariffMode,
-        employees: client.employees,
-        period: { startDate, endDate },
-        pricePerUser: client.pricePerUser,
-        totalHours,
-        pricePerHour: client.pricePerHour
-      });
-      return {
-        clientId: client.id,
-        name: client.name,
-        tariffMode: client.tariffMode,
-        totalWorkerDays: calculated.totalWorkerDays,
-        totalHours: calculated.totalHours,
-        totalAmount: calculated.totalAmount
-      };
-    });
-    res.json({ success: true, billing: billingData });
-  } catch (err) {
-    console.error("Owner billing error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0440\u0430\u0441\u0447\u0435\u0442\u0430 \u0431\u0438\u043B\u043B\u0438\u043D\u0433\u0430" });
-  }
-});
-ownerRouter.get("/invoices", async (_req, res) => {
-  try {
-    const invoices = await prisma.invoice.findMany({
-      include: { client: { select: { name: true, username: true } } },
-      orderBy: { createdAt: "desc" }
-    });
-    res.json({ success: true, invoices });
-  } catch (err) {
-    console.error("Owner invoices error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0441\u0447\u0435\u0442\u043E\u0432" });
-  }
-});
-ownerRouter.post("/invoices", async (req, res) => {
-  try {
-    const { clientId, periodMonth, amount, details } = req.body;
-    if (!clientId || !periodMonth || typeof amount !== "number") {
-      res.status(400).json({ error: "\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0443\u043A\u0430\u0437\u0430\u0442\u044C clientId, periodMonth \u0438 amount" });
-      return;
-    }
-    const invoice = await prisma.invoice.upsert({
-      where: {
-        clientId_periodMonth: { clientId, periodMonth }
-      },
-      update: { amount, details },
-      create: { clientId, periodMonth, amount, details }
-    });
-    res.json({ success: true, invoice });
-  } catch (err) {
-    console.error("Owner create invoice error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u0441\u0447\u0451\u0442\u0430" });
-  }
-});
-ownerRouter.post("/invoices/:id/toggle", async (req, res) => {
-  try {
-    const id = req.params["id"];
-    const inv = await prisma.invoice.findUnique({ where: { id } });
-    if (!inv) {
-      res.status(404).json({ error: "\u0421\u0447\u0451\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
-      return;
-    }
-    const newStatus = inv.status === "paid" ? "pending" : "paid";
-    const updated = await prisma.invoice.update({
-      where: { id },
-      data: {
-        status: newStatus,
-        paidAt: newStatus === "paid" ? /* @__PURE__ */ new Date() : null
-      }
-    });
-    res.json({ success: true, invoice: updated });
-  } catch (err) {
-    console.error("Owner toggle invoice error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u0441\u0447\u0435\u0442\u0430" });
-  }
-});
-ownerRouter.post("/invoices/:id/issue-receipt", async (req, res) => {
-  try {
-    const id = req.params["id"];
-    const { method } = req.body || {};
-    const result = await IsraeliInvoiceService.generateTaxInvoiceReceipt(id, {
-      method: method || "manual"
-    });
-    res.json({ success: true, ...result });
-  } catch (err) {
-    console.error("Owner issue receipt error:", err);
-    res.status(500).json({ error: err.message || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0432\u044B\u043F\u0438\u0441\u043A\u0438 \u05D7\u05E9\u05D1\u05D5\u05E0\u05D9\u05EA \u05DE\u05E1 \u05E7\u05D1\u05DC\u05D4" });
-  }
-});
-ownerRouter.delete("/invoices/:id", async (req, res) => {
-  try {
-    const id = req.params["id"];
-    await prisma.invoice.delete({ where: { id } });
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Owner delete invoice error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0441\u0447\u0451\u0442\u0430" });
-  }
-});
-ownerRouter.get("/leads", async (_req, res) => {
-  try {
-    const leads = await prisma.contactRequest.findMany({
-      orderBy: { createdAt: "desc" }
-    });
-    res.json({ success: true, leads });
-  } catch (err) {
-    console.error("Owner leads error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043E\u043A" });
-  }
-});
-ownerRouter.post("/leads/:id/comment", async (req, res) => {
-  try {
-    const id = parseInt(req.params["id"], 10);
-    const { comment, status } = req.body;
-    const updated = await prisma.contactRequest.update({
-      where: { id },
-      data: {
-        ...comment !== void 0 ? { comment } : {},
-        ...status ? { status } : {}
-      }
-    });
-    res.json({ success: true, lead: updated });
-  } catch (err) {
-    console.error("Owner comment lead error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043A\u0438" });
-  }
-});
-ownerRouter.delete("/leads/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params["id"], 10);
-    await prisma.contactRequest.delete({ where: { id } });
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Owner delete lead error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043A\u0438" });
-  }
-});
-ownerRouter.post("/password", async (req, res) => {
-  try {
-    const { newPassword } = req.body;
-    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
-      res.status(400).json({ error: "\u041F\u0430\u0440\u043E\u043B\u044C \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0442 6 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432" });
-      return;
-    }
-    const salt = await import_bcryptjs3.default.genSalt(10);
-    const ownerPasswordHash = await import_bcryptjs3.default.hash(newPassword, salt);
-    const first = await prisma.saaSSettings.findFirst();
-    if (first) {
-      await prisma.saaSSettings.update({
-        where: { id: first.id },
-        data: { ownerPasswordHash }
-      });
-    } else {
-      await prisma.saaSSettings.create({
-        data: { ownerPasswordHash }
-      });
-    }
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Owner change password error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043C\u0435\u043D\u044B \u043F\u0430\u0440\u043E\u043B\u044F" });
-  }
-});
-ownerRouter.get("/settings", async (_req, res) => {
-  try {
-    const settings = await prisma.saaSSettings.findFirst();
-    res.json({
-      success: true,
-      settings: settings ? {
-        companyName: settings.companyName || "",
-        taxId: settings.taxId || "",
-        address: settings.address || "",
-        phone: settings.phone || "",
-        email: settings.email || "",
-        vatRate: settings.vatRate ?? 17,
-        invoiceProvider: settings.invoiceProvider || "morning",
-        invoiceApiKey: settings.invoiceApiKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" + settings.invoiceApiKey.slice(-4) : "",
-        hasApiKey: !!settings.invoiceApiKey,
-        hasApiSecret: !!settings.invoiceApiSecret,
-        invoiceSandbox: settings.invoiceSandbox
-      } : null
-    });
-  } catch (err) {
-    console.error("Get owner settings error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A \u0431\u0438\u0437\u043D\u0435\u0441\u0430" });
-  }
-});
-ownerRouter.post("/settings", async (req, res) => {
-  try {
-    const {
-      companyName,
-      taxId,
-      address,
-      phone,
-      email,
-      vatRate,
-      invoiceProvider,
-      invoiceApiKey,
-      invoiceApiSecret,
-      invoiceSandbox
-    } = req.body;
-    const first = await prisma.saaSSettings.findFirst();
-    const dataToUpdate = {
-      ...companyName !== void 0 ? { companyName: companyName.trim() } : {},
-      ...taxId !== void 0 ? { taxId: taxId.trim() } : {},
-      ...address !== void 0 ? { address: address.trim() } : {},
-      ...phone !== void 0 ? { phone: phone.trim() } : {},
-      ...email !== void 0 ? { email: email.trim() } : {},
-      ...typeof vatRate === "number" ? { vatRate } : {},
-      ...invoiceProvider !== void 0 ? { invoiceProvider } : {},
-      ...typeof invoiceSandbox === "boolean" ? { invoiceSandbox } : {}
-    };
-    if (invoiceApiKey && invoiceApiKey.trim() && !invoiceApiKey.startsWith("\u2022\u2022\u2022")) {
-      dataToUpdate.invoiceApiKey = invoiceApiKey.trim();
-    }
-    if (invoiceApiSecret && invoiceApiSecret.trim() && !invoiceApiSecret.startsWith("\u2022\u2022\u2022")) {
-      dataToUpdate.invoiceApiSecret = invoiceApiSecret.trim();
-    }
-    let updated;
-    if (first) {
-      updated = await prisma.saaSSettings.update({
-        where: { id: first.id },
-        data: dataToUpdate
-      });
-    } else {
-      updated = await prisma.saaSSettings.create({
-        data: {
-          ownerPasswordHash: "",
-          ...dataToUpdate
-        }
-      });
-    }
-    res.json({ success: true, settings: updated });
-  } catch (err) {
-    console.error("Update owner settings error:", err);
-    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A \u0431\u0438\u0437\u043D\u0435\u0441\u0430" });
-  }
-});
-
 // packages/api/src/routes/client.ts
-var import_express4 = __toESM(require_express2());
-var import_bcryptjs4 = __toESM(require_bcryptjs());
+var import_express2 = __toESM(require_express2());
+var import_crypto = __toESM(require("crypto"));
+var import_bcryptjs2 = __toESM(require_bcryptjs());
 
 // packages/api/src/services/csvReportService.ts
 var CSV_TRANSLATIONS = {
@@ -98959,8 +98142,811 @@ async function generatePdfReport(rows, clientName, periodTitle, _logoUrl, lang =
   return await pdfDoc.save();
 }
 
+// packages/api/src/services/israeliInvoiceService.ts
+var IsraeliInvoiceService = class {
+  /**
+   * Get Morning (Green Invoice) API base URL based on sandbox flag
+   */
+  static getMorningBaseUrl(isSandbox) {
+    return isSandbox ? "https://sandbox.greeninvoice.co.il/api/v1" : "https://api.greeninvoice.co.il/api/v1";
+  }
+  /**
+   * Acquire JWT token from Morning API
+   */
+  static async getMorningToken(apiKey, apiSecret, isSandbox) {
+    const baseUrl = this.getMorningBaseUrl(isSandbox);
+    const res = await fetch(`${baseUrl}/account/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: apiKey, secret: apiSecret })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Morning authentication failed (${res.status}): ${errText}`);
+    }
+    const data = await res.json();
+    return data.token;
+  }
+  /**
+   * Generate an online payment link for a specific invoice
+   */
+  static async createPaymentLink(invoiceId, originUrl) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { client: true }
+    });
+    if (!invoice) {
+      throw new Error("Invoice not found");
+    }
+    const settings = await prisma.saaSSettings.findFirst();
+    const vatRate = settings?.vatRate ?? 17;
+    const totalWithVat = Math.round(invoice.amount * (1 + vatRate / 100) * 100) / 100;
+    const hasKeys = settings?.invoiceApiKey && settings?.invoiceApiSecret && settings.invoiceProvider === "morning";
+    if (!hasKeys) {
+      const host = originUrl || "http://localhost:4000";
+      const simUrl = `${host}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`;
+      return {
+        paymentUrl: simUrl,
+        isSimulated: true,
+        invoiceId: invoice.id,
+        amount: invoice.amount,
+        vatRate,
+        totalWithVat
+      };
+    }
+    try {
+      const token = await this.getMorningToken(
+        settings.invoiceApiKey,
+        settings.invoiceApiSecret,
+        !!settings.invoiceSandbox
+      );
+      const baseUrl = this.getMorningBaseUrl(!!settings.invoiceSandbox);
+      const appHost = originUrl || process.env["FRONTEND_URL"] || "https://timetracker-saas.vercel.app";
+      const payload = {
+        description: `\u05D3\u05DE\u05D9 \u05DE\u05E0\u05D5\u05D9 \u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
+        amount: totalWithVat,
+        currency: "ILS",
+        client: {
+          name: invoice.client.legalName || invoice.client.name,
+          taxId: invoice.client.taxId || void 0,
+          emails: invoice.client.billingEmail ? [invoice.client.billingEmail] : [],
+          phone: invoice.client.billingPhone || void 0,
+          address: invoice.client.billingAddress || void 0
+        },
+        document: {
+          type: 320,
+          // 320 = חשבונית מס קבלה (Tax Invoice Receipt)
+          description: `\u05D3\u05DE\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`
+        },
+        custom: invoice.id,
+        successUrl: `${appHost}/client?payment=success&invoiceId=${invoice.id}`,
+        failureUrl: `${appHost}/client?payment=failed&invoiceId=${invoice.id}`,
+        notifyUrl: `${process.env["API_URL"] || appHost}/api/webhooks/morning`
+      };
+      const res = await fetch(`${baseUrl}/payments/form`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn("Morning create payment form warning:", errText);
+        const simUrl = `${appHost}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`;
+        return {
+          paymentUrl: simUrl,
+          isSimulated: true,
+          invoiceId: invoice.id,
+          amount: invoice.amount,
+          vatRate,
+          totalWithVat
+        };
+      }
+      const resData = await res.json();
+      return {
+        paymentUrl: resData.url,
+        isSimulated: false,
+        invoiceId: invoice.id,
+        amount: invoice.amount,
+        vatRate,
+        totalWithVat
+      };
+    } catch (err) {
+      console.error("Failed to create Morning payment link, falling back to simulated:", err);
+      const host = originUrl || "http://localhost:4000";
+      return {
+        paymentUrl: `${host}/api/webhooks/simulate-payment?invoiceId=${invoice.id}`,
+        isSimulated: true,
+        invoiceId: invoice.id,
+        amount: invoice.amount,
+        vatRate,
+        totalWithVat
+      };
+    }
+  }
+  /**
+   * Issues official חשבונית מס קבלה (Tax Invoice Receipt) for an invoice
+   */
+  static async generateTaxInvoiceReceipt(invoiceId, paymentDetails) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { client: true }
+    });
+    if (!invoice) {
+      throw new Error("Invoice not found");
+    }
+    const settings = await prisma.saaSSettings.findFirst();
+    const vatRate = settings?.vatRate ?? 17;
+    const totalWithVat = Math.round(invoice.amount * (1 + vatRate / 100) * 100) / 100;
+    let receiptNumber = invoice.receiptNumber;
+    let receiptUrl = invoice.receiptUrl;
+    let docId = invoice.paymentDocId;
+    const hasKeys = settings?.invoiceApiKey && settings?.invoiceApiSecret && settings.invoiceProvider === "morning";
+    if (hasKeys) {
+      try {
+        const token = await this.getMorningToken(
+          settings.invoiceApiKey,
+          settings.invoiceApiSecret,
+          !!settings.invoiceSandbox
+        );
+        const baseUrl = this.getMorningBaseUrl(!!settings.invoiceSandbox);
+        const methodCode = paymentDetails?.method === "bit" ? 12 : paymentDetails?.method === "bank_transfer" ? 4 : 1;
+        const docPayload = {
+          type: 320,
+          // חשבונית מס קבלה
+          description: `\u05D3\u05DE\u05D9 \u05DE\u05E0\u05D5\u05D9 \u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
+          lang: "he",
+          currency: "ILS",
+          vatRate,
+          client: {
+            name: invoice.client.legalName || invoice.client.name,
+            taxId: invoice.client.taxId || void 0,
+            emails: invoice.client.billingEmail ? [invoice.client.billingEmail] : [],
+            phone: invoice.client.billingPhone || void 0,
+            address: invoice.client.billingAddress || void 0
+          },
+          income: [
+            {
+              description: `\u05D3\u05DE\u05D9 \u05E9\u05D9\u05DE\u05D5\u05E9 \u05D1\u05DE\u05E2\u05E8\u05DB\u05EA TimeTracker - \u05D7\u05D5\u05D3\u05E9 ${invoice.periodMonth}`,
+              quantity: 1,
+              price: invoice.amount,
+              vatType: 0
+              // Standard VAT rate
+            }
+          ],
+          payment: [
+            {
+              type: methodCode,
+              price: totalWithVat,
+              date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+            }
+          ]
+        };
+        const res = await fetch(`${baseUrl}/documents`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(docPayload)
+        });
+        if (res.ok) {
+          const docData = await res.json();
+          receiptNumber = String(docData.number || docData.documentNumber || "");
+          receiptUrl = docData.url?.pdf || docData.url?.origin || "";
+          docId = docData.id || "";
+        } else {
+          console.warn("Morning document creation response not ok:", await res.text());
+        }
+      } catch (e) {
+        console.error("Failed to issue Morning document directly:", e);
+      }
+    }
+    if (!receiptNumber) {
+      const randomNum = Math.floor(1e5 + Math.random() * 9e5);
+      receiptNumber = `REC-${randomNum}`;
+    }
+    if (!receiptUrl) {
+      receiptUrl = `https://morning.co.il/receipt/${receiptNumber}.pdf`;
+    }
+    const updated = await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        status: "paid",
+        paidAt: /* @__PURE__ */ new Date(),
+        receiptNumber,
+        receiptUrl,
+        paymentMethod: paymentDetails?.method || "credit_card",
+        paymentDocId: docId || paymentDetails?.transactionId || `sim_${Date.now()}`
+      }
+    });
+    return {
+      invoiceId: updated.id,
+      receiptNumber: updated.receiptNumber,
+      receiptUrl: updated.receiptUrl,
+      status: updated.status,
+      paidAt: updated.paidAt
+    };
+  }
+  /**
+   * Handle incoming Morning (Green Invoice) webhook
+   */
+  static async handleMorningWebhook(payload) {
+    const invoiceId = payload?.custom || payload?.invoiceId;
+    if (!invoiceId) {
+      console.warn("Morning webhook received without custom invoiceId:", payload);
+      return false;
+    }
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId }
+    });
+    if (!invoice) {
+      console.warn(`Morning webhook invoiceId not found: ${invoiceId}`);
+      return false;
+    }
+    const docNumber = payload?.document?.number || payload?.documentNumber || payload?.number || `REC-${Math.floor(1e5 + Math.random() * 9e5)}`;
+    const docUrl = payload?.document?.url?.pdf || payload?.document?.url?.origin || payload?.receiptUrl || `https://morning.co.il/receipt/${docNumber}.pdf`;
+    const docId = payload?.document?.id || payload?.transactionId || payload?.id;
+    const method = payload?.payment?.method || payload?.paymentMethod || "credit_card";
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: "paid",
+        paidAt: /* @__PURE__ */ new Date(),
+        receiptNumber: String(docNumber),
+        receiptUrl: docUrl,
+        paymentMethod: method,
+        paymentDocId: docId ? String(docId) : null
+      }
+    });
+    return true;
+  }
+};
+
+// packages/api/src/services/payrollIntegrationService.ts
+var DEFAULT_PAYROLL_CODES = {
+  companyCode: "001",
+  codeWorkDays: "100",
+  codeRegular100: "101",
+  codeOvertime125: "125",
+  codeOvertime150: "150",
+  codeShabbat150: "160",
+  codeNight: "170",
+  codeExpenses: "200"
+};
+function escapeCsvCell2(val) {
+  if (val === null || val === void 0) return '""';
+  const str = String(val);
+  const safeStr = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+  return `"${safeStr.replace(/"/g, '""')}"`;
+}
+function aggregateMonthlyPayroll(rows, expensesByEmpId = /* @__PURE__ */ new Map(), allEmployees = []) {
+  const map = /* @__PURE__ */ new Map();
+  for (const emp of allEmployees) {
+    map.set(emp.empId, {
+      empId: emp.empId,
+      name: emp.name,
+      dates: /* @__PURE__ */ new Set(),
+      regular100Hours: 0,
+      overtime125Hours: 0,
+      overtime150Hours: 0,
+      shabbatHours: 0,
+      nightHours: 0,
+      lunchDeductedHours: 0,
+      totalGrossHours: 0,
+      totalNetHours: 0
+    });
+  }
+  for (const r of rows) {
+    let entry = map.get(r.empId);
+    if (!entry) {
+      entry = {
+        empId: r.empId,
+        name: r.name,
+        dates: /* @__PURE__ */ new Set(),
+        regular100Hours: 0,
+        overtime125Hours: 0,
+        overtime150Hours: 0,
+        shabbatHours: 0,
+        nightHours: 0,
+        lunchDeductedHours: 0,
+        totalGrossHours: 0,
+        totalNetHours: 0
+      };
+      map.set(r.empId, entry);
+    }
+    if (r.netHours > 0 || r.grossHours > 0) {
+      entry.dates.add(r.date);
+    }
+    const ot125 = r.overtime125Hours ?? Math.min(2, r.overtimeHours);
+    const ot150 = r.overtime150Hours ?? Math.max(0, r.overtimeHours - ot125);
+    const shabbat = r.saturdayHours || 0;
+    const regular100 = Math.max(0, Number((r.netHours - r.overtimeHours - shabbat).toFixed(2)));
+    entry.regular100Hours += regular100;
+    entry.overtime125Hours += ot125;
+    entry.overtime150Hours += ot150;
+    entry.shabbatHours += shabbat;
+    entry.nightHours += r.nightHours || 0;
+    entry.lunchDeductedHours += r.lunchDeducted || 0;
+    entry.totalGrossHours += r.grossHours || 0;
+    entry.totalNetHours += r.netHours || 0;
+  }
+  const summaries = [];
+  for (const entry of map.values()) {
+    const expensesIls = Number((expensesByEmpId.get(entry.empId) || 0).toFixed(2));
+    if (entry.totalNetHours > 0 || entry.totalGrossHours > 0 || expensesIls > 0) {
+      summaries.push({
+        empId: entry.empId,
+        name: entry.name,
+        workDays: entry.dates.size,
+        regular100Hours: Number(entry.regular100Hours.toFixed(2)),
+        overtime125Hours: Number(entry.overtime125Hours.toFixed(2)),
+        overtime150Hours: Number(entry.overtime150Hours.toFixed(2)),
+        shabbatHours: Number(entry.shabbatHours.toFixed(2)),
+        nightHours: Number(entry.nightHours.toFixed(2)),
+        lunchDeductedHours: Number(entry.lunchDeductedHours.toFixed(2)),
+        totalGrossHours: Number(entry.totalGrossHours.toFixed(2)),
+        totalNetHours: Number(entry.totalNetHours.toFixed(2)),
+        expensesIls
+      });
+    }
+  }
+  return summaries.sort((a, b) => a.empId.localeCompare(b.empId));
+}
+function generatePayrollExportFile(params) {
+  const { system, periodMonth, clientName, summaries, dailyRows } = params;
+  const codes = {
+    ...DEFAULT_PAYROLL_CODES,
+    ...params.codes || {}
+  };
+  const BOM = "\uFEFF";
+  const safeClient = clientName.replace(/[^a-zA-Z0-9_-]/g, "_") || "Company";
+  const [yearStr, monthStr] = periodMonth.split("-");
+  const displayPeriod = `${monthStr}/${yearStr}`;
+  if (system === "api") {
+    const payload = {
+      system: "TickWork Payroll & ERP API v2",
+      companyName: clientName,
+      companyCode: codes.companyCode,
+      periodMonth,
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      salaryCodes: codes,
+      employeeSummaries: summaries,
+      dailyAttendance: dailyRows
+    };
+    return {
+      content: JSON.stringify(payload, null, 2),
+      filename: `TickWork_API_${safeClient}_${periodMonth}.json`,
+      contentType: "application/json; charset=utf-8"
+    };
+  }
+  const lines = [];
+  switch (system) {
+    case "michpal": {
+      lines.push(
+        [
+          escapeCsvCell2("\u05DE\u05DE\u05E9\u05E7 \u05E9\u05DB\u05E8 \u05DE\u05D9\u05DB\u05E4\u05DC (Michpal)"),
+          escapeCsvCell2(clientName),
+          escapeCsvCell2(`\u05DE\u05E4\u05E2\u05DC: ${codes.companyCode}`),
+          escapeCsvCell2(`\u05EA\u05E7\u05D5\u05E4\u05D4: ${displayPeriod}`)
+        ].join(",")
+      );
+      lines.push("");
+      lines.push(
+        [
+          "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05E4\u05E2\u05DC",
+          "\u05EA\u05E7\u05D5\u05E4\u05EA \u05E9\u05DB\u05E8",
+          "\u05DE\u05E1\u05E4\u05E8 \u05E2\u05D5\u05D1\u05D3",
+          "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3",
+          `\u05D9\u05DE\u05D9 \u05E2\u05D1\u05D5\u05D3\u05D4 (${codes.codeWorkDays})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05E8\u05D2\u05D9\u05DC\u05D5\u05EA 100% (${codes.codeRegular100})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 125% (${codes.codeOvertime125})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 150% (${codes.codeOvertime150})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05E9\u05D1\u05EA 150% (${codes.codeShabbat150})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05DC\u05D9\u05DC\u05D4 (${codes.codeNight})`,
+          `\u05D4\u05D7\u05D6\u05E8 \u05D4\u05D5\u05E6\u05D0\u05D5\u05EA/\u05E0\u05E1\u05D9\u05E2\u05D5\u05EA (${codes.codeExpenses})`,
+          '\u05E1\u05D4"\u05DB \u05E9\u05E2\u05D5\u05EA \u05E0\u05D8\u05D5'
+        ].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        lines.push(
+          [
+            codes.companyCode,
+            displayPeriod,
+            s.empId,
+            s.name,
+            s.workDays,
+            s.regular100Hours.toFixed(2),
+            s.overtime125Hours.toFixed(2),
+            s.overtime150Hours.toFixed(2),
+            s.shabbatHours.toFixed(2),
+            s.nightHours.toFixed(2),
+            s.expensesIls.toFixed(2),
+            s.totalNetHours.toFixed(2)
+          ].map(escapeCsvCell2).join(",")
+        );
+      }
+      lines.push("");
+      lines.push([escapeCsvCell2("--- \u05E8\u05E9\u05D5\u05DE\u05D5\u05EA \u05E7\u05DC\u05D9\u05D8\u05D4 \u05DC\u05DE\u05D9\u05DB\u05E4\u05DC \u05DC\u05E4\u05D9 \u05E1\u05DE\u05DC \u05E9\u05DB\u05E8 (Batch Import) ---")].join(","));
+      lines.push(
+        ["\u05DE\u05E1\u05E4\u05E8 \u05DE\u05E4\u05E2\u05DC", "\u05DE\u05E1\u05E4\u05E8 \u05E2\u05D5\u05D1\u05D3", "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3", "\u05D7\u05D5\u05D3\u05E9", "\u05E9\u05E0\u05D4", "\u05E1\u05DE\u05DC \u05E9\u05DB\u05E8", "\u05EA\u05D9\u05D0\u05D5\u05E8 \u05E8\u05DB\u05D9\u05D1", "\u05DB\u05DE\u05D5\u05EA / \u05E9\u05E2\u05D5\u05EA / \u05E1\u05DB\u05D5\u05DD"].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        const items = [
+          [codes.codeWorkDays, "\u05D9\u05DE\u05D9 \u05E2\u05D1\u05D5\u05D3\u05D4", s.workDays],
+          [codes.codeRegular100, "\u05E9\u05E2\u05D5\u05EA \u05E8\u05D2\u05D9\u05DC\u05D5\u05EA 100%", s.regular100Hours],
+          [codes.codeOvertime125, "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 125%", s.overtime125Hours],
+          [codes.codeOvertime150, "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 150%", s.overtime150Hours],
+          [codes.codeShabbat150, "\u05E9\u05E2\u05D5\u05EA \u05E9\u05D1\u05EA 150%", s.shabbatHours],
+          [codes.codeNight, "\u05E9\u05E2\u05D5\u05EA \u05DC\u05D9\u05DC\u05D4", s.nightHours],
+          [codes.codeExpenses, "\u05D4\u05D7\u05D6\u05E8 \u05D4\u05D5\u05E6\u05D0\u05D5\u05EA", s.expensesIls]
+        ];
+        for (const [code, label, val] of items) {
+          if (val > 0) {
+            lines.push(
+              [codes.companyCode, s.empId, s.name, monthStr, yearStr, code, label, val.toFixed(2)].map(escapeCsvCell2).join(",")
+            );
+          }
+        }
+      }
+      return {
+        content: BOM + lines.join("\r\n"),
+        filename: `Michpal_${safeClient}_${periodMonth}.csv`,
+        contentType: "text/csv; charset=utf-8"
+      };
+    }
+    case "shiklolit": {
+      lines.push(
+        [
+          escapeCsvCell2("\u05DE\u05DE\u05E9\u05E7 \u05E9\u05DB\u05E8 \u05E9\u05D9\u05E7\u05DC\u05D5\u05DC\u05D9\u05EA - \u05D8.\u05DE.\u05DC (Shiklolit TML)"),
+          escapeCsvCell2(clientName),
+          escapeCsvCell2(`\u05E7\u05D5\u05D3 \u05D7\u05D1\u05E8\u05D4: ${codes.companyCode}`),
+          escapeCsvCell2(`\u05D7\u05D5\u05D3\u05E9: ${displayPeriod}`)
+        ].join(",")
+      );
+      lines.push("");
+      lines.push(
+        [
+          "\u05E7\u05D5\u05D3 \u05D7\u05D1\u05E8\u05D4",
+          "\u05D7\u05D5\u05D3\u05E9 \u05D5\u05E9\u05E0\u05D4",
+          "\u05E7\u05D5\u05D3 \u05E2\u05D5\u05D1\u05D3",
+          "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3",
+          `\u05E1\u05DE\u05DC ${codes.codeWorkDays} (\u05D9\u05DE\u05D9\u05DD)`,
+          `\u05E1\u05DE\u05DC ${codes.codeRegular100} (\u05E8\u05D2\u05D9\u05DC\u05D5\u05EA 100%)`,
+          `\u05E1\u05DE\u05DC ${codes.codeOvertime125} (\u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 125%)`,
+          `\u05E1\u05DE\u05DC ${codes.codeOvertime150} (\u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 150%)`,
+          `\u05E1\u05DE\u05DC ${codes.codeShabbat150} (\u05E9\u05D1\u05EA 150%)`,
+          `\u05E1\u05DE\u05DC ${codes.codeNight} (\u05DC\u05D9\u05DC\u05D4)`,
+          `\u05E1\u05DE\u05DC ${codes.codeExpenses} (\u05D4\u05D5\u05E6\u05D0\u05D5\u05EA \u05E9"\u05D7)`,
+          '\u05E1\u05D4"\u05DB \u05E9\u05E2\u05D5\u05EA \u05DC\u05EA\u05E9\u05DC\u05D5\u05DD'
+        ].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        lines.push(
+          [
+            codes.companyCode,
+            displayPeriod,
+            s.empId,
+            s.name,
+            s.workDays,
+            s.regular100Hours.toFixed(2),
+            s.overtime125Hours.toFixed(2),
+            s.overtime150Hours.toFixed(2),
+            s.shabbatHours.toFixed(2),
+            s.nightHours.toFixed(2),
+            s.expensesIls.toFixed(2),
+            s.totalNetHours.toFixed(2)
+          ].map(escapeCsvCell2).join(",")
+        );
+      }
+      return {
+        content: BOM + lines.join("\r\n"),
+        filename: `Shiklolit_TML_${safeClient}_${periodMonth}.csv`,
+        contentType: "text/csv; charset=utf-8"
+      };
+    }
+    case "hargal": {
+      lines.push(
+        [
+          escapeCsvCell2("\u05DE\u05DE\u05E9\u05E7 \u05E7\u05DC\u05D9\u05D8\u05EA \u05E0\u05D5\u05DB\u05D7\u05D5\u05EA - \u05D4\u05E8-\u05D2\u05DC (Har-Gal)"),
+          escapeCsvCell2(clientName),
+          escapeCsvCell2(`\u05DE\u05E4\u05E2\u05DC: ${codes.companyCode}`),
+          escapeCsvCell2(`\u05EA\u05E7\u05D5\u05E4\u05D4: ${displayPeriod}`)
+        ].join(",")
+      );
+      lines.push("");
+      lines.push(
+        [
+          "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05E4\u05E2\u05DC",
+          "\u05EA\u05E7\u05D5\u05E4\u05D4",
+          "\u05DE\u05E1\u05E4\u05E8 \u05E2\u05D5\u05D1\u05D3",
+          "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3",
+          "\u05D9\u05DE\u05D9 \u05E2\u05D1\u05D5\u05D3\u05D4",
+          "\u05E9\u05E2\u05D5\u05EA \u05EA\u05E7\u05DF 100%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 125%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 150%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E9\u05D1\u05EA/\u05D7\u05D2 150%",
+          "\u05E9\u05E2\u05D5\u05EA \u05DC\u05D9\u05DC\u05D4",
+          "\u05E0\u05D9\u05DB\u05D5\u05D9 \u05D4\u05E4\u05E1\u05E7\u05D4",
+          '\u05D4\u05D7\u05D6\u05E8 \u05D4\u05D5\u05E6\u05D0\u05D5\u05EA (\u05E9"\u05D7)',
+          '\u05E1\u05D4"\u05DB \u05E9\u05E2\u05D5\u05EA \u05E0\u05D8\u05D5'
+        ].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        lines.push(
+          [
+            codes.companyCode,
+            displayPeriod,
+            s.empId,
+            s.name,
+            s.workDays,
+            s.regular100Hours.toFixed(2),
+            s.overtime125Hours.toFixed(2),
+            s.overtime150Hours.toFixed(2),
+            s.shabbatHours.toFixed(2),
+            s.nightHours.toFixed(2),
+            s.lunchDeductedHours.toFixed(2),
+            s.expensesIls.toFixed(2),
+            s.totalNetHours.toFixed(2)
+          ].map(escapeCsvCell2).join(",")
+        );
+      }
+      return {
+        content: BOM + lines.join("\r\n"),
+        filename: `HarGal_${safeClient}_${periodMonth}.csv`,
+        contentType: "text/csv; charset=utf-8"
+      };
+    }
+    case "okez": {
+      lines.push(
+        [
+          escapeCsvCell2("\u05DE\u05DE\u05E9\u05E7 \u05E9\u05DB\u05E8 - \u05E2\u05D5\u05E7\u05E5 \u05DE\u05E2\u05E8\u05DB\u05D5\u05EA (Okez)"),
+          escapeCsvCell2(clientName),
+          escapeCsvCell2(`\u05E7\u05D5\u05D3 \u05DE\u05E2\u05E1\u05D9\u05E7: ${codes.companyCode}`),
+          escapeCsvCell2(`\u05D7\u05D5\u05D3\u05E9: ${displayPeriod}`)
+        ].join(",")
+      );
+      lines.push("");
+      lines.push(
+        [
+          "\u05E7\u05D5\u05D3 \u05DE\u05E2\u05E1\u05D9\u05E7",
+          "\u05D7\u05D5\u05D3\u05E9 \u05E9\u05DB\u05E8",
+          "\u05DE\u05E1\u05E4\u05E8 \u05E2\u05D5\u05D1\u05D3",
+          "\u05E9\u05DD \u05DE\u05DC\u05D0",
+          "\u05D9\u05DE\u05D9 \u05E0\u05D5\u05DB\u05D7\u05D5\u05EA",
+          "\u05E9\u05E2\u05D5\u05EA \u05E8\u05D2\u05D9\u05DC\u05D5\u05EA 100%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 125%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 150%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E9\u05D1\u05EA 150%",
+          "\u05E9\u05E2\u05D5\u05EA \u05DC\u05D9\u05DC\u05D4",
+          "\u05D4\u05D5\u05E6\u05D0\u05D5\u05EA \u05D5\u05E0\u05E1\u05D9\u05E2\u05D5\u05EA",
+          '\u05E1\u05D4"\u05DB \u05E9\u05E2\u05D5\u05EA \u05E0\u05D8\u05D5'
+        ].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        lines.push(
+          [
+            codes.companyCode,
+            displayPeriod,
+            s.empId,
+            s.name,
+            s.workDays,
+            s.regular100Hours.toFixed(2),
+            s.overtime125Hours.toFixed(2),
+            s.overtime150Hours.toFixed(2),
+            s.shabbatHours.toFixed(2),
+            s.nightHours.toFixed(2),
+            s.expensesIls.toFixed(2),
+            s.totalNetHours.toFixed(2)
+          ].map(escapeCsvCell2).join(",")
+        );
+      }
+      return {
+        content: BOM + lines.join("\r\n"),
+        filename: `Okez_${safeClient}_${periodMonth}.csv`,
+        contentType: "text/csv; charset=utf-8"
+      };
+    }
+    case "hilan": {
+      lines.push(
+        [
+          escapeCsvCell2("\u05DE\u05DE\u05E9\u05E7 \u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05DB\u05D7\u05D5\u05EA - \u05D7\u05D9\u05DC\u05DF (Hilan)"),
+          escapeCsvCell2(clientName),
+          escapeCsvCell2(`\u05D0\u05E8\u05D2\u05D5\u05DF: ${codes.companyCode}`),
+          escapeCsvCell2(`\u05EA\u05E7\u05D5\u05E4\u05D4: ${displayPeriod}`)
+        ].join(",")
+      );
+      lines.push("");
+      lines.push(
+        [
+          "\u05E7\u05D5\u05D3 \u05D0\u05E8\u05D2\u05D5\u05DF",
+          "\u05EA\u05E7\u05D5\u05E4\u05EA \u05E9\u05DB\u05E8",
+          "\u05DE\u05E1\u05E4\u05E8 \u05E2\u05D5\u05D1\u05D3",
+          "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3",
+          `\u05D9\u05DE\u05D9 \u05E2\u05D1\u05D5\u05D3\u05D4 (${codes.codeWorkDays})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05EA\u05E7\u05DF 100% (${codes.codeRegular100})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 125% (${codes.codeOvertime125})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 150% (${codes.codeOvertime150})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05DE\u05E0\u05D5\u05D7\u05D4/\u05E9\u05D1\u05EA (${codes.codeShabbat150})`,
+          `\u05E9\u05E2\u05D5\u05EA \u05DC\u05D9\u05DC\u05D4 (${codes.codeNight})`,
+          `\u05D4\u05D7\u05D6\u05E8 \u05D4\u05D5\u05E6\u05D0\u05D5\u05EA (${codes.codeExpenses})`,
+          '\u05E1\u05D4"\u05DB \u05E9\u05E2\u05D5\u05EA \u05E0\u05D8\u05D5'
+        ].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        lines.push(
+          [
+            codes.companyCode,
+            displayPeriod,
+            s.empId,
+            s.name,
+            s.workDays,
+            s.regular100Hours.toFixed(2),
+            s.overtime125Hours.toFixed(2),
+            s.overtime150Hours.toFixed(2),
+            s.shabbatHours.toFixed(2),
+            s.nightHours.toFixed(2),
+            s.expensesIls.toFixed(2),
+            s.totalNetHours.toFixed(2)
+          ].map(escapeCsvCell2).join(",")
+        );
+      }
+      return {
+        content: BOM + lines.join("\r\n"),
+        filename: `Hilan_${safeClient}_${periodMonth}.csv`,
+        contentType: "text/csv; charset=utf-8"
+      };
+    }
+    case "priority": {
+      lines.push(
+        [
+          "COMPANY_CODE",
+          "COMPANY_NAME",
+          "PAY_PERIOD",
+          "EMP_ID",
+          "EMP_NAME",
+          "WORK_DAYS",
+          "REG_100_HRS",
+          "OT_125_HRS",
+          "OT_150_HRS",
+          "SHABBAT_150_HRS",
+          "NIGHT_HRS",
+          "BREAK_DEDUCT_HRS",
+          "EXPENSES_ILS",
+          "TOTAL_NET_HRS"
+        ].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        lines.push(
+          [
+            codes.companyCode,
+            clientName,
+            periodMonth,
+            s.empId,
+            s.name,
+            s.workDays,
+            s.regular100Hours.toFixed(2),
+            s.overtime125Hours.toFixed(2),
+            s.overtime150Hours.toFixed(2),
+            s.shabbatHours.toFixed(2),
+            s.nightHours.toFixed(2),
+            s.lunchDeductedHours.toFixed(2),
+            s.expensesIls.toFixed(2),
+            s.totalNetHours.toFixed(2)
+          ].map(escapeCsvCell2).join(",")
+        );
+      }
+      return {
+        content: BOM + lines.join("\r\n"),
+        filename: `Priority_ERP_${safeClient}_${periodMonth}.csv`,
+        contentType: "text/csv; charset=utf-8"
+      };
+    }
+    case "rivhit": {
+      lines.push(
+        [
+          escapeCsvCell2("\u05D3\u05D5\u05D7 \u05E8\u05D9\u05DB\u05D5\u05D6 \u05E9\u05E2\u05D5\u05EA \u05D5\u05D4\u05D5\u05E6\u05D0\u05D5\u05EA - \u05E8\u05D9\u05D5\u05D5\u05D7\u05D9\u05EA (Rivhit)"),
+          escapeCsvCell2(clientName),
+          escapeCsvCell2(`\u05DE\u05E1\u05E4\u05E8 \u05D7\u05D1\u05E8\u05D4/\u05E2\u05D5\u05E1\u05E7: ${codes.companyCode}`),
+          escapeCsvCell2(`\u05EA\u05E7\u05D5\u05E4\u05D4: ${displayPeriod}`)
+        ].join(",")
+      );
+      lines.push("");
+      lines.push(
+        [
+          "\u05E7\u05D5\u05D3 \u05D7\u05D1\u05E8\u05D4",
+          "\u05EA\u05E7\u05D5\u05E4\u05D4",
+          "\u05E7\u05D5\u05D3 \u05E2\u05D5\u05D1\u05D3",
+          "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3",
+          "\u05D9\u05DE\u05D9 \u05E2\u05D1\u05D5\u05D3\u05D4",
+          "\u05E9\u05E2\u05D5\u05EA \u05E8\u05D2\u05D9\u05DC\u05D5\u05EA (100%)",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA (125%)",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA (150%)",
+          "\u05E9\u05E2\u05D5\u05EA \u05E9\u05D1\u05EA (150%)",
+          '\u05D4\u05D7\u05D6\u05E8 \u05D4\u05D5\u05E6\u05D0\u05D5\u05EA \u05DE\u05D5\u05DB\u05E8\u05D5\u05EA (\u05E9"\u05D7)',
+          '\u05E1\u05D4"\u05DB \u05E9\u05E2\u05D5\u05EA \u05E0\u05D8\u05D5'
+        ].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        lines.push(
+          [
+            codes.companyCode,
+            displayPeriod,
+            s.empId,
+            s.name,
+            s.workDays,
+            s.regular100Hours.toFixed(2),
+            s.overtime125Hours.toFixed(2),
+            s.overtime150Hours.toFixed(2),
+            s.shabbatHours.toFixed(2),
+            s.expensesIls.toFixed(2),
+            s.totalNetHours.toFixed(2)
+          ].map(escapeCsvCell2).join(",")
+        );
+      }
+      return {
+        content: BOM + lines.join("\r\n"),
+        filename: `Rivhit_${safeClient}_${periodMonth}.csv`,
+        contentType: "text/csv; charset=utf-8"
+      };
+    }
+    case "excel":
+    default: {
+      lines.push(
+        [
+          escapeCsvCell2("\u05D3\u05D5\u05D7 \u05E9\u05DB\u05E8 \u05DE\u05E8\u05D5\u05DB\u05D6 \u05DC\u05D4\u05E0\u05D4\u05DC\u05EA \u05D7\u05E9\u05D1\u05D5\u05E0\u05D5\u05EA (Excel Payroll Master)"),
+          escapeCsvCell2(clientName),
+          escapeCsvCell2(`\u05EA\u05E7\u05D5\u05E4\u05D4: ${displayPeriod}`)
+        ].join(",")
+      );
+      lines.push("");
+      lines.push(
+        [
+          "\u05E7\u05D5\u05D3 \u05E2\u05D5\u05D1\u05D3",
+          "\u05E9\u05DD \u05E2\u05D5\u05D1\u05D3",
+          "\u05D9\u05DE\u05D9 \u05E2\u05D1\u05D5\u05D3\u05D4",
+          "\u05E9\u05E2\u05D5\u05EA \u05D1\u05E8\u05D5\u05D8\u05D5",
+          "\u05E0\u05D9\u05DB\u05D5\u05D9 \u05D4\u05E4\u05E1\u05E7\u05D4",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D8\u05D5",
+          "\u05E9\u05E2\u05D5\u05EA \u05E8\u05D2\u05D9\u05DC\u05D5\u05EA 100%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 125%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E0\u05D5\u05E1\u05E4\u05D5\u05EA 150%",
+          "\u05E9\u05E2\u05D5\u05EA \u05E9\u05D1\u05EA 150%",
+          "\u05E9\u05E2\u05D5\u05EA \u05DC\u05D9\u05DC\u05D4",
+          '\u05D4\u05D7\u05D6\u05E8 \u05D4\u05D5\u05E6\u05D0\u05D5\u05EA (\u05E9"\u05D7)'
+        ].map(escapeCsvCell2).join(",")
+      );
+      for (const s of summaries) {
+        lines.push(
+          [
+            s.empId,
+            s.name,
+            s.workDays,
+            s.totalGrossHours.toFixed(2),
+            s.lunchDeductedHours.toFixed(2),
+            s.totalNetHours.toFixed(2),
+            s.regular100Hours.toFixed(2),
+            s.overtime125Hours.toFixed(2),
+            s.overtime150Hours.toFixed(2),
+            s.shabbatHours.toFixed(2),
+            s.nightHours.toFixed(2),
+            s.expensesIls.toFixed(2)
+          ].map(escapeCsvCell2).join(",")
+        );
+      }
+      return {
+        content: BOM + lines.join("\r\n"),
+        filename: `Excel_Payroll_${safeClient}_${periodMonth}.csv`,
+        contentType: "text/csv; charset=utf-8"
+      };
+    }
+  }
+}
+
 // packages/api/src/routes/client.ts
-var clientRouter = (0, import_express4.Router)();
+var clientRouter = (0, import_express2.Router)();
 clientRouter.use(authRequired, requireRole("client", "foreman"));
 function getTargetClientId(req) {
   return req.user?.clientId ?? req.user?.id ?? "";
@@ -99352,8 +99338,8 @@ clientRouter.post("/foremen", requireRole("client"), async (req, res) => {
       res.status(400).json({ error: "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0438\u043C\u044F, \u043B\u043E\u0433\u0438\u043D \u0438 \u043F\u0430\u0440\u043E\u043B\u044C" });
       return;
     }
-    const salt = await import_bcryptjs4.default.genSalt(10);
-    const passwordHash = await import_bcryptjs4.default.hash(password, salt);
+    const salt = await import_bcryptjs2.default.genSalt(10);
+    const passwordHash = await import_bcryptjs2.default.hash(password, salt);
     const foreman = await prisma.foreman.create({
       data: {
         clientId,
@@ -100377,6 +100363,799 @@ clientRouter.post("/invoices/:id/pay", requireRole("client"), async (req, res) =
   } catch (err) {
     console.error("Create payment link error:", err);
     res.status(500).json({ error: err.message || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u0438 \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u043E\u043F\u043B\u0430\u0442\u0443" });
+  }
+});
+async function buildClientPayrollData(clientId, monthParam, foremanId) {
+  const now = /* @__PURE__ */ new Date();
+  const currentMonth = getJerusalemParts(now).dateStr.slice(0, 7);
+  const periodMonth = monthParam && /^\d{4}-\d{2}$/.test(monthParam) ? monthParam : currentMonth;
+  const [yStr, mStr] = periodMonth.split("-");
+  const year = parseInt(yStr, 10);
+  const month = parseInt(mStr, 10);
+  const lastDay = new Date(year, month, 0).getDate();
+  const startDate = jerusalemDateTimeToDate(`${periodMonth}-01`, "00:00");
+  const endDate = jerusalemDateTimeToDate(
+    `${periodMonth}-${String(lastDay).padStart(2, "0")}`,
+    "23:59"
+  );
+  const [reportData, clientRecord, employees, notes] = await Promise.all([
+    computeClientReportRows(clientId, startDate, endDate, foremanId),
+    prisma.client.findUnique({
+      where: { id: clientId },
+      select: { name: true, defaultShifts: true, taxId: true, billingEmail: true, billingPhone: true }
+    }),
+    prisma.employee.findMany({
+      where: { clientId, ...foremanId ? { foremanId } : {} },
+      select: { empId: true, name: true }
+    }),
+    prisma.dailyNote.findMany({
+      where: {
+        clientId,
+        date: {
+          gte: `${periodMonth}-01`,
+          lte: `${periodMonth}-${String(lastDay).padStart(2, "0")}`
+        }
+      },
+      select: { empId: true, expense: true }
+    })
+  ]);
+  const expensesByEmpId = /* @__PURE__ */ new Map();
+  for (const n of notes) {
+    if (n.expense && n.expense > 0) {
+      expensesByEmpId.set(n.empId, (expensesByEmpId.get(n.empId) || 0) + n.expense);
+    }
+  }
+  const shiftsObj = clientRecord?.defaultShifts || {
+    morning: { start: "07:00", end: "16:00" },
+    evening: { start: "16:00", end: "00:00" },
+    night: { start: "22:00", end: "06:00" }
+  };
+  let payrollConfig = {
+    ...DEFAULT_PAYROLL_CODES,
+    companyCode: clientRecord?.taxId || DEFAULT_PAYROLL_CODES.companyCode,
+    ...shiftsObj.payrollConfig || {}
+  };
+  if (!payrollConfig.apiKey) {
+    const generatedKey = `tw_${clientId.slice(0, 6)}_${import_crypto.default.createHash("sha256").update(`${clientId}_payroll_secret`).digest("hex").slice(0, 20)}`;
+    payrollConfig = { ...payrollConfig, apiKey: generatedKey };
+  }
+  const activePayrollSystem = shiftsObj.activePayrollSystem || "michpal";
+  const summaries = aggregateMonthlyPayroll(reportData.rows, expensesByEmpId, employees);
+  return {
+    periodMonth,
+    clientName: reportData.clientName,
+    activePayrollSystem,
+    payrollConfig,
+    summaries,
+    dailyRows: reportData.rows,
+    shiftsObj
+  };
+}
+clientRouter.get("/integrations/preview", async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const isForeman = req.user?.role === "foreman";
+    const monthParam = req.query["month"];
+    const data = await buildClientPayrollData(
+      clientId,
+      monthParam,
+      isForeman ? req.user?.id : void 0
+    );
+    res.json({
+      success: true,
+      periodMonth: data.periodMonth,
+      clientName: data.clientName,
+      activePayrollSystem: data.activePayrollSystem,
+      payrollConfig: data.payrollConfig,
+      summaries: data.summaries
+    });
+  } catch (err) {
+    console.error("Integrations preview error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0434\u0430\u043D\u043D\u044B\u0445 \u0438\u043D\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0439" });
+  }
+});
+clientRouter.post("/integrations/config", requireRole("client"), async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const { activePayrollSystem, payrollConfig, regenerateApiKey } = req.body;
+    const clientRecord = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { defaultShifts: true }
+    });
+    const currentShifts = clientRecord?.defaultShifts || {
+      morning: { start: "07:00", end: "16:00" },
+      evening: { start: "16:00", end: "00:00" },
+      night: { start: "22:00", end: "06:00" }
+    };
+    const mergedConfig = {
+      ...DEFAULT_PAYROLL_CODES,
+      ...currentShifts.payrollConfig || {},
+      ...payrollConfig || {}
+    };
+    if (regenerateApiKey || !mergedConfig.apiKey) {
+      mergedConfig.apiKey = `tw_${clientId.slice(0, 6)}_${import_crypto.default.randomBytes(12).toString("hex")}`;
+    }
+    const updatedShifts = {
+      ...currentShifts,
+      activePayrollSystem: activePayrollSystem || currentShifts.activePayrollSystem || "michpal",
+      payrollConfig: mergedConfig
+    };
+    await prisma.client.update({
+      where: { id: clientId },
+      data: { defaultShifts: updatedShifts }
+    });
+    res.json({
+      success: true,
+      activePayrollSystem: updatedShifts.activePayrollSystem,
+      payrollConfig: mergedConfig
+    });
+  } catch (err) {
+    console.error("Save integrations config error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A \u0438\u043D\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438" });
+  }
+});
+clientRouter.get("/integrations/export", async (req, res) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const isForeman = req.user?.role === "foreman";
+    const monthParam = req.query["month"];
+    const systemParam = req.query["system"] || void 0;
+    const data = await buildClientPayrollData(
+      clientId,
+      monthParam,
+      isForeman ? req.user?.id : void 0
+    );
+    const targetSystem = systemParam || data.activePayrollSystem || "michpal";
+    const exported = generatePayrollExportFile({
+      system: targetSystem,
+      periodMonth: data.periodMonth,
+      clientName: data.clientName,
+      summaries: data.summaries,
+      dailyRows: data.dailyRows,
+      codes: data.payrollConfig
+    });
+    res.setHeader("Content-Type", exported.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${exported.filename}"`);
+    res.send(exported.content);
+  } catch (err) {
+    console.error("Export payroll integration file error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0432\u044B\u0433\u0440\u0443\u0437\u043A\u0438 \u0444\u0430\u0439\u043B\u0430 \u0434\u043B\u044F \u0431\u0443\u0445\u0433\u0430\u043B\u0442\u0435\u0440\u0438\u0438" });
+  }
+});
+
+// packages/api/src/routes/public.ts
+var publicRouter = (0, import_express3.Router)();
+var contactSchema = external_exports.object({
+  name: external_exports.string().min(1),
+  company: external_exports.string().optional(),
+  phone: external_exports.string().min(1),
+  email: external_exports.string().email().optional().or(external_exports.literal("")),
+  message: external_exports.string().optional()
+});
+publicRouter.post("/contact", async (req, res) => {
+  try {
+    const data = contactSchema.parse(req.body);
+    const contact = await prisma.contactRequest.create({
+      data: {
+        name: data.name,
+        company: data.company || null,
+        phone: data.phone,
+        email: data.email || null,
+        message: data.message || null
+      }
+    });
+    res.json({ success: true, id: contact.id });
+  } catch (err) {
+    if (err instanceof external_exports.ZodError) {
+      res.status(400).json({ error: "\u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0437\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043F\u043E\u043B\u044F (\u0438\u043C\u044F \u0438 \u0442\u0435\u043B\u0435\u0444\u043E\u043D)" });
+      return;
+    }
+    console.error("Contact error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043A\u0438" });
+  }
+});
+var registerSchema = external_exports.object({
+  username: external_exports.string().min(3),
+  password: external_exports.string().min(6),
+  name: external_exports.string().min(2),
+  phone: external_exports.string().optional()
+});
+publicRouter.post("/register", async (req, res) => {
+  try {
+    const data = registerSchema.parse(req.body);
+    const existing = await prisma.client.findUnique({
+      where: { username: data.username }
+    });
+    if (existing) {
+      res.status(400).json({ error: "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u0441 \u0442\u0430\u043A\u0438\u043C \u043B\u043E\u0433\u0438\u043D\u043E\u043C \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442" });
+      return;
+    }
+    const salt = await import_bcryptjs3.default.genSalt(10);
+    const passwordHash = await import_bcryptjs3.default.hash(data.password, salt);
+    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1e3);
+    const defaultShifts = {
+      morning: { start: "07:00", end: "16:00" },
+      evening: { start: "16:00", end: "00:00" },
+      night: { start: "00:00", end: "07:00" }
+    };
+    const client = await prisma.client.create({
+      data: {
+        username: data.username,
+        passwordHash,
+        name: data.name,
+        trialEndsAt,
+        defaultShifts,
+        positions: DEFAULT_COMPANY_POSITIONS
+      }
+    });
+    const token = signSessionToken({
+      id: client.id,
+      role: "client",
+      name: client.name,
+      clientId: client.id
+    });
+    const isProd = process.env["NODE_ENV"] === "production";
+    res.cookie("session", token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1e3
+    });
+    res.json({
+      success: true,
+      role: "client",
+      clientId: client.id,
+      name: client.name
+    });
+  } catch (err) {
+    if (err instanceof external_exports.ZodError) {
+      res.status(400).json({ error: "\u041B\u043E\u0433\u0438\u043D \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0442 3 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432, \u043F\u0430\u0440\u043E\u043B\u044C \u043E\u0442 6 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432" });
+      return;
+    }
+    console.error("Registration error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438" });
+  }
+});
+publicRouter.get("/v1/payroll", async (req, res) => {
+  try {
+    const apiKey = req.query["apiKey"] || req.headers["x-api-key"] || "";
+    if (!apiKey || !apiKey.startsWith("tw_")) {
+      res.status(401).json({ error: "Missing or invalid API Key (tw_...)" });
+      return;
+    }
+    const clients = await prisma.client.findMany({
+      select: { id: true, name: true, taxId: true, defaultShifts: true }
+    });
+    const matchedClient = clients.find((c) => {
+      const shifts = c.defaultShifts;
+      const savedKey = shifts?.payrollConfig?.apiKey;
+      const defaultKey = `tw_${c.id.slice(0, 6)}_${import_crypto2.default.createHash("sha256").update(`${c.id}_payroll_secret`).digest("hex").slice(0, 20)}`;
+      return savedKey === apiKey || defaultKey === apiKey;
+    });
+    if (!matchedClient) {
+      res.status(403).json({ error: "Invalid API Key" });
+      return;
+    }
+    const now = /* @__PURE__ */ new Date();
+    const currentMonth = getJerusalemParts(now).dateStr.slice(0, 7);
+    const monthParam = req.query["month"];
+    const periodMonth = monthParam && /^\d{4}-\d{2}$/.test(monthParam) ? monthParam : currentMonth;
+    const [yStr, mStr] = periodMonth.split("-");
+    const year = parseInt(yStr, 10);
+    const month = parseInt(mStr, 10);
+    const lastDay = new Date(year, month, 0).getDate();
+    const startDate = jerusalemDateTimeToDate(`${periodMonth}-01`, "00:00");
+    const endDate = jerusalemDateTimeToDate(
+      `${periodMonth}-${String(lastDay).padStart(2, "0")}`,
+      "23:59"
+    );
+    const [reportData, employees, notes] = await Promise.all([
+      computeClientReportRows(matchedClient.id, startDate, endDate),
+      prisma.employee.findMany({
+        where: { clientId: matchedClient.id },
+        select: { empId: true, name: true }
+      }),
+      prisma.dailyNote.findMany({
+        where: {
+          clientId: matchedClient.id,
+          date: {
+            gte: `${periodMonth}-01`,
+            lte: `${periodMonth}-${String(lastDay).padStart(2, "0")}`
+          }
+        },
+        select: { empId: true, expense: true }
+      })
+    ]);
+    const expensesByEmpId = /* @__PURE__ */ new Map();
+    for (const n of notes) {
+      if (n.expense && n.expense > 0) {
+        expensesByEmpId.set(n.empId, (expensesByEmpId.get(n.empId) || 0) + n.expense);
+      }
+    }
+    const shiftsObj = matchedClient.defaultShifts || null;
+    const payrollConfig = {
+      ...DEFAULT_PAYROLL_CODES,
+      companyCode: matchedClient.taxId || DEFAULT_PAYROLL_CODES.companyCode,
+      ...shiftsObj?.payrollConfig || {}
+    };
+    const summaries = aggregateMonthlyPayroll(reportData.rows, expensesByEmpId, employees);
+    const system = req.query["system"] || "api";
+    const exported = generatePayrollExportFile({
+      system,
+      periodMonth,
+      clientName: matchedClient.name,
+      summaries,
+      dailyRows: reportData.rows,
+      codes: payrollConfig
+    });
+    res.setHeader("Content-Type", exported.contentType);
+    if (system !== "api") {
+      res.setHeader("Content-Disposition", `attachment; filename="${exported.filename}"`);
+    }
+    res.send(exported.content);
+  } catch (err) {
+    console.error("Public API v1 payroll error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// packages/api/src/routes/owner.ts
+var import_express4 = __toESM(require_express2());
+var import_bcryptjs4 = __toESM(require_bcryptjs());
+var ownerRouter = (0, import_express4.Router)();
+ownerRouter.use(authRequired, requireRole("owner"));
+ownerRouter.get("/clients", async (_req, res) => {
+  try {
+    const clients = await prisma.client.findMany({
+      include: {
+        _count: {
+          select: { employees: true, foremen: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({ success: true, clients });
+  } catch (err) {
+    console.error("Owner list clients error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0441\u043F\u0438\u0441\u043A\u0430 \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432" });
+  }
+});
+var createClientSchema = external_exports.object({
+  username: external_exports.string().min(3),
+  password: external_exports.string().min(6),
+  name: external_exports.string().min(2),
+  tariffMode: external_exports.enum(["PER_USER", "PER_HOUR"]).default("PER_USER"),
+  pricePerUser: external_exports.number().default(0),
+  pricePerHour: external_exports.number().default(0),
+  trialDays: external_exports.number().default(14),
+  positions: external_exports.array(external_exports.string()).optional()
+});
+ownerRouter.post("/clients", async (req, res) => {
+  try {
+    const data = createClientSchema.parse(req.body);
+    const existing = await prisma.client.findUnique({
+      where: { username: data.username }
+    });
+    if (existing) {
+      res.status(400).json({ error: "\u041A\u043B\u0438\u0435\u043D\u0442 \u0441 \u0442\u0430\u043A\u0438\u043C \u043B\u043E\u0433\u0438\u043D\u043E\u043C \u0443\u0436\u0435 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u0435\u0442" });
+      return;
+    }
+    const salt = await import_bcryptjs4.default.genSalt(10);
+    const passwordHash = await import_bcryptjs4.default.hash(data.password, salt);
+    const trialEndsAt = data.trialDays > 0 ? new Date(Date.now() + data.trialDays * 24 * 60 * 60 * 1e3) : null;
+    const defaultShifts = {
+      morning: { start: "07:00", end: "16:00" },
+      evening: { start: "16:00", end: "00:00" },
+      night: { start: "22:00", end: "06:00" }
+    };
+    const positions = data.positions ? normalizePositionsList(data.positions) : DEFAULT_COMPANY_POSITIONS;
+    const client = await prisma.client.create({
+      data: {
+        username: data.username,
+        passwordHash,
+        name: data.name,
+        tariffMode: data.tariffMode,
+        pricePerUser: data.pricePerUser,
+        pricePerHour: data.pricePerHour,
+        trialEndsAt,
+        defaultShifts,
+        positions
+      }
+    });
+    res.json({ success: true, client });
+  } catch (err) {
+    if (err instanceof external_exports.ZodError) {
+      res.status(400).json({ error: "\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0432\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u0434\u0430\u043D\u043D\u044B\u0435" });
+      return;
+    }
+    console.error("Owner create client error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u0430" });
+  }
+});
+ownerRouter.post("/clients/:id/toggle", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const client = await prisma.client.findUnique({ where: { id } });
+    if (!client) {
+      res.status(404).json({ error: "\u041A\u043B\u0438\u0435\u043D\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    const updated = await prisma.client.update({
+      where: { id },
+      data: { isActive: !client.isActive }
+    });
+    res.json({ success: true, isActive: updated.isActive });
+  } catch (err) {
+    console.error("Owner toggle client error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F \u0441\u0442\u0430\u0442\u0443\u0441\u0430" });
+  }
+});
+ownerRouter.post("/clients/:id/reset-password", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const { newPassword } = req.body;
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+      res.status(400).json({ error: "\u041F\u0430\u0440\u043E\u043B\u044C \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0442 6 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432" });
+      return;
+    }
+    const salt = await import_bcryptjs4.default.genSalt(10);
+    const passwordHash = await import_bcryptjs4.default.hash(newPassword, salt);
+    await prisma.client.update({
+      where: { id },
+      data: { passwordHash }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Owner reset password error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0431\u0440\u043E\u0441\u0430 \u043F\u0430\u0440\u043E\u043B\u044F" });
+  }
+});
+ownerRouter.post("/clients/:id/tariff", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const { tariffMode, pricePerUser, pricePerHour, trialEndsAt } = req.body;
+    const updated = await prisma.client.update({
+      where: { id },
+      data: {
+        ...tariffMode ? { tariffMode } : {},
+        ...typeof pricePerUser === "number" ? { pricePerUser } : {},
+        ...typeof pricePerHour === "number" ? { pricePerHour } : {},
+        ...trialEndsAt !== void 0 ? { trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null } : {}
+      }
+    });
+    res.json({ success: true, client: updated });
+  } catch (err) {
+    console.error("Owner update tariff error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0442\u0430\u0440\u0438\u0444\u0430" });
+  }
+});
+ownerRouter.post("/clients/:id/billing-details", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const { legalName, taxId, billingAddress, billingEmail, billingPhone, externalCustId } = req.body;
+    const updated = await prisma.client.update({
+      where: { id },
+      data: {
+        legalName: legalName !== void 0 ? legalName?.trim() || null : void 0,
+        taxId: taxId !== void 0 ? taxId?.trim() || null : void 0,
+        billingAddress: billingAddress !== void 0 ? billingAddress?.trim() || null : void 0,
+        billingEmail: billingEmail !== void 0 ? billingEmail?.trim() || null : void 0,
+        billingPhone: billingPhone !== void 0 ? billingPhone?.trim() || null : void 0,
+        externalCustId: externalCustId !== void 0 ? externalCustId?.trim() || null : void 0
+      }
+    });
+    res.json({ success: true, client: updated });
+  } catch (err) {
+    console.error("Owner update billing details error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0440\u0435\u043A\u0432\u0438\u0437\u0438\u0442\u043E\u0432 \u043A\u043B\u0438\u0435\u043D\u0442\u0430" });
+  }
+});
+ownerRouter.delete("/clients/:id", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const client = await prisma.client.findUnique({ where: { id } });
+    if (!client) {
+      res.status(404).json({ error: "\u041A\u043E\u043C\u043F\u0430\u043D\u0438\u044F \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430" });
+      return;
+    }
+    await prisma.client.delete({ where: { id } });
+    res.json({ success: true, message: `\u041A\u043E\u043C\u043F\u0430\u043D\u0438\u044F "${client.name}" \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u0443\u0434\u0430\u043B\u0435\u043D\u0430` });
+  } catch (err) {
+    console.error("Owner delete client error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0438" });
+  }
+});
+ownerRouter.post("/clients/cleanup-test", async (_req, res) => {
+  try {
+    const result = await prisma.client.deleteMany({
+      where: {
+        OR: [
+          { username: { startsWith: "testclient_" } },
+          { name: { contains: "\u0422\u0435\u0441\u0442\u043E\u0432\u0430\u044F" } }
+        ]
+      }
+    });
+    res.json({ success: true, count: result.count });
+  } catch (err) {
+    console.error("Owner cleanup test clients error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0447\u0438\u0441\u0442\u043A\u0438 \u0442\u0435\u0441\u0442\u043E\u0432\u044B\u0445 \u043A\u043E\u043C\u043F\u0430\u043D\u0438\u0439" });
+  }
+});
+ownerRouter.get("/billing", async (req, res) => {
+  try {
+    const startDateStr = req.query["startDate"];
+    const endDateStr = req.query["endDate"];
+    const startDate = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 30 * 864e5);
+    const endDate = endDateStr ? new Date(endDateStr) : /* @__PURE__ */ new Date();
+    const clients = await prisma.client.findMany({
+      include: {
+        employees: {
+          select: { empId: true, createdAt: true }
+        },
+        logs: {
+          where: {
+            dateTime: { gte: startDate, lte: endDate }
+          },
+          select: { empId: true, action: true, dateTime: true },
+          orderBy: { dateTime: "asc" }
+        }
+      }
+    });
+    const billingData = clients.map((client) => {
+      let totalHours = 0;
+      const lastInByEmp = /* @__PURE__ */ new Map();
+      for (const log of client.logs) {
+        if (log.action === "CLOCK_IN" || log.action === "AUTO_RESUME" && !lastInByEmp.has(log.empId)) {
+          lastInByEmp.set(log.empId, log.dateTime);
+        } else if (log.action === "CLOCK_OUT" || log.action === "AUTO_EXIT") {
+          const lastInTime = lastInByEmp.get(log.empId);
+          if (lastInTime) {
+            const diff = (log.dateTime.getTime() - lastInTime.getTime()) / 36e5;
+            if (diff > 0 && diff < 24) {
+              totalHours += diff;
+            }
+            lastInByEmp.delete(log.empId);
+          }
+        }
+      }
+      const calculated = calculateClientBilling({
+        tariffMode: client.tariffMode,
+        employees: client.employees,
+        period: { startDate, endDate },
+        pricePerUser: client.pricePerUser,
+        totalHours,
+        pricePerHour: client.pricePerHour
+      });
+      return {
+        clientId: client.id,
+        name: client.name,
+        tariffMode: client.tariffMode,
+        totalWorkerDays: calculated.totalWorkerDays,
+        totalHours: calculated.totalHours,
+        totalAmount: calculated.totalAmount
+      };
+    });
+    res.json({ success: true, billing: billingData });
+  } catch (err) {
+    console.error("Owner billing error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0440\u0430\u0441\u0447\u0435\u0442\u0430 \u0431\u0438\u043B\u043B\u0438\u043D\u0433\u0430" });
+  }
+});
+ownerRouter.get("/invoices", async (_req, res) => {
+  try {
+    const invoices = await prisma.invoice.findMany({
+      include: { client: { select: { name: true, username: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({ success: true, invoices });
+  } catch (err) {
+    console.error("Owner invoices error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0441\u0447\u0435\u0442\u043E\u0432" });
+  }
+});
+ownerRouter.post("/invoices", async (req, res) => {
+  try {
+    const { clientId, periodMonth, amount, details } = req.body;
+    if (!clientId || !periodMonth || typeof amount !== "number") {
+      res.status(400).json({ error: "\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0443\u043A\u0430\u0437\u0430\u0442\u044C clientId, periodMonth \u0438 amount" });
+      return;
+    }
+    const invoice = await prisma.invoice.upsert({
+      where: {
+        clientId_periodMonth: { clientId, periodMonth }
+      },
+      update: { amount, details },
+      create: { clientId, periodMonth, amount, details }
+    });
+    res.json({ success: true, invoice });
+  } catch (err) {
+    console.error("Owner create invoice error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0438\u044F \u0441\u0447\u0451\u0442\u0430" });
+  }
+});
+ownerRouter.post("/invoices/:id/toggle", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const inv = await prisma.invoice.findUnique({ where: { id } });
+    if (!inv) {
+      res.status(404).json({ error: "\u0421\u0447\u0451\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    const newStatus = inv.status === "paid" ? "pending" : "paid";
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: {
+        status: newStatus,
+        paidAt: newStatus === "paid" ? /* @__PURE__ */ new Date() : null
+      }
+    });
+    res.json({ success: true, invoice: updated });
+  } catch (err) {
+    console.error("Owner toggle invoice error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0441\u0442\u0430\u0442\u0443\u0441\u0430 \u0441\u0447\u0435\u0442\u0430" });
+  }
+});
+ownerRouter.post("/invoices/:id/issue-receipt", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    const { method } = req.body || {};
+    const result = await IsraeliInvoiceService.generateTaxInvoiceReceipt(id, {
+      method: method || "manual"
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("Owner issue receipt error:", err);
+    res.status(500).json({ error: err.message || "\u041E\u0448\u0438\u0431\u043A\u0430 \u0432\u044B\u043F\u0438\u0441\u043A\u0438 \u05D7\u05E9\u05D1\u05D5\u05E0\u05D9\u05EA \u05DE\u05E1 \u05E7\u05D1\u05DC\u05D4" });
+  }
+});
+ownerRouter.delete("/invoices/:id", async (req, res) => {
+  try {
+    const id = req.params["id"];
+    await prisma.invoice.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Owner delete invoice error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0441\u0447\u0451\u0442\u0430" });
+  }
+});
+ownerRouter.get("/leads", async (_req, res) => {
+  try {
+    const leads = await prisma.contactRequest.findMany({
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({ success: true, leads });
+  } catch (err) {
+    console.error("Owner leads error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043E\u043A" });
+  }
+});
+ownerRouter.post("/leads/:id/comment", async (req, res) => {
+  try {
+    const id = parseInt(req.params["id"], 10);
+    const { comment, status } = req.body;
+    const updated = await prisma.contactRequest.update({
+      where: { id },
+      data: {
+        ...comment !== void 0 ? { comment } : {},
+        ...status ? { status } : {}
+      }
+    });
+    res.json({ success: true, lead: updated });
+  } catch (err) {
+    console.error("Owner comment lead error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043A\u0438" });
+  }
+});
+ownerRouter.delete("/leads/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params["id"], 10);
+    await prisma.contactRequest.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Owner delete lead error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0437\u0430\u044F\u0432\u043A\u0438" });
+  }
+});
+ownerRouter.post("/password", async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+      res.status(400).json({ error: "\u041F\u0430\u0440\u043E\u043B\u044C \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0442 6 \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432" });
+      return;
+    }
+    const salt = await import_bcryptjs4.default.genSalt(10);
+    const ownerPasswordHash = await import_bcryptjs4.default.hash(newPassword, salt);
+    const first = await prisma.saaSSettings.findFirst();
+    if (first) {
+      await prisma.saaSSettings.update({
+        where: { id: first.id },
+        data: { ownerPasswordHash }
+      });
+    } else {
+      await prisma.saaSSettings.create({
+        data: { ownerPasswordHash }
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Owner change password error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043C\u0435\u043D\u044B \u043F\u0430\u0440\u043E\u043B\u044F" });
+  }
+});
+ownerRouter.get("/settings", async (_req, res) => {
+  try {
+    const settings = await prisma.saaSSettings.findFirst();
+    res.json({
+      success: true,
+      settings: settings ? {
+        companyName: settings.companyName || "",
+        taxId: settings.taxId || "",
+        address: settings.address || "",
+        phone: settings.phone || "",
+        email: settings.email || "",
+        vatRate: settings.vatRate ?? 17,
+        invoiceProvider: settings.invoiceProvider || "morning",
+        invoiceApiKey: settings.invoiceApiKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" + settings.invoiceApiKey.slice(-4) : "",
+        hasApiKey: !!settings.invoiceApiKey,
+        hasApiSecret: !!settings.invoiceApiSecret,
+        invoiceSandbox: settings.invoiceSandbox
+      } : null
+    });
+  } catch (err) {
+    console.error("Get owner settings error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A \u0431\u0438\u0437\u043D\u0435\u0441\u0430" });
+  }
+});
+ownerRouter.post("/settings", async (req, res) => {
+  try {
+    const {
+      companyName,
+      taxId,
+      address,
+      phone,
+      email,
+      vatRate,
+      invoiceProvider,
+      invoiceApiKey,
+      invoiceApiSecret,
+      invoiceSandbox
+    } = req.body;
+    const first = await prisma.saaSSettings.findFirst();
+    const dataToUpdate = {
+      ...companyName !== void 0 ? { companyName: companyName.trim() } : {},
+      ...taxId !== void 0 ? { taxId: taxId.trim() } : {},
+      ...address !== void 0 ? { address: address.trim() } : {},
+      ...phone !== void 0 ? { phone: phone.trim() } : {},
+      ...email !== void 0 ? { email: email.trim() } : {},
+      ...typeof vatRate === "number" ? { vatRate } : {},
+      ...invoiceProvider !== void 0 ? { invoiceProvider } : {},
+      ...typeof invoiceSandbox === "boolean" ? { invoiceSandbox } : {}
+    };
+    if (invoiceApiKey && invoiceApiKey.trim() && !invoiceApiKey.startsWith("\u2022\u2022\u2022")) {
+      dataToUpdate.invoiceApiKey = invoiceApiKey.trim();
+    }
+    if (invoiceApiSecret && invoiceApiSecret.trim() && !invoiceApiSecret.startsWith("\u2022\u2022\u2022")) {
+      dataToUpdate.invoiceApiSecret = invoiceApiSecret.trim();
+    }
+    let updated;
+    if (first) {
+      updated = await prisma.saaSSettings.update({
+        where: { id: first.id },
+        data: dataToUpdate
+      });
+    } else {
+      updated = await prisma.saaSSettings.create({
+        data: {
+          ownerPasswordHash: "",
+          ...dataToUpdate
+        }
+      });
+    }
+    res.json({ success: true, settings: updated });
+  } catch (err) {
+    console.error("Update owner settings error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A \u0431\u0438\u0437\u043D\u0435\u0441\u0430" });
   }
 });
 

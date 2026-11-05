@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@timetracker/db';
@@ -7,6 +8,8 @@ import {
   getJerusalemParts,
   WorkSession,
   ClientShiftsConfig,
+  PayrollSystemId,
+  PayrollCodesConfig,
   jerusalemDateTimeToDate,
   parseClientDateTime,
   addDays,
@@ -21,6 +24,11 @@ import { authRequired, requireRole } from '../middleware/auth';
 import { generateCsvReport, ReportRow } from '../services/csvReportService';
 import { generatePdfReport } from '../services/pdfReportService';
 import { IsraeliInvoiceService } from '../services/israeliInvoiceService';
+import {
+  aggregateMonthlyPayroll,
+  generatePayrollExportFile,
+  DEFAULT_PAYROLL_CODES,
+} from '../services/payrollIntegrationService';
 
 export const clientRouter = Router();
 
@@ -1073,7 +1081,7 @@ clientRouter.delete('/logs/manual', async (req: Request, res: Response) => {
 /**
  * 11. Core Hours & Report Calculation Logic
  */
-async function computeClientReportRows(
+export async function computeClientReportRows(
   clientId: string,
   startDateInput: Date,
   endDateInput: Date,
@@ -1745,5 +1753,197 @@ clientRouter.post('/invoices/:id/pay', requireRole('client'), async (req: Reques
     res.status(500).json({ error: err.message || 'Ошибка генерации ссылки на оплату' });
   }
 });
+
+/**
+ * 16. Payroll & ERP Integrations (Michpal, Shiklolit, Priority, Rivhit, Hilan, Har-Gal, Okez, Excel, API)
+ */
+async function buildClientPayrollData(clientId: string, monthParam?: string, foremanId?: string) {
+  const now = new Date();
+  const currentMonth = getJerusalemParts(now).dateStr.slice(0, 7);
+  const periodMonth =
+    monthParam && /^\d{4}-\d{2}$/.test(monthParam) ? monthParam : currentMonth;
+
+  const [yStr, mStr] = periodMonth.split('-');
+  const year = parseInt(yStr!, 10);
+  const month = parseInt(mStr!, 10);
+  const lastDay = new Date(year, month, 0).getDate();
+
+  const startDate = jerusalemDateTimeToDate(`${periodMonth}-01`, '00:00');
+  const endDate = jerusalemDateTimeToDate(
+    `${periodMonth}-${String(lastDay).padStart(2, '0')}`,
+    '23:59'
+  );
+
+  const [reportData, clientRecord, employees, notes] = await Promise.all([
+    computeClientReportRows(clientId, startDate, endDate, foremanId),
+    prisma.client.findUnique({
+      where: { id: clientId },
+      select: { name: true, defaultShifts: true, taxId: true, billingEmail: true, billingPhone: true },
+    }),
+    prisma.employee.findMany({
+      where: { clientId, ...(foremanId ? { foremanId } : {}) },
+      select: { empId: true, name: true },
+    }),
+    prisma.dailyNote.findMany({
+      where: {
+        clientId,
+        date: {
+          gte: `${periodMonth}-01`,
+          lte: `${periodMonth}-${String(lastDay).padStart(2, '0')}`,
+        },
+      },
+      select: { empId: true, expense: true },
+    }),
+  ]);
+
+  const expensesByEmpId = new Map<string, number>();
+  for (const n of notes) {
+    if (n.expense && n.expense > 0) {
+      expensesByEmpId.set(n.empId, (expensesByEmpId.get(n.empId) || 0) + n.expense);
+    }
+  }
+
+  const shiftsObj = (clientRecord?.defaultShifts as unknown as ClientShiftsConfig) || {
+    morning: { start: '07:00', end: '16:00' },
+    evening: { start: '16:00', end: '00:00' },
+    night: { start: '22:00', end: '06:00' },
+  };
+
+  let payrollConfig: PayrollCodesConfig = {
+    ...DEFAULT_PAYROLL_CODES,
+    companyCode: clientRecord?.taxId || DEFAULT_PAYROLL_CODES.companyCode,
+    ...(shiftsObj.payrollConfig || {}),
+  };
+
+  // Ensure an API key exists for the client
+  if (!payrollConfig.apiKey) {
+    const generatedKey = `tw_${clientId.slice(0, 6)}_${crypto
+      .createHash('sha256')
+      .update(`${clientId}_payroll_secret`)
+      .digest('hex')
+      .slice(0, 20)}`;
+    payrollConfig = { ...payrollConfig, apiKey: generatedKey };
+  }
+
+  const activePayrollSystem: PayrollSystemId = shiftsObj.activePayrollSystem || 'michpal';
+  const summaries = aggregateMonthlyPayroll(reportData.rows, expensesByEmpId, employees);
+
+  return {
+    periodMonth,
+    clientName: reportData.clientName,
+    activePayrollSystem,
+    payrollConfig,
+    summaries,
+    dailyRows: reportData.rows,
+    shiftsObj,
+  };
+}
+
+clientRouter.get('/integrations/preview', async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const isForeman = req.user?.role === 'foreman';
+    const monthParam = req.query['month'] as string | undefined;
+
+    const data = await buildClientPayrollData(
+      clientId,
+      monthParam,
+      isForeman ? req.user?.id : undefined
+    );
+
+    res.json({
+      success: true,
+      periodMonth: data.periodMonth,
+      clientName: data.clientName,
+      activePayrollSystem: data.activePayrollSystem,
+      payrollConfig: data.payrollConfig,
+      summaries: data.summaries,
+    });
+  } catch (err) {
+    console.error('Integrations preview error:', err);
+    res.status(500).json({ error: 'Ошибка загрузки данных интеграций' });
+  }
+});
+
+clientRouter.post('/integrations/config', requireRole('client'), async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const { activePayrollSystem, payrollConfig, regenerateApiKey } = req.body;
+
+    const clientRecord = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { defaultShifts: true },
+    });
+
+    const currentShifts = (clientRecord?.defaultShifts as unknown as ClientShiftsConfig) || {
+      morning: { start: '07:00', end: '16:00' },
+      evening: { start: '16:00', end: '00:00' },
+      night: { start: '22:00', end: '06:00' },
+    };
+
+    const mergedConfig: PayrollCodesConfig = {
+      ...DEFAULT_PAYROLL_CODES,
+      ...(currentShifts.payrollConfig || {}),
+      ...(payrollConfig || {}),
+    };
+
+    if (regenerateApiKey || !mergedConfig.apiKey) {
+      mergedConfig.apiKey = `tw_${clientId.slice(0, 6)}_${crypto.randomBytes(12).toString('hex')}`;
+    }
+
+    const updatedShifts: ClientShiftsConfig = {
+      ...currentShifts,
+      activePayrollSystem: (activePayrollSystem as PayrollSystemId) || currentShifts.activePayrollSystem || 'michpal',
+      payrollConfig: mergedConfig,
+    };
+
+    await prisma.client.update({
+      where: { id: clientId },
+      data: { defaultShifts: updatedShifts as any },
+    });
+
+    res.json({
+      success: true,
+      activePayrollSystem: updatedShifts.activePayrollSystem,
+      payrollConfig: mergedConfig,
+    });
+  } catch (err) {
+    console.error('Save integrations config error:', err);
+    res.status(500).json({ error: 'Ошибка сохранения настроек интеграции' });
+  }
+});
+
+clientRouter.get('/integrations/export', async (req: Request, res: Response) => {
+  try {
+    const clientId = getTargetClientId(req);
+    const isForeman = req.user?.role === 'foreman';
+    const monthParam = req.query['month'] as string | undefined;
+    const systemParam = (req.query['system'] as PayrollSystemId) || undefined;
+
+    const data = await buildClientPayrollData(
+      clientId,
+      monthParam,
+      isForeman ? req.user?.id : undefined
+    );
+
+    const targetSystem: PayrollSystemId = systemParam || data.activePayrollSystem || 'michpal';
+    const exported = generatePayrollExportFile({
+      system: targetSystem,
+      periodMonth: data.periodMonth,
+      clientName: data.clientName,
+      summaries: data.summaries,
+      dailyRows: data.dailyRows,
+      codes: data.payrollConfig,
+    });
+
+    res.setHeader('Content-Type', exported.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${exported.filename}"`);
+    res.send(exported.content);
+  } catch (err) {
+    console.error('Export payroll integration file error:', err);
+    res.status(500).json({ error: 'Ошибка выгрузки файла для бухгалтерии' });
+  }
+});
+
 
 
