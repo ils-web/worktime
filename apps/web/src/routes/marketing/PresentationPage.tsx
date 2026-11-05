@@ -464,19 +464,19 @@ const SLIDES_DATA: Record<PresLang, SlideItem[]> = {
     },
     {
       id: 8,
-      badge: 'STEP 7 • PAYROLL & ACCOUNTING REPORTS',
-      title: '1-Click Hebrew PDF & Excel (CSV) Payroll Exports',
+      badge: 'STEP 7 • PAYROLL INTEGRATIONS & REPORTS',
+      title: '1-Click Integrations with Israeli Payroll (Michpal, Shiklolit, Priority, Rivhit, Hilan)',
       subtitle:
-        'Generate accountant-ready attendance sheets in Hebrew, Russian, or English.',
+        'Direct export for accountants & ERPs: 9 native Israeli payroll connectors + PDF and Excel.',
       bullets: [
-        'Instant PDF and Excel-ready CSV downloads in Hebrew (עב), Russian (RU), or English (EN)',
-        'Includes company logo, Gross/Break/Net totals, 125%/150% OT, Shabbat, and GPS notes',
-        'Easy manual shift creation & editing by managers with full audit trail',
-        'Integrated Israeli tax receipt generation (חשבונית מס קבלה)',
+        'Native export files for: Michpal, Shiklolit (TML), Priority ERP, Rivhit, Hilan, Har-Gal, Okez',
+        'Automatic salary component breakdown: 100%, 125%, 150%, Shabbat, Night hours & Expenses',
+        'Instant PDF & Excel downloads + 1-click summary share to your accountant via WhatsApp',
+        'Direct REST API endpoint to pull live monthly payroll into custom ERP, 1C or Make/Zapier',
       ],
-      highlightTitle: 'Accountant Ready',
-      highlightValue: 'PDF + Excel',
-      highlightDesc: 'Ready to send to your payroll accountant in one click',
+      highlightTitle: 'Payroll Connectors',
+      highlightValue: '9 Systems + PDF',
+      highlightDesc: 'Michpal • Shiklolit • Priority • Rivhit • Hilan • Har-Gal • Okez • Excel • API',
       accentColor: 'emerald',
       mockupType: 'reports',
     },
@@ -787,6 +787,58 @@ export function PresentationPage() {
           ctx.font = '16px system-ui, -apple-system, sans-serif';
           wrapText(s.highlightDesc, boxX + 24, boxY + 175, boxW - 48, 22, false);
 
+          // 8b. For Slide 8 (Payroll & ERP Integrations), draw the 9 logos box in the video
+          if (sIdx === 7) {
+            const intX = boxX;
+            const intY = boxY + boxH + 16;
+            const intW = boxW;
+            const intH = 165;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.roundRect(intX, intY, intW, intH, 16);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#34d399';
+            ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(
+              isRtl ? '9 ממשקי שכר ו-ERP מובנים' : '9 Native Payroll & ERP Connectors',
+              intX + intW / 2,
+              intY + 22
+            );
+
+            const sysNames = [
+              'מיכפל',
+              'שיקלולית',
+              'Priority',
+              'ריווחית',
+              'חילן',
+              'הר-גל',
+              'עוקץ',
+              'Excel',
+              'API',
+            ];
+            const cols = 3;
+            const cellW = (intW - 24) / cols;
+            const cellH = 34;
+            for (let i = 0; i < sysNames.length; i++) {
+              const r = Math.floor(i / cols);
+              const c = i % cols;
+              const cx = intX + 12 + c * cellW;
+              const cy = intY + 34 + r * (cellH + 6);
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              ctx.roundRect(cx + 2, cy, cellW - 4, cellH, 6);
+              ctx.fill();
+              ctx.fillStyle = '#0f172a';
+              ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+              ctx.fillText(sysNames[i]!, cx + cellW / 2, cy + 21);
+            }
+          }
+
           // 9. Bottom Slide Progress Bar
           ctx.fillStyle = '#1e293b';
           ctx.fillRect(48, 675, 1184, 10);
@@ -977,27 +1029,70 @@ export function PresentationPage() {
 
       case 'reports':
         return (
-          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white">דוח שעות נוכחות (PDF / CSV)</span>
-              <div className="flex gap-1">
-                <span className="px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold">עב</span>
-                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-bold">RU</span>
-                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-bold">EN</span>
+          <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3 space-y-2">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>
+                  {lang === 'he'
+                    ? 'מתממשקת לתוכנת השכר בקליק אחד!'
+                    : lang === 'en'
+                      ? '1-Click Payroll & ERP Integrations'
+                      : 'Интеграция с программами зарплаты в 1 клик'}
+                </span>
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
+                9 систем
+              </span>
+            </div>
+
+            {/* 9 System Visual Badges Grid */}
+            <div className="grid grid-cols-3 gap-1.5 text-center">
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex flex-col items-center justify-center">
+                <div className="text-[11px] font-black text-sky-900 leading-none">מיכפל</div>
+                <div className="h-0.5 w-6 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 mt-0.5" />
+              </div>
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex flex-col items-center justify-center">
+                <div className="text-[9px] font-black text-blue-700 leading-none">ט.מ.ל שיקלולית</div>
+              </div>
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex items-center justify-center gap-1">
+                <span className="w-2 h-2 rounded bg-indigo-600 inline-block" />
+                <span className="text-[10px] font-extrabold text-slate-900 leading-none">Priority</span>
+              </div>
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex items-center justify-center gap-1">
+                <span className="text-[10px] font-black text-slate-900 leading-none">ריווחית</span>
+                <span className="w-2 h-2 rounded bg-amber-500 inline-block" />
+              </div>
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex flex-col items-center justify-center">
+                <div className="text-[10px] font-black text-emerald-800 leading-none">חילן HILAN</div>
+              </div>
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex items-center justify-center gap-1">
+                <span className="text-[10px] font-black text-slate-800 leading-none">הר-גל</span>
+                <span className="w-2 h-2 rounded-full border border-orange-500 inline-block" />
+              </div>
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex flex-col items-center justify-center">
+                <div className="text-[10px] font-black text-rose-700 leading-none">עוקץ</div>
+              </div>
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex items-center justify-center gap-1">
+                <span className="w-3.5 h-3.5 rounded bg-emerald-700 text-white font-black text-[8px] flex items-center justify-center">
+                  X
+                </span>
+                <span className="text-[10px] font-black text-emerald-900 leading-none">Excel</span>
+              </div>
+              <div className="bg-white rounded-lg p-1.5 shadow-sm border border-slate-200 flex items-center justify-center gap-1">
+                <span className="w-3.5 h-3.5 rounded-full bg-sky-600 text-white font-mono text-[7px] font-black flex items-center justify-center">
+                  {'</>'}
+                </span>
+                <span className="text-[10px] font-black text-slate-900 leading-none">API</span>
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-1.5 text-[10px] font-mono text-center bg-slate-900 p-2 rounded-xl border border-slate-800">
-              <div className="text-emerald-400 font-bold">נטו: 186.5</div>
-              <div className="text-amber-300">125%: 14.0</div>
-              <div className="text-rose-300">150%: 6.5</div>
-              <div className="text-purple-300">שבת: 8.0</div>
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 text-center text-xs font-bold">
-                📄 PDF (עברית)
+
+            <div className="flex gap-1.5 pt-1">
+              <div className="flex-1 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-center text-[10px] font-bold">
+                ✓ סמלי שכר (100%, 125%, 150%, שבת)
               </div>
-              <div className="flex-1 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-center text-xs font-bold">
-                📊 Excel CSV
+              <div className="flex-1 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-center text-[10px] font-bold">
+                📲 שליחה לרו״ח בוואטסאפ
               </div>
             </div>
           </div>

@@ -147,6 +147,15 @@ export function MarketingPage() {
             <a href="#features" className="hover:text-emerald-400 transition">
               {t('marketing.nav.features')}
             </a>
+            <a href="#integrations" className="hover:text-emerald-400 transition font-bold text-emerald-400">
+              {currentLang === 'he'
+                ? 'ממשקי שכר ו-ERP'
+                : currentLang === 'en'
+                  ? 'Payroll & ERP'
+                  : currentLang === 'ar'
+                    ? 'تكامل الرواتب'
+                    : 'Интеграции со счетом'}
+            </a>
             <a href="#how-it-works" className="hover:text-emerald-400 transition">
               {t('marketing.nav.howItWorks')}
             </a>
@@ -469,6 +478,50 @@ export function MarketingPage() {
                 <span className="text-base font-black text-slate-900">API</span>
               </div>
               <span className="text-[11px] font-bold text-slate-500">JSON & Webhooks</span>
+            </div>
+          </div>
+
+          {/* Key Integration Features Bar */}
+          <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-4xl mx-auto">
+            <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-300 text-xs font-semibold flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                {currentLang === 'he'
+                  ? 'קובץ קליטה תקני בקליק אחד'
+                  : currentLang === 'en'
+                    ? '1-Click Ready File'
+                    : 'Готовый файл в 1 клик'}
+              </span>
+            </div>
+            <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-300 text-xs font-semibold flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                {currentLang === 'he'
+                  ? 'סמלי שכר (100%, 125%, 150%)'
+                  : currentLang === 'en'
+                    ? 'Salary Codes (100-150%)'
+                    : 'Коды начислений 100-150%'}
+              </span>
+            </div>
+            <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-300 text-xs font-semibold flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                {currentLang === 'he'
+                  ? 'שליחה ישירה לרו״ח ב-WhatsApp'
+                  : currentLang === 'en'
+                    ? 'Direct WhatsApp to CPA'
+                    : 'Отправка в WhatsApp бухгалтеру'}
+              </span>
+            </div>
+            <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-300 text-xs font-semibold flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                {currentLang === 'he'
+                  ? 'חיבור API ישיר ל-ERP'
+                  : currentLang === 'en'
+                    ? 'Direct ERP REST API'
+                    : 'Прямой REST API для ERP'}
+              </span>
             </div>
           </div>
         </div>
