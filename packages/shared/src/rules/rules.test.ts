@@ -3,6 +3,7 @@ import { calculateHaversineDistance, checkGeofence, evaluateWorkerGeofence, esti
 import {
   calculateSessionHours,
   calculateDailyHours,
+  calculateDailySessionsBreakdown,
   isMinuteInNightWindow,
   jerusalemDateTimeToDate,
   formatIsoToDisplayDate,
@@ -391,5 +392,44 @@ describe('Billing Rules', () => {
     // 5. Preserves custom user notes and joins multi-note segments
     const multiNote = `${arNote} • Купил цемент 5 мешков`;
     expect(localizeSystemNote(multiNote, 'ru')).toBe('Покинул объект "NaotHaTichon" (строгий GPS, 4638м) • Купил цемент 5 мешков');
+
+    // 6. Repeat call-out system note localization:
+    const calloutNote = 'Повторный вызов (Смена #2)';
+    expect(isSystemGpsNote(calloutNote)).toBe(true);
+    expect(localizeSystemNote(calloutNote, 'he')).toBe('קריאה חוזרת (משמרת #2)');
+    expect(localizeSystemNote(calloutNote, 'en')).toBe('Repeat Call-out (Shift #2)');
+    expect(localizeSystemNote(calloutNote, 'ru')).toBe('Повторный вызов (Смена #2)');
+  });
+
+  it('calculates repeat call-out shifts on the same day as immediate overtime (125% / 150%) in separate rows', () => {
+    // Shift #1: 08:00 to 15:00 (7h < 9h daily norm) -> 7h regular, 0h overtime
+    // Shift #2 (Urgent repeat call-out): 19:00 to 22:00 (3h) -> immediately overtime: 2h @ 125% + 1h @ 150%
+    const s1 = {
+      clockIn: jerusalemDateTimeToDate('2026-10-05', '08:00'),
+      clockOut: jerusalemDateTimeToDate('2026-10-05', '15:00'),
+    };
+    const s2 = {
+      clockIn: jerusalemDateTimeToDate('2026-10-05', '19:00'),
+      clockOut: jerusalemDateTimeToDate('2026-10-05', '22:00'),
+    };
+
+    const breakdown = calculateDailySessionsBreakdown([s1, s2], false, '22:00', '06:00', '16:00', 9);
+    expect(breakdown).toHaveLength(2);
+
+    // Shift #1
+    expect(breakdown[0]!.sessionIndex).toBe(1);
+    expect(breakdown[0]!.isCallout).toBe(false);
+    expect(breakdown[0]!.netHours).toBe(7);
+    expect(breakdown[0]!.regularHours).toBe(7);
+    expect(breakdown[0]!.overtimeHours).toBe(0);
+
+    // Shift #2 (Call-out)
+    expect(breakdown[1]!.sessionIndex).toBe(2);
+    expect(breakdown[1]!.isCallout).toBe(true);
+    expect(breakdown[1]!.netHours).toBe(3);
+    expect(breakdown[1]!.regularHours).toBe(0);
+    expect(breakdown[1]!.overtimeHours).toBe(3);
+    expect(breakdown[1]!.overtime125Hours).toBe(2);
+    expect(breakdown[1]!.overtime150Hours).toBe(1);
   });
 });

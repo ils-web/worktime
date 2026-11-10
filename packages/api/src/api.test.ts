@@ -215,14 +215,19 @@ describe('TimeTracker API Endpoints', () => {
     expect(profileRes.body.status.isOnShift).toBe(false);
     expect(profileRes.body.status.autoClosedDueToStrictGps).toBe(true);
 
-    // 4. Hours report contains the strict GPS note
+    // 4. Hours report contains separate rows per shift and the strict GPS + repeat call-out note on Shift #2
     const hoursRes = await request(app)
       .get('/api/client/hours')
       .set('Cookie', clientCookie);
     expect(hoursRes.status).toBe(200);
-    const todayRow = hoursRes.body.hours.find((h: any) => h.empId === testEmpId);
-    expect(todayRow).toBeDefined();
-    expect(todayRow.notes).toContain('строгий GPS');
+    const empRows = hoursRes.body.hours.filter((h: any) => h.empId === testEmpId);
+    expect(empRows.length).toBeGreaterThanOrEqual(2);
+    const calloutRow = empRows.find((h: any) => h.isCallout === true) || empRows[empRows.length - 1];
+    expect(calloutRow).toBeDefined();
+    expect(calloutRow.isCallout).toBe(true);
+    expect(calloutRow.sessionIndex).toBe(2);
+    expect(calloutRow.notes).toContain('Повторный вызов (Смена #2)');
+    expect(calloutRow.notes).toContain('строгий GPS');
   });
 
   it('11. Client and Worker can fetch server-generated localized CSV (Hebrew default + Russian) and PDF reports', async () => {

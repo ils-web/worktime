@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { prisma } from '@timetracker/db';
 import {
   calculateDailyHours,
+  calculateDailySessionsBreakdown,
   getJerusalemParts,
   WorkSession,
   ClientShiftsConfig,
@@ -1202,19 +1203,14 @@ export async function computeClientReportRows(
       sessionsByDate[d].push(s);
     }
 
-    // 3. Notes by date
-    const notesByDate: Record<string, string> = {};
+    // 3. Notes grouped by date (with createdAt for multi-shift matching)
+    const rawNotesByDate: Record<string, Array<{ text: string; createdAt: Date }>> = {};
     for (const n of emp.dailyNotes) {
       if (!n.noteText) continue;
       const clean = n.noteText.trim();
       if (!clean) continue;
-      if (notesByDate[n.date]) {
-        if (!notesByDate[n.date].includes(clean)) {
-          notesByDate[n.date] += ' • ' + clean;
-        }
-      } else {
-        notesByDate[n.date] = clean;
-      }
+      if (!rawNotesByDate[n.date]) rawNotesByDate[n.date] = [];
+      rawNotesByDate[n.date]!.push({ text: clean, createdAt: n.createdAt });
     }
 
     const empShifts = (emp.shifts as unknown as ClientShiftsConfig) || shiftsConfig;
@@ -1226,10 +1222,13 @@ export async function computeClientReportRows(
         ? Number(empShifts.overtimeThreshold)
         : overtimeThreshold;
 
-    // 4. Calculate for each date
+    // 4. Calculate for each date (creating a separate ReportRow for each shift / repeat call-out)
     for (const [dateStr, daySessions] of Object.entries(sessionsByDate)) {
-      const dailyCalc = calculateDailyHours(
-        daySessions,
+      const sortedDaySessions = [...daySessions].sort(
+        (a, b) => a.clockIn.getTime() - b.clockIn.getTime()
+      );
+      const sessionCalcs = calculateDailySessionsBreakdown(
+        sortedDaySessions,
         autoDeductLunch,
         empNightStart,
         empNightEnd,
@@ -1237,40 +1236,75 @@ export async function computeClientReportRows(
         empOvertimeThreshold
       );
 
-      const firstInParts = getJerusalemParts(daySessions[0]!.clockIn);
-      const lastOutParts = getJerusalemParts(daySessions[daySessions.length - 1]!.clockOut);
-      const hasManual = daySessions.some((s) => s.isManual);
-      const allLogIds = daySessions.flatMap((s) => s.allLogIds);
-      const shiftsSummary = daySessions.length > 1
-        ? daySessions.map((s) => `${getJerusalemParts(s.clockIn).timeStr}-${getJerusalemParts(s.clockOut).timeStr}`).join(', ')
-        : undefined;
+      // Assign notes to their corresponding session on this date
+      const dateNotes = rawNotesByDate[dateStr] || [];
+      const notesPerSession: string[][] = sortedDaySessions.map(() => []);
+      for (const item of dateNotes) {
+        let targetIdx = 0;
+        if (sortedDaySessions.length > 1) {
+          for (let k = sortedDaySessions.length - 1; k >= 0; k--) {
+            if (item.createdAt.getTime() >= sortedDaySessions[k]!.clockIn.getTime() - 10 * 60000) {
+              targetIdx = k;
+              break;
+            }
+          }
+        }
+        if (!notesPerSession[targetIdx]!.includes(item.text)) {
+          notesPerSession[targetIdx]!.push(item.text);
+        }
+      }
 
-      reportRows.push({
-        empId: emp.empId,
-        name: emp.name,
-        date: dateStr,
-        dayOfWeek: getDayOfWeek(dateStr, 'he'),
-        firstIn: firstInParts.timeStr,
-        lastOut: lastOutParts.timeStr,
-        grossHours: dailyCalc.grossHours,
-        lunchDeducted: dailyCalc.lunchDeductedHours,
-        netHours: dailyCalc.netHours,
-        nightHours: dailyCalc.nightHours,
-        saturdayHours: dailyCalc.saturdayHours,
-        overtimeHours: dailyCalc.overtimeHours,
-        overtime125Hours: dailyCalc.overtime125Hours,
-        overtime150Hours: dailyCalc.overtime150Hours,
-        notes: notesByDate[dateStr] || '',
-        isManual: hasManual,
-        logIds: allLogIds,
-        shiftsSummary,
-        sessionsCount: daySessions.length,
-      });
+      for (let sIdx = 0; sIdx < sortedDaySessions.length; sIdx++) {
+        const s = sortedDaySessions[sIdx]!;
+        const sc = sessionCalcs[sIdx]!;
+        const sessionNotes = [...(notesPerSession[sIdx] || [])];
+
+        if (sc.isCallout) {
+          const calloutTag = `Повторный вызов (Смена #${sc.sessionIndex})`;
+          const alreadyHasTag = sessionNotes.some(
+            (nt) =>
+              nt.includes('Повторный вызов') ||
+              nt.includes('Repeat Call-out') ||
+              nt.includes('קריאה חוזרת')
+          );
+          if (!alreadyHasTag) {
+            sessionNotes.unshift(calloutTag);
+          }
+        }
+
+        reportRows.push({
+          empId: emp.empId,
+          name: emp.name,
+          date: dateStr,
+          dayOfWeek: getDayOfWeek(dateStr, 'he'),
+          firstIn: sc.firstIn,
+          lastOut: sc.lastOut,
+          grossHours: sc.grossHours,
+          lunchDeducted: sc.lunchDeductedHours,
+          netHours: sc.netHours,
+          nightHours: sc.nightHours,
+          saturdayHours: sc.saturdayHours,
+          overtimeHours: sc.overtimeHours,
+          overtime125Hours: sc.overtime125Hours,
+          overtime150Hours: sc.overtime150Hours,
+          notes: sessionNotes.join(' • '),
+          isManual: s.isManual,
+          logIds: s.allLogIds,
+          sessionsCount: sortedDaySessions.length,
+          sessionIndex: sc.sessionIndex,
+          isCallout: sc.isCallout,
+        });
+      }
     }
   }
 
-  // Sort by date asc, empId asc
-  reportRows.sort((a, b) => a.date.localeCompare(b.date) || a.empId.localeCompare(b.empId));
+  // Sort by date asc, empId asc, sessionIndex asc
+  reportRows.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.empId.localeCompare(b.empId) ||
+      (a.sessionIndex || 1) - (b.sessionIndex || 1)
+  );
 
   return {
     rows: reportRows,

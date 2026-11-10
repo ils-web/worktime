@@ -92,13 +92,20 @@ interface MonthlyReportSummary {
 
 interface DailyReportRow {
   date: string;
+  firstIn?: string;
+  lastOut?: string;
   grossHours: number;
   lunchDeducted: number;
   netHours: number;
   nightHours: number;
   saturdayHours: number;
   overtimeHours: number;
+  overtime125Hours?: number;
+  overtime150Hours?: number;
   isManual?: boolean;
+  isCallout?: boolean;
+  sessionIndex?: number;
+  sessionsCount?: number;
 }
 
 interface SlideToConfirmProps {
@@ -301,6 +308,9 @@ export function WorkerAppPage() {
     hours: number;
     minutes: number;
     text: string;
+    isCallout?: boolean;
+    sessionIndex?: number;
+    dayTotalNetHours?: number;
   } | null>(null);
 
   // Auto-dismiss confirmation modals after 15 seconds of inactivity (anti-pocket safety)
@@ -792,7 +802,14 @@ export function WorkerAppPage() {
           const h = res.todaySummary?.hours ?? fallbackH;
           const m = res.todaySummary?.minutes ?? fallbackM;
           const msg = formatWorkedMessage(h, m, i18n.language);
-          setCompletedShiftSummary({ hours: h, minutes: m, text: msg });
+          setCompletedShiftSummary({
+            hours: h,
+            minutes: m,
+            text: msg,
+            isCallout: res.todaySummary?.isCallout,
+            sessionIndex: res.todaySummary?.sessionIndex,
+            dayTotalNetHours: res.todaySummary?.dayTotalNetHours,
+          });
           setShowClockOutConfirm(false);
           setShowShiftCompleteModal(true);
           fetchProfile();
@@ -800,7 +817,14 @@ export function WorkerAppPage() {
           const h = res.todaySummary?.hours ?? fallbackH;
           const m = res.todaySummary?.minutes ?? fallbackM;
           const msg = formatWorkedMessage(h, m, i18n.language);
-          setCompletedShiftSummary({ hours: h, minutes: m, text: msg });
+          setCompletedShiftSummary({
+            hours: h,
+            minutes: m,
+            text: msg,
+            isCallout: res.todaySummary?.isCallout,
+            sessionIndex: res.todaySummary?.sessionIndex,
+            dayTotalNetHours: res.todaySummary?.dayTotalNetHours,
+          });
           setShowAutoCloseAlert(true);
           fetchProfile();
         }
@@ -1633,19 +1657,46 @@ export function WorkerAppPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-slate-800/60 max-h-60 overflow-y-auto">
-                  {monthlyDays.map((d) => (
-                    <div key={d.date} className="px-3.5 py-2.5 flex justify-between items-center text-xs">
-                      <span className="font-mono text-slate-300 flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          {getDayOfWeek(d.date, i18n.language)}
+                  {monthlyDays.map((d, idx) => (
+                    <div
+                      key={`${d.date}_${d.sessionIndex || idx}`}
+                      className={`px-3.5 py-2.5 flex justify-between items-center text-xs ${
+                        d.isCallout ? 'bg-amber-950/20 border-l-2 border-l-amber-500' : ''
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <span className="font-mono text-slate-300 flex items-center gap-1.5 flex-wrap">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            {getDayOfWeek(d.date, i18n.language)}
+                          </span>
+                          <span>{formatIsoToDisplayDate(d.date)}</span>
+                          {d.firstIn && d.lastOut && (
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              ({d.firstIn}–{d.lastOut})
+                            </span>
+                          )}
+                          {d.isManual && (
+                            <span className="text-amber-400 font-bold" title={t('admin.manualShiftTooltip')}>*</span>
+                          )}
                         </span>
-                        <span>{formatIsoToDisplayDate(d.date)}</span>
-                        {d.isManual && (
-                          <span className="text-amber-400 font-bold" title={t('admin.manualShiftTooltip')}>*</span>
+                        {d.isCallout && (
+                          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-300">
+                            ⚡{' '}
+                            {i18n.language?.startsWith('he')
+                              ? `קריאה חוזרת #${d.sessionIndex || 2} (125%/150%)`
+                              : i18n.language?.startsWith('en')
+                              ? `Call-out #${d.sessionIndex || 2} (125%/150%)`
+                              : `Повторный вызов #${d.sessionIndex || 2} (125%/150%)`}
+                          </div>
                         )}
-                      </span>
+                      </div>
                       <div className="text-right">
                         <span className="font-bold text-emerald-400">{d.netHours} {t('admin.hourUnit')}</span>
+                        {d.overtimeHours > 0 && (
+                          <span className="text-[10px] text-amber-400 font-mono block">
+                            +{d.overtimeHours}{t('admin.hourUnit')} (125%/150%)
+                          </span>
+                        )}
                         {d.lunchDeducted > 0 && (
                           <span className="text-[10px] text-slate-500 block">
                             ({t('worker.lunch')} -{d.lunchDeducted}{t('admin.hourUnit')})
@@ -1911,6 +1962,18 @@ export function WorkerAppPage() {
             <p className="text-sm font-semibold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 rounded-2xl py-3 px-4 inline-block shadow-inner leading-relaxed">
               {completedShiftSummary?.text}
             </p>
+            {completedShiftSummary?.isCallout && (
+              <div className="pt-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/35 text-xs font-bold text-amber-300">
+                  ⚡{' '}
+                  {i18n.language?.startsWith('he')
+                    ? `קריאה חוזרת #${completedShiftSummary.sessionIndex || 2} (שעות נוספות 125%/150%)`
+                    : i18n.language?.startsWith('en')
+                    ? `Repeat Call-out #${completedShiftSummary.sessionIndex || 2} (Overtime 125%/150%)`
+                    : `Повторный вызов #${completedShiftSummary.sessionIndex || 2} (Сверхурочные 125%/150%)`}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Shift Details Breakdown Card */}

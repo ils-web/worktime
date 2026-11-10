@@ -518,7 +518,14 @@ export function ClientHoursTab() {
                   </tr>
                 ) : (
                   hoursList.map((row, idx) => (
-                    <tr key={`${row.empId}_${row.date}_${idx}`} className="hover:bg-slate-800/40 transition">
+                    <tr
+                      key={`${row.empId}_${row.date}_${row.sessionIndex || idx}`}
+                      className={
+                        row.isCallout
+                          ? 'bg-amber-950/20 hover:bg-amber-900/25 transition border-l-2 border-l-amber-500'
+                          : 'hover:bg-slate-800/40 transition'
+                      }
+                    >
                       <td className="p-3.5 font-mono text-xs text-slate-300 whitespace-nowrap">
                         <span>{formatIsoToDisplayDate(row.date)}</span>
                         {row.isManual && (
@@ -540,10 +547,15 @@ export function ClientHoursTab() {
                         <span className="block text-[11px] font-mono text-slate-400">{row.empId}</span>
                       </td>
                       <td className="p-3.5 text-xs text-slate-300">
-                        {row.firstIn}
-                        {row.shiftsSummary && (
-                          <span className="block text-[10px] text-amber-400 font-mono font-medium mt-0.5 whitespace-nowrap">
-                            ⚡ {row.shiftsSummary}
+                        <span className="font-mono font-semibold">{row.firstIn}</span>
+                        {row.isCallout && (
+                          <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-300 font-bold whitespace-nowrap">
+                            ⚡{' '}
+                            {i18n.language?.startsWith('he')
+                              ? `קריאה חוזרת #${row.sessionIndex || 2}`
+                              : i18n.language?.startsWith('en')
+                              ? `Call-out #${row.sessionIndex || 2}`
+                              : `Вызов #${row.sessionIndex || 2}`}
                           </span>
                         )}
                       </td>

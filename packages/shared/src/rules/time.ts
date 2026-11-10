@@ -298,6 +298,96 @@ export function calculateDailyHours(
   };
 }
 
+export interface SessionCalculationResult extends DailyCalculationResult {
+  sessionIndex: number; // 1 = Main shift (Смена 1), 2 = Repeat Call-out #2 (Вызов №2), etc.
+  totalSessionsInDay: number;
+  isCallout: boolean;   // true when sessionIndex >= 2 (repeat call-out on the same day)
+  firstIn: string;      // HH:mm in Asia/Jerusalem
+  lastOut: string;      // HH:mm in Asia/Jerusalem
+}
+
+/**
+ * Calculates per-session hours breakdown for all sessions belonging to the same calendar day.
+ * - Session #1 (sessionIndex === 1) is the primary daily shift:
+ *   regular hours up to overtimeThresholdHours (default 9h), then first 2h @ 125% and rest @ 150%.
+ * - Session #2+ (sessionIndex >= 2) are repeat call-outs (Повторный вызов / קריאה חוזרת) on the same day:
+ *   any repeat call-out on the same day immediately counts as overtime (125% / 150%), regardless of Session #1 length.
+ */
+export function calculateDailySessionsBreakdown(
+  sessions: WorkSession[],
+  autoDeductLunch = false,
+  nightStartHHmm = '22:00',
+  nightEndHHmm = '06:00',
+  shabbatEnterHHmm = '16:00',
+  overtimeThresholdHours = 9
+): SessionCalculationResult[] {
+  if (sessions.length === 0) return [];
+
+  const sorted = [...sessions].sort(
+    (a, b) => a.clockIn.getTime() - b.clockIn.getTime()
+  );
+
+  const threshold = overtimeThresholdHours > 0 ? overtimeThresholdHours : 9;
+  const dateStr = getJerusalemParts(sorted[0]!.clockIn).dateStr;
+  let cumulativeOvertime125Used = 0;
+
+  return sorted.map((cur, idx) => {
+    const breakdown = calculateSessionHours(cur, nightStartHHmm, nightEndHHmm, shabbatEnterHHmm);
+    const grossHours = breakdown.totalHours;
+    const lunchDeductedHours = autoDeductLunch && grossHours >= 6 ? 0.5 : 0;
+    const netHours = Math.max(0, Math.round((grossHours - lunchDeductedHours) * 100) / 100);
+    const rawSaturdayHours = Math.round((breakdown.saturdayMinutes / 60) * 100) / 100;
+    const saturdayHours = Math.min(netHours, rawSaturdayHours);
+    const nightHours = Math.min(netHours, Math.round(breakdown.nightHours * 100) / 100);
+
+    const isCallout = idx >= 1;
+    let overtimeHours = 0;
+    let overtime125Hours = 0;
+    let overtime150Hours = 0;
+    let regularHours = 0;
+
+    if (!isCallout) {
+      // Primary shift (#1)
+      if (netHours > threshold) {
+        overtimeHours = Math.round((netHours - threshold) * 100) / 100;
+      }
+      overtime125Hours = Math.round(Math.min(2, overtimeHours) * 100) / 100;
+      overtime150Hours = Math.max(0, Math.round((overtimeHours - overtime125Hours) * 100) / 100);
+      regularHours = Math.round((netHours - overtimeHours) * 100) / 100;
+      cumulativeOvertime125Used = Math.round((cumulativeOvertime125Used + overtime125Hours) * 100) / 100;
+    } else {
+      // Repeat call-out (#2+ on the same day): 100% of netHours immediately go to overtime (125% / 150%)
+      overtimeHours = netHours;
+      regularHours = 0;
+      const remaining125Quota = Math.max(0, Math.round((2 - cumulativeOvertime125Used) * 100) / 100);
+      overtime125Hours = Math.round(Math.min(remaining125Quota, overtimeHours) * 100) / 100;
+      overtime150Hours = Math.max(0, Math.round((overtimeHours - overtime125Hours) * 100) / 100);
+      cumulativeOvertime125Used = Math.round((cumulativeOvertime125Used + overtime125Hours) * 100) / 100;
+    }
+
+    const inParts = getJerusalemParts(cur.clockIn);
+    const outParts = getJerusalemParts(cur.clockOut);
+
+    return {
+      dateStr,
+      sessionIndex: idx + 1,
+      totalSessionsInDay: sorted.length,
+      isCallout,
+      firstIn: inParts.timeStr,
+      lastOut: outParts.timeStr,
+      grossHours,
+      lunchDeductedHours,
+      netHours,
+      nightHours,
+      saturdayHours,
+      overtimeHours,
+      overtime125Hours,
+      overtime150Hours,
+      regularHours,
+    };
+  });
+}
+
 /**
  * Converts a calendar date ("YYYY-MM-DD") and time ("HH:mm") in Asia/Jerusalem
  * into an absolute UTC Date object, correctly resolving daylight saving time (IDT / IST).
@@ -585,7 +675,11 @@ export function isSystemGpsNote(noteText?: string | null): boolean {
     noteText.includes('Время на переезд между объектами') ||
     noteText.includes('Transit time between sites') ||
     noteText.includes('זמן נסיעה בין אתרים') ||
-    noteText.includes('وقت التنقل بين المواقع')
+    noteText.includes('وقت التنقل بين المواقع') ||
+    noteText.includes('Повторный вызов') ||
+    noteText.includes('Repeat Call-out') ||
+    noteText.includes('קריאה חוזרת') ||
+    noteText.includes('استدعاء إضافي')
   );
 }
 
@@ -711,6 +805,26 @@ export function localizeSystemNote(noteText?: string | null, lang: string = 'he'
       if (targetLang === 'he') return `זמן נסיעה בין אתרים: ${mins} דק'`;
       if (targetLang === 'ar') return `وقت التنقل بين المواقع: ${mins} د`;
       return `Transit time between sites: ${mins} min`;
+    }
+
+    // 5. Repeat Call-out / Extra Shift on the same day:
+    // RU: Повторный вызов (Смена #2)
+    // HE: קריאה חוזרת (משמרת #2)
+    // EN: Repeat Call-out (Shift #2)
+    // AR: استدعاء إضافي (وردية #2)
+    const isRepeatCallout =
+      part.includes('Повторный вызов') ||
+      part.includes('Repeat Call-out') ||
+      part.includes('קריאה חוזרת') ||
+      part.includes('استدعاء إضافي');
+
+    if (isRepeatCallout) {
+      const numMatch = part.match(/#(\d+)/);
+      const shiftNum = numMatch && numMatch[1] ? numMatch[1] : '2';
+      if (targetLang === 'ru') return `Повторный вызов (Смена #${shiftNum})`;
+      if (targetLang === 'he') return `קריאה חוזרת (משמרת #${shiftNum})`;
+      if (targetLang === 'ar') return `استدعاء إضافي (وردية #${shiftNum})`;
+      return `Repeat Call-out (Shift #${shiftNum})`;
     }
 
     return part;

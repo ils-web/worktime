@@ -687,15 +687,19 @@ export async function generatePdfReport(
 
     const isEven = i % 2 === 0;
 
-    // Row background (alternating zebra stripes)
+    // Row background (alternating zebra stripes, with warm highlight for repeat call-out shifts)
     page.drawRectangle({
       x: startX,
       y: y - 4,
       width: totalTableWidth,
       height: rowHeight,
-      color: isEven ? rgb(0.98, 0.99, 1.0) : rgb(1, 1, 1),
-      borderColor: rgb(0.9, 0.92, 0.95),
-      borderWidth: 0.4,
+      color: r.isCallout
+        ? rgb(1.0, 0.98, 0.93)
+        : isEven
+          ? rgb(0.98, 0.99, 1.0)
+          : rgb(1, 1, 1),
+      borderColor: r.isCallout ? rgb(0.95, 0.78, 0.45) : rgb(0.9, 0.92, 0.95),
+      borderWidth: r.isCallout ? 0.6 : 0.4,
     });
 
     // Draw row cells

@@ -18,6 +18,8 @@ export interface ReportRow {
   dayOfWeek?: string;
   shiftsSummary?: string;
   sessionsCount?: number;
+  sessionIndex?: number;
+  isCallout?: boolean;
 }
 
 import { formatIsoToDisplayDate, getDayOfWeek, localizeSystemNote } from '@timetracker/shared';
