@@ -300,6 +300,7 @@ export function calculateDailyHours(
 
 export interface SessionCalculationResult extends DailyCalculationResult {
   sessionIndex: number; // 1 = Main shift (Смена 1), 2 = Repeat Call-out #2 (Вызов №2), etc.
+  sessionsCount: number;
   totalSessionsInDay: number;
   isCallout: boolean;   // true when sessionIndex >= 2 (repeat call-out on the same day)
   firstIn: string;      // HH:mm in Asia/Jerusalem
@@ -311,7 +312,7 @@ export interface SessionCalculationResult extends DailyCalculationResult {
  * - Session #1 (sessionIndex === 1) is the primary daily shift:
  *   regular hours up to overtimeThresholdHours (default 9h), then first 2h @ 125% and rest @ 150%.
  * - Session #2+ (sessionIndex >= 2) are repeat call-outs (Повторный вызов / קריאה חוזרת) on the same day:
- *   any repeat call-out on the same day immediately counts as overtime (125% / 150%), regardless of Session #1 length.
+ *   recorded as separate shift rows with their exact hours and flagged as a call-out (without forcing 125%/150% tariff).
  */
 export function calculateDailySessionsBreakdown(
   sessions: WorkSession[],
@@ -329,7 +330,6 @@ export function calculateDailySessionsBreakdown(
 
   const threshold = overtimeThresholdHours > 0 ? overtimeThresholdHours : 9;
   const dateStr = getJerusalemParts(sorted[0]!.clockIn).dateStr;
-  let cumulativeOvertime125Used = 0;
 
   return sorted.map((cur, idx) => {
     const breakdown = calculateSessionHours(cur, nightStartHHmm, nightEndHHmm, shabbatEnterHHmm);
@@ -344,7 +344,7 @@ export function calculateDailySessionsBreakdown(
     let overtimeHours = 0;
     let overtime125Hours = 0;
     let overtime150Hours = 0;
-    let regularHours = 0;
+    let regularHours = netHours;
 
     if (!isCallout) {
       // Primary shift (#1)
@@ -354,15 +354,6 @@ export function calculateDailySessionsBreakdown(
       overtime125Hours = Math.round(Math.min(2, overtimeHours) * 100) / 100;
       overtime150Hours = Math.max(0, Math.round((overtimeHours - overtime125Hours) * 100) / 100);
       regularHours = Math.round((netHours - overtimeHours) * 100) / 100;
-      cumulativeOvertime125Used = Math.round((cumulativeOvertime125Used + overtime125Hours) * 100) / 100;
-    } else {
-      // Repeat call-out (#2+ on the same day): 100% of netHours immediately go to overtime (125% / 150%)
-      overtimeHours = netHours;
-      regularHours = 0;
-      const remaining125Quota = Math.max(0, Math.round((2 - cumulativeOvertime125Used) * 100) / 100);
-      overtime125Hours = Math.round(Math.min(remaining125Quota, overtimeHours) * 100) / 100;
-      overtime150Hours = Math.max(0, Math.round((overtimeHours - overtime125Hours) * 100) / 100);
-      cumulativeOvertime125Used = Math.round((cumulativeOvertime125Used + overtime125Hours) * 100) / 100;
     }
 
     const inParts = getJerusalemParts(cur.clockIn);
@@ -371,6 +362,7 @@ export function calculateDailySessionsBreakdown(
     return {
       dateStr,
       sessionIndex: idx + 1,
+      sessionsCount: sorted.length,
       totalSessionsInDay: sorted.length,
       isCallout,
       firstIn: inParts.timeStr,

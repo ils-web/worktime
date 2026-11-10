@@ -1683,10 +1683,10 @@ export function WorkerAppPage() {
                           <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-300">
                             ⚡{' '}
                             {i18n.language?.startsWith('he')
-                              ? `קריאה חוזרת #${d.sessionIndex || 2} (125%/150%)`
+                              ? `קריאה חוזרת #${d.sessionIndex || 2}`
                               : i18n.language?.startsWith('en')
-                              ? `Call-out #${d.sessionIndex || 2} (125%/150%)`
-                              : `Повторный вызов #${d.sessionIndex || 2} (125%/150%)`}
+                              ? `Call-out #${d.sessionIndex || 2}`
+                              : `Повторный вызов #${d.sessionIndex || 2}`}
                           </div>
                         )}
                       </div>
@@ -1967,10 +1967,10 @@ export function WorkerAppPage() {
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/35 text-xs font-bold text-amber-300">
                   ⚡{' '}
                   {i18n.language?.startsWith('he')
-                    ? `קריאה חוזרת #${completedShiftSummary.sessionIndex || 2} (שעות נוספות 125%/150%)`
+                    ? `קריאה חוזרת #${completedShiftSummary.sessionIndex || 2}`
                     : i18n.language?.startsWith('en')
-                    ? `Repeat Call-out #${completedShiftSummary.sessionIndex || 2} (Overtime 125%/150%)`
-                    : `Повторный вызов #${completedShiftSummary.sessionIndex || 2} (Сверхурочные 125%/150%)`}
+                    ? `Repeat Call-out #${completedShiftSummary.sessionIndex || 2}`
+                    : `Повторный вызов #${completedShiftSummary.sessionIndex || 2}`}
                 </span>
               </div>
             )}

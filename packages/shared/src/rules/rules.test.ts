@@ -401,9 +401,9 @@ describe('Billing Rules', () => {
     expect(localizeSystemNote(calloutNote, 'ru')).toBe('Повторный вызов (Смена #2)');
   });
 
-  it('calculates repeat call-out shifts on the same day as immediate overtime (125% / 150%) in separate rows', () => {
-    // Shift #1: 08:00 to 15:00 (7h < 9h daily norm) -> 7h regular, 0h overtime
-    // Shift #2 (Urgent repeat call-out): 19:00 to 22:00 (3h) -> immediately overtime: 2h @ 125% + 1h @ 150%
+  it('records repeat call-out shifts on the same day in separate rows and flags them as call-outs without forcing overtime', () => {
+    // Shift #1: 08:00 to 15:00 (7h) -> 7h regular, 0h overtime
+    // Shift #2 (Urgent repeat call-out): 19:00 to 22:00 (3h) -> recorded separately as 3h with isCallout = true
     const s1 = {
       clockIn: jerusalemDateTimeToDate('2026-10-05', '08:00'),
       clockOut: jerusalemDateTimeToDate('2026-10-05', '15:00'),
@@ -427,9 +427,9 @@ describe('Billing Rules', () => {
     expect(breakdown[1]!.sessionIndex).toBe(2);
     expect(breakdown[1]!.isCallout).toBe(true);
     expect(breakdown[1]!.netHours).toBe(3);
-    expect(breakdown[1]!.regularHours).toBe(0);
-    expect(breakdown[1]!.overtimeHours).toBe(3);
-    expect(breakdown[1]!.overtime125Hours).toBe(2);
-    expect(breakdown[1]!.overtime150Hours).toBe(1);
+    expect(breakdown[1]!.regularHours).toBe(3);
+    expect(breakdown[1]!.overtimeHours).toBe(0);
+    expect(breakdown[1]!.overtime125Hours).toBe(0);
+    expect(breakdown[1]!.overtime150Hours).toBe(0);
   });
 });

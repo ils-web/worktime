@@ -96981,7 +96981,6 @@ function calculateDailySessionsBreakdown(sessions, autoDeductLunch = false, nigh
   );
   const threshold = overtimeThresholdHours > 0 ? overtimeThresholdHours : 9;
   const dateStr = getJerusalemParts(sorted[0].clockIn).dateStr;
-  let cumulativeOvertime125Used = 0;
   return sorted.map((cur, idx) => {
     const breakdown = calculateSessionHours(cur, nightStartHHmm, nightEndHHmm, shabbatEnterHHmm);
     const grossHours = breakdown.totalHours;
@@ -96994,7 +96993,7 @@ function calculateDailySessionsBreakdown(sessions, autoDeductLunch = false, nigh
     let overtimeHours = 0;
     let overtime125Hours = 0;
     let overtime150Hours = 0;
-    let regularHours = 0;
+    let regularHours = netHours;
     if (!isCallout) {
       if (netHours > threshold) {
         overtimeHours = Math.round((netHours - threshold) * 100) / 100;
@@ -97002,20 +97001,13 @@ function calculateDailySessionsBreakdown(sessions, autoDeductLunch = false, nigh
       overtime125Hours = Math.round(Math.min(2, overtimeHours) * 100) / 100;
       overtime150Hours = Math.max(0, Math.round((overtimeHours - overtime125Hours) * 100) / 100);
       regularHours = Math.round((netHours - overtimeHours) * 100) / 100;
-      cumulativeOvertime125Used = Math.round((cumulativeOvertime125Used + overtime125Hours) * 100) / 100;
-    } else {
-      overtimeHours = netHours;
-      regularHours = 0;
-      const remaining125Quota = Math.max(0, Math.round((2 - cumulativeOvertime125Used) * 100) / 100);
-      overtime125Hours = Math.round(Math.min(remaining125Quota, overtimeHours) * 100) / 100;
-      overtime150Hours = Math.max(0, Math.round((overtimeHours - overtime125Hours) * 100) / 100);
-      cumulativeOvertime125Used = Math.round((cumulativeOvertime125Used + overtime125Hours) * 100) / 100;
     }
     const inParts = getJerusalemParts(cur.clockIn);
     const outParts = getJerusalemParts(cur.clockOut);
     return {
       dateStr,
       sessionIndex: idx + 1,
+      sessionsCount: sorted.length,
       totalSessionsInDay: sorted.length,
       isCallout,
       firstIn: inParts.timeStr,
