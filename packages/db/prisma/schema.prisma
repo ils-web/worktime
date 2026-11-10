@@ -95,6 +95,8 @@ model Employee {
 
   @@index([clientId])
   @@index([empId])
+  @@index([clientId, foremanId])
+  @@index([clientId, isGlobal])
 }
 
 model TimeLog {
@@ -156,6 +158,7 @@ model DailyNote {
 
   @@index([clientId, date])
   @@index([empId, date])
+  @@index([employeeId, date])
 }
 
 model Invoice {

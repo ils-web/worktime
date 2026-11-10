@@ -27,7 +27,12 @@ export function getPrismaClient(): PrismaClient {
 
   try {
     if (connectionString && connectionString.includes('neon.tech')) {
-      const pool = new Pool({ connectionString });
+      const pool = new Pool({
+        connectionString,
+        max: 5,
+        idleTimeoutMillis: 15000,
+        connectionTimeoutMillis: 10000,
+      });
       const adapter = new PrismaNeon(pool);
       client = new PrismaClient({ adapter });
     } else {
@@ -38,9 +43,7 @@ export function getPrismaClient(): PrismaClient {
     client = new PrismaClient();
   }
 
-  if (process.env['NODE_ENV'] !== 'production') {
-    globalForPrisma.prisma = client;
-  }
+  globalForPrisma.prisma = client;
   cachedPrisma = client;
 
   return client;

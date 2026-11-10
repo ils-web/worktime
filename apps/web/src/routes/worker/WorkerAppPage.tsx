@@ -517,6 +517,9 @@ export function WorkerAppPage() {
   };
 
   // 5. GPS Location Check
+  const profileRef = useRef<WorkerProfile | null>(null);
+  profileRef.current = profile;
+
   const refreshLocation = useCallback(async () => {
     setIsLocating(true);
     setGeoError(null);
@@ -524,8 +527,9 @@ export function WorkerAppPage() {
       const coords = await getCurrentCoordinates(10000);
       setGeoResult(coords);
 
-      if (profile && !profile.isMobile) {
-        const ev = evaluateWorkerGeofence(coords.lat, coords.lng, profile);
+      const curProfile = profileRef.current;
+      if (curProfile && !curProfile.isMobile) {
+        const ev = evaluateWorkerGeofence(coords.lat, coords.lng, curProfile);
         setGeofenceEval(ev);
       }
     } catch (err: any) {
@@ -533,13 +537,13 @@ export function WorkerAppPage() {
     } finally {
       setIsLocating(false);
     }
-  }, [profile, t]);
+  }, [t]);
 
   useEffect(() => {
-    if (profile) {
+    if (profile?.empId) {
       refreshLocation();
     }
-  }, [profile, refreshLocation]);
+  }, [profile?.empId, refreshLocation]);
 
   // Strict GPS / Multi-Site Transit Watcher when on shift OR waiting for arrival at next site
   const shouldWatchGps = Boolean(
@@ -563,8 +567,9 @@ export function WorkerAppPage() {
           timestamp: pos.timestamp,
         });
 
-        if (profile && !profile.isMobile) {
-          const ev = evaluateWorkerGeofence(pos.coords.latitude, pos.coords.longitude, profile);
+        const curProfile = profileRef.current;
+        if (curProfile && !curProfile.isMobile) {
+          const ev = evaluateWorkerGeofence(pos.coords.latitude, pos.coords.longitude, curProfile);
           setGeofenceEval(ev);
         }
       },
@@ -573,7 +578,7 @@ export function WorkerAppPage() {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [profile, shouldWatchGps]);
+  }, [shouldWatchGps]);
 
   // 6. Live Shift Timer
   useEffect(() => {
@@ -967,11 +972,13 @@ export function WorkerAppPage() {
     isSubmittingAction,
   ]);
 
-  // Re-check profile & location on tab focus or screen unlock
+  // Re-check profile & location on tab focus or screen unlock (throttled to avoid duplicate focus+visibilitychange bursts)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        lastVisibilityResumeRef.current = Date.now();
+        const now = Date.now();
+        if (now - lastVisibilityResumeRef.current < 4000) return;
+        lastVisibilityResumeRef.current = now;
         fetchProfile();
         refreshLocation();
       }

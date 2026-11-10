@@ -388,7 +388,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         const dParts = getJerusalemParts(lastLog.dateTime);
         const strictNote = await prisma.dailyNote.findFirst({
           where: {
-            employeeId: employee.id,
+            empId: employee.empId,
             date: dParts.dateStr,
             OR: [
               { noteText: { contains: 'строгий GPS' } },

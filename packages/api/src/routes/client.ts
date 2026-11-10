@@ -111,7 +111,9 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
           clientId,
           monthStart,
           now,
-          isForeman ? req.user?.id : undefined
+          isForeman ? req.user?.id : undefined,
+          undefined,
+          true
         );
         for (const r of rows) {
           if (r.date.startsWith(currentMonthStr)) {
@@ -1087,7 +1089,8 @@ export async function computeClientReportRows(
   startDateInput: Date,
   endDateInput: Date,
   foremanId?: string,
-  empId?: string
+  empId?: string,
+  onlyGlobal?: boolean
 ): Promise<{ rows: ReportRow[]; clientName: string; logoUrl: string | null }> {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -1109,6 +1112,10 @@ export async function computeClientReportRows(
   const whereEmp: any = { clientId };
   if (foremanId) whereEmp.foremanId = foremanId;
   if (empId) whereEmp.empId = empId;
+  if (onlyGlobal) {
+    whereEmp.isGlobal = true;
+    whereEmp.contractMonthlyHours = { gt: 0 };
+  }
 
   const startParts = getJerusalemParts(startDateInput);
   const endParts = getJerusalemParts(endDateInput);

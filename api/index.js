@@ -96562,7 +96562,12 @@ function getPrismaClient() {
   let client;
   try {
     if (connectionString && connectionString.includes("neon.tech")) {
-      const pool = new import_serverless.Pool({ connectionString });
+      const pool = new import_serverless.Pool({
+        connectionString,
+        max: 5,
+        idleTimeoutMillis: 15e3,
+        connectionTimeoutMillis: 1e4
+      });
       const adapter = new import_adapter_neon.PrismaNeon(pool);
       client = new import_client.PrismaClient({ adapter });
     } else {
@@ -96572,9 +96577,7 @@ function getPrismaClient() {
     console.error("Failed to create PrismaClient with adapter, falling back to direct PrismaClient:", err);
     client = new import_client.PrismaClient();
   }
-  if (process.env["NODE_ENV"] !== "production") {
-    globalForPrisma.prisma = client;
-  }
+  globalForPrisma.prisma = client;
   cachedPrisma = client;
   return client;
 }
@@ -96952,14 +96955,33 @@ function calculateSessionHours(session, nightStartHHmm = "22:00", nightEndHHmm =
   const shabbatEnterMin = shabbatEnterHHmm ? parseTimeToMinutes(shabbatEnterHHmm) : 16 * 60;
   let nightMinutesCount = 0;
   let shabbatMinutesCount = 0;
-  for (let t = inMs; t < outMs; t += 6e4) {
-    const curParts = getJerusalemParts(new Date(t));
-    const curMinuteOfDay = curParts.hour * 60 + curParts.minute;
-    if (isMinuteInNightWindow(curMinuteOfDay, nightStartMin, nightEndMin)) {
-      nightMinutesCount++;
+  const startMinuteOfDay = inParts.hour * 60 + inParts.minute;
+  const endMinuteOfDay = outParts.hour * 60 + outParts.minute;
+  const expectedEndMinuteOfDay = (startMinuteOfDay + durationMinutes) % 1440;
+  const isLinearTimezoneWindow = durationMinutes < 1440 && Math.abs(expectedEndMinuteOfDay - endMinuteOfDay) <= 1;
+  if (isLinearTimezoneWindow) {
+    const steps = Math.ceil(durationMs / 6e4);
+    for (let i = 0; i < steps; i++) {
+      const totalMin = startMinuteOfDay + i;
+      const curMinuteOfDay = totalMin % 1440;
+      const curDayOfWeek = (inParts.dayOfWeek + Math.floor(totalMin / 1440)) % 7;
+      if (isMinuteInNightWindow(curMinuteOfDay, nightStartMin, nightEndMin)) {
+        nightMinutesCount++;
+      }
+      if (curDayOfWeek === 6 || curDayOfWeek === 5 && curMinuteOfDay >= shabbatEnterMin) {
+        shabbatMinutesCount++;
+      }
     }
-    if (curParts.dayOfWeek === 6 || curParts.dayOfWeek === 5 && curMinuteOfDay >= shabbatEnterMin) {
-      shabbatMinutesCount++;
+  } else {
+    for (let t = inMs; t < outMs; t += 6e4) {
+      const curParts = getJerusalemParts(new Date(t));
+      const curMinuteOfDay = curParts.hour * 60 + curParts.minute;
+      if (isMinuteInNightWindow(curMinuteOfDay, nightStartMin, nightEndMin)) {
+        nightMinutesCount++;
+      }
+      if (curParts.dayOfWeek === 6 || curParts.dayOfWeek === 5 && curMinuteOfDay >= shabbatEnterMin) {
+        shabbatMinutesCount++;
+      }
     }
   }
   const nightHours = Math.round(nightMinutesCount / 60 * 100) / 100;
@@ -98997,7 +99019,9 @@ clientRouter.get("/employees", async (req, res) => {
           clientId,
           monthStart,
           now,
-          isForeman ? req.user?.id : void 0
+          isForeman ? req.user?.id : void 0,
+          void 0,
+          true
         );
         for (const r of rows) {
           if (r.date.startsWith(currentMonthStr)) {
@@ -99811,7 +99835,7 @@ clientRouter.delete("/logs/manual", async (req, res) => {
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0441\u043C\u0435\u043D\u044B" });
   }
 });
-async function computeClientReportRows(clientId, startDateInput, endDateInput, foremanId, empId) {
+async function computeClientReportRows(clientId, startDateInput, endDateInput, foremanId, empId, onlyGlobal) {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     select: { name: true, logoUrl: true, autoDeductLunch: true, defaultShifts: true }
@@ -99829,6 +99853,10 @@ async function computeClientReportRows(clientId, startDateInput, endDateInput, f
   const whereEmp = { clientId };
   if (foremanId) whereEmp.foremanId = foremanId;
   if (empId) whereEmp.empId = empId;
+  if (onlyGlobal) {
+    whereEmp.isGlobal = true;
+    whereEmp.contractMonthlyHours = { gt: 0 };
+  }
   const startParts = getJerusalemParts(startDateInput);
   const endParts = getJerusalemParts(endDateInput);
   const startDateStr = startParts.dateStr;
@@ -101464,7 +101492,7 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         const dParts = getJerusalemParts(lastLog.dateTime);
         const strictNote = await prisma.dailyNote.findFirst({
           where: {
-            employeeId: employee.id,
+            empId: employee.empId,
             date: dParts.dateStr,
             OR: [
               { noteText: { contains: "\u0441\u0442\u0440\u043E\u0433\u0438\u0439 GPS" } },
