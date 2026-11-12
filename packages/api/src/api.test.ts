@@ -598,6 +598,45 @@ describe('TimeTracker API Endpoints', () => {
     expect(prof2.body.status.activeSiteName).toBe('База Запад');
   }, 15000);
 
+  it('14c. Employee phone and ID are encrypted with AES-256 in DB and privacy consent is recorded', async () => {
+    const encEmpId = `E_ENC_${Date.now()}`;
+    const rawPhone = '054-987-6543';
+
+    const createRes = await request(app)
+      .post('/api/client/employees')
+      .set('Cookie', clientCookie)
+      .send({
+        empId: encEmpId,
+        name: 'Сотрудник Защищённый',
+        phone: rawPhone,
+        isMobile: true,
+      });
+
+    expect(createRes.status).toBe(200);
+    expect(createRes.body.employee.phone).toBe(rawPhone);
+
+    // Verify in DB directly that phone and encryptedIdentity are ciphertext (enc:v1:...)
+    const dbRecord = await prisma.employee.findUnique({ where: { empId: encEmpId } });
+    expect(dbRecord).toBeDefined();
+    expect(dbRecord?.phone).toMatch(/^enc:v1:/);
+    expect(dbRecord?.phone).not.toContain('987-6543');
+    expect(dbRecord?.encryptedIdentity).toMatch(/^enc:v1:/);
+
+    // Record worker privacy consent
+    const consentRes = await request(app)
+      .post('/api/worker/consent')
+      .send({ empId: encEmpId });
+
+    expect(consentRes.status).toBe(200);
+    expect(consentRes.body.success).toBe(true);
+    expect(consentRes.body.privacyConsentAt).toBeTruthy();
+
+    // Verify worker profile returns privacyConsentAt
+    const profRes = await request(app).get(`/api/worker/profile/${encEmpId}`);
+    expect(profRes.status).toBe(200);
+    expect(profRes.body.employee.privacyConsentAt).toBeTruthy();
+  });
+
   it('15. Owner can delete client and cleanup test clients', async () => {
     const ownerToken = signSessionToken({ id: 'owner', role: 'owner', name: 'Master Owner' });
     const ownerCookie = `session=${ownerToken}`;

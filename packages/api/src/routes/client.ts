@@ -22,6 +22,7 @@ import {
   normalizePositionsList,
 } from '@timetracker/shared';
 import { authRequired, requireRole } from '../middleware/auth';
+import { encryptField, decryptField } from '../utils/encryption';
 import { generateCsvReport, ReportRow } from '../services/csvReportService';
 import { generatePdfReport } from '../services/pdfReportService';
 import { IsraeliInvoiceService } from '../services/israeliInvoiceService';
@@ -157,6 +158,7 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
 
       return {
         ...emp,
+        phone: decryptField(emp.phone),
         isOnShift,
         lastLogAction: lastLog?.action ?? null,
         lastLogTime: activeClockInTime,
@@ -178,6 +180,7 @@ clientRouter.get('/employees', async (req: Request, res: Response) => {
 const createEmployeeSchema = z.object({
   empId: z.string().min(2),
   name: z.string().min(2),
+  phone: z.string().max(40).nullable().optional(),
   position: z.string().max(120).nullable().optional(),
   isMobile: z.boolean().default(false),
   strictGps: z.boolean().default(false),
@@ -237,7 +240,9 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
       data: {
         clientId,
         empId: data.empId,
+        encryptedIdentity: encryptField(data.empId),
         name: data.name,
+        phone: encryptField(data.phone),
         position: cleanPosition,
         isMobile: data.isMobile,
         strictGps: data.strictGps,
@@ -266,7 +271,13 @@ clientRouter.post('/employees', requireRole('client', 'foreman'), async (req: Re
       await ensurePositionInClientList(clientId, cleanPosition);
     }
 
-    res.json({ success: true, employee: created });
+    res.json({
+      success: true,
+      employee: {
+        ...created,
+        phone: decryptField(created.phone),
+      },
+    });
   } catch (err) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: 'Заполните обязательные поля корректно' });
@@ -287,6 +298,7 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
     const {
       name,
       newEmpId,
+      phone,
       position,
       isMobile,
       strictGps,
@@ -362,7 +374,9 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
       where: { id: employee.id },
       data: {
         empId: finalEmpId,
+        encryptedIdentity: encryptField(finalEmpId),
         ...(name ? { name } : {}),
+        ...(phone !== undefined ? { phone: encryptField(phone) } : {}),
         ...(cleanPosition !== undefined ? { position: cleanPosition } : {}),
         ...(isMobile !== undefined ? { isMobile } : {}),
         ...(strictGps !== undefined ? { strictGps } : {}),
@@ -395,7 +409,13 @@ clientRouter.put('/employees/:empId', requireRole('client', 'foreman'), async (r
       await ensurePositionInClientList(clientId, cleanPosition);
     }
 
-    res.json({ success: true, employee: updated });
+    res.json({
+      success: true,
+      employee: {
+        ...updated,
+        phone: decryptField(updated.phone),
+      },
+    });
   } catch (err) {
     console.error('Update employee error:', err);
     res.status(500).json({ error: 'Ошибка обновления сотрудника' });

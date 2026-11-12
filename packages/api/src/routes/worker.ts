@@ -20,6 +20,7 @@ import {
 } from '@timetracker/shared';
 import { generatePdfReport } from '../services/pdfReportService';
 import { generateCsvReport, ReportRow } from '../services/csvReportService';
+import { encryptField } from '../utils/encryption';
 
 interface TrackedSession extends WorkSession {
   isManual?: boolean;
@@ -478,6 +479,7 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
         autoCloseShift: employee.autoCloseShift ?? false,
         isGlobal: employee.isGlobal ?? false,
         contractMonthlyHours: employee.contractMonthlyHours ?? null,
+        privacyConsentAt: employee.privacyConsentAt ?? null,
         globalMonthlyStatus,
         geofence: employee.geofence,
         sites: sitesList,
@@ -498,6 +500,42 @@ workerRouter.get('/profile/:empId', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Worker profile error:', err);
     res.status(500).json({ error: 'Ошибка получения профиля' });
+  }
+});
+
+/**
+ * 1.1 Worker Privacy & Personal Data Processing Consent
+ */
+workerRouter.post('/consent', async (req: Request, res: Response) => {
+  try {
+    const { empId, acceptedAt } = req.body || {};
+    if (!empId || typeof empId !== 'string') {
+      res.status(400).json({ error: 'Не указан empId' });
+      return;
+    }
+
+    const employee = await prisma.employee.findUnique({ where: { empId } });
+    if (!employee) {
+      res.status(404).json({ error: 'Сотрудник не найден' });
+      return;
+    }
+
+    const consentTime = acceptedAt ? new Date(acceptedAt) : new Date();
+    const updated = await prisma.employee.update({
+      where: { id: employee.id },
+      data: {
+        privacyConsentAt: employee.privacyConsentAt || consentTime,
+        ...(!employee.encryptedIdentity ? { encryptedIdentity: encryptField(employee.empId) } : {}),
+      },
+    });
+
+    res.json({
+      success: true,
+      privacyConsentAt: updated.privacyConsentAt,
+    });
+  } catch (err) {
+    console.error('Worker consent error:', err);
+    res.status(500).json({ error: 'Ошибка сохранения согласия' });
   }
 });
 

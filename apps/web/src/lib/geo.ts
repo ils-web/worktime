@@ -24,26 +24,72 @@ export class GeoLocationError extends Error {
   }
 }
 
+const LAST_GEO_CACHE_KEY = 'worktime_last_geo_fix';
+
+export function saveCachedGeoFix(fix: GeoLocationResult): void {
+  try {
+    localStorage.setItem(LAST_GEO_CACHE_KEY, JSON.stringify(fix));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function loadCachedGeoFix(maxAgeMs = 45 * 60 * 1000): GeoLocationResult | null {
+  try {
+    const raw = localStorage.getItem(LAST_GEO_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as GeoLocationResult;
+    if (
+      parsed &&
+      typeof parsed.lat === 'number' &&
+      typeof parsed.lng === 'number' &&
+      Date.now() - (parsed.timestamp || 0) <= maxAgeMs
+    ) {
+      return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 /**
- * Get current GPS coordinates with high accuracy
+ * Get current GPS coordinates with high accuracy, with fast indoor/underground fallback
  */
-export function getCurrentCoordinates(timeout = 10000): Promise<GeoLocationResult> {
+export function getCurrentCoordinates(timeout = 7000): Promise<GeoLocationResult> {
   return new Promise((resolve, reject) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      const cached = loadCachedGeoFix();
+      if (cached) {
+        resolve(cached);
+        return;
+      }
       reject(new GeoLocationError('Geolocation is not supported by your browser', 0));
       return;
     }
 
     const handleSuccess = (pos: GeolocationPosition) => {
-      resolve({
+      const res: GeoLocationResult = {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         accuracy: pos.coords.accuracy,
-        timestamp: pos.timestamp,
-      });
+        timestamp: Date.now(),
+      };
+      saveCachedGeoFix(res);
+      resolve(res);
     };
 
     const handleFinalError = (err: GeolocationPositionError) => {
+      // If underground / in concrete parking where GPS & cell triangulation time out,
+      // fallback to recent cached GPS fix (within 45 mins) if permission was not denied
+      if (err.code !== err.PERMISSION_DENIED) {
+        const cached = loadCachedGeoFix(45 * 60 * 1000);
+        if (cached) {
+          resolve(cached);
+          return;
+        }
+      }
+
       let msg = 'Failed to obtain GPS coordinates';
       if (err.code === err.PERMISSION_DENIED) {
         msg = 'Permission to access location was denied';
@@ -68,15 +114,15 @@ export function getCurrentCoordinates(timeout = 10000): Promise<GeoLocationResul
           handleFinalError,
           {
             enableHighAccuracy: false,
-            timeout: Math.max(5000, timeout),
-            maximumAge: 60000,
+            timeout: Math.min(3500, timeout),
+            maximumAge: 15 * 60 * 1000,
           }
         );
       },
       {
         enableHighAccuracy: true,
-        timeout: Math.min(timeout, 7000),
-        maximumAge: 10000,
+        timeout: Math.min(timeout, 4000),
+        maximumAge: 30000,
       }
     );
   });

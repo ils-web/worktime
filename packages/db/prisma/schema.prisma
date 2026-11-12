@@ -69,18 +69,21 @@ enum TariffMode {
 }
 
 model Employee {
-  id        Int      @id @default(autoincrement())
-  clientId  String
-  empId     String   @unique // Public alphanumeric ID for /w/:empId
-  name      String
-  position  String?  // Job title / specialty (תפקיד / מקצוע)
-  isMobile             Boolean  @default(false)
-  strictGps            Boolean  @default(false)
-  multiSiteTransit     Boolean  @default(false)
-  autoCloseShift       Boolean  @default(false)
-  isGlobal             Boolean  @default(false)
+  id                   Int       @id @default(autoincrement())
+  clientId             String
+  empId                String    @unique // Public alphanumeric ID for /w/:empId
+  encryptedIdentity    String?   // AES-256-GCM encrypted ID in database
+  name                 String
+  phone                String?   // AES-256-GCM encrypted phone number in database
+  position             String?   // Job title / specialty (תפקיד / מקצוע)
+  isMobile             Boolean   @default(false)
+  strictGps            Boolean   @default(false)
+  multiSiteTransit     Boolean   @default(false)
+  autoCloseShift       Boolean   @default(false)
+  isGlobal             Boolean   @default(false)
   contractMonthlyHours Float?
-  createdAt            DateTime @default(now())
+  privacyConsentAt     DateTime? // Timestamp when worker accepted personal data processing terms
+  createdAt            DateTime  @default(now())
 
   geofence  Json?    // { lat, lng, radius, address } — null for mobile
   shifts    Json?    // Employee-level shift overrides

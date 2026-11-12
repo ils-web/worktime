@@ -20071,14 +20071,14 @@ var require_etag = __commonJS({
   "node_modules/etag/index.js"(exports2, module2) {
     "use strict";
     module2.exports = etag;
-    var crypto3 = require("crypto");
+    var crypto4 = require("crypto");
     var Stats = require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash = crypto3.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash = crypto4.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash + '"';
     }
@@ -22987,11 +22987,11 @@ var require_request = __commonJS({
 // node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "node_modules/cookie-signature/index.js"(exports2) {
-    var crypto3 = require("crypto");
+    var crypto4 = require("crypto");
     exports2.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if ("string" != typeof secret) throw new TypeError("Secret string must be provided.");
-      return val + "." + crypto3.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto4.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports2.unsign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Signed cookie string must be provided.");
@@ -23000,7 +23000,7 @@ var require_cookie_signature = __commonJS({
       return sha1(mac) == sha1(val) ? str : false;
     };
     function sha1(str) {
-      return crypto3.createHash("sha1").update(str).digest("hex");
+      return crypto4.createHash("sha1").update(str).digest("hex");
     }
   }
 });
@@ -30253,14 +30253,14 @@ var require_buffer_equal_constant_time = __commonJS({
 var require_jwa = __commonJS({
   "node_modules/jwa/index.js"(exports2, module2) {
     var Buffer2 = require_safe_buffer().Buffer;
-    var crypto3 = require("crypto");
+    var crypto4 = require("crypto");
     var formatEcdsa = require_ecdsa_sig_formatter();
     var util2 = require("util");
     var MSG_INVALID_ALGORITHM = '"%s" is not a valid algorithm.\n  Supported algorithms are:\n  "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512" and "none".';
     var MSG_INVALID_SECRET = "secret must be a string or buffer";
     var MSG_INVALID_VERIFIER_KEY = "key must be a string or a buffer";
     var MSG_INVALID_SIGNER_KEY = "key must be a string, a buffer or an object";
-    var supportsKeyObjects = typeof crypto3.createPublicKey === "function";
+    var supportsKeyObjects = typeof crypto4.createPublicKey === "function";
     if (supportsKeyObjects) {
       MSG_INVALID_VERIFIER_KEY += " or a KeyObject";
       MSG_INVALID_SECRET += "or a KeyObject";
@@ -30350,17 +30350,17 @@ var require_jwa = __commonJS({
       return function sign(thing, secret) {
         checkIsSecretKey(secret);
         thing = normalizeInput(thing);
-        var hmac = crypto3.createHmac("sha" + bits, secret);
+        var hmac = crypto4.createHmac("sha" + bits, secret);
         var sig = (hmac.update(thing), hmac.digest("base64"));
         return fromBase64(sig);
       };
     }
     var bufferEqual;
-    var timingSafeEqual = "timingSafeEqual" in crypto3 ? function timingSafeEqual2(a, b) {
+    var timingSafeEqual = "timingSafeEqual" in crypto4 ? function timingSafeEqual2(a, b) {
       if (a.byteLength !== b.byteLength) {
         return false;
       }
-      return crypto3.timingSafeEqual(a, b);
+      return crypto4.timingSafeEqual(a, b);
     } : function timingSafeEqual2(a, b) {
       if (!bufferEqual) {
         bufferEqual = require_buffer_equal_constant_time();
@@ -30377,7 +30377,7 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto3.createSign("RSA-SHA" + bits);
+        var signer = crypto4.createSign("RSA-SHA" + bits);
         var sig = (signer.update(thing), signer.sign(privateKey, "base64"));
         return fromBase64(sig);
       };
@@ -30387,7 +30387,7 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto3.createVerify("RSA-SHA" + bits);
+        var verifier = crypto4.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify(publicKey, signature, "base64");
       };
@@ -30396,11 +30396,11 @@ var require_jwa = __commonJS({
       return function sign(thing, privateKey) {
         checkIsPrivateKey(privateKey);
         thing = normalizeInput(thing);
-        var signer = crypto3.createSign("RSA-SHA" + bits);
+        var signer = crypto4.createSign("RSA-SHA" + bits);
         var sig = (signer.update(thing), signer.sign({
           key: privateKey,
-          padding: crypto3.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto3.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto4.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto4.constants.RSA_PSS_SALTLEN_DIGEST
         }, "base64"));
         return fromBase64(sig);
       };
@@ -30410,12 +30410,12 @@ var require_jwa = __commonJS({
         checkIsPublicKey(publicKey);
         thing = normalizeInput(thing);
         signature = toBase64(signature);
-        var verifier = crypto3.createVerify("RSA-SHA" + bits);
+        var verifier = crypto4.createVerify("RSA-SHA" + bits);
         verifier.update(thing);
         return verifier.verify({
           key: publicKey,
-          padding: crypto3.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: crypto3.constants.RSA_PSS_SALTLEN_DIGEST
+          padding: crypto4.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: crypto4.constants.RSA_PSS_SALTLEN_DIGEST
         }, signature, "base64");
       };
     }
@@ -96803,7 +96803,7 @@ authRouter.get("/me", authRequired, (req, res) => {
 
 // packages/api/src/routes/public.ts
 var import_express3 = __toESM(require_express2());
-var import_crypto2 = __toESM(require("crypto"));
+var import_crypto3 = __toESM(require("crypto"));
 var import_bcryptjs3 = __toESM(require_bcryptjs());
 
 // packages/shared/src/types/index.ts
@@ -97319,8 +97319,56 @@ function calculateClientBilling(params) {
 
 // packages/api/src/routes/client.ts
 var import_express2 = __toESM(require_express2());
-var import_crypto = __toESM(require("crypto"));
+var import_crypto2 = __toESM(require("crypto"));
 var import_bcryptjs2 = __toESM(require_bcryptjs());
+
+// packages/api/src/utils/encryption.ts
+var import_crypto = __toESM(require("crypto"));
+var ENCRYPTION_PREFIX = "enc:v1:";
+function getEncryptionKey() {
+  const rawSecret = process.env["DATA_ENCRYPTION_KEY"] || process.env["JWT_SECRET"] || "tickwork-aes-256-gcm-field-encryption-secret-key-2026";
+  return import_crypto.default.createHash("sha256").update(rawSecret).digest();
+}
+function encryptField(plainText) {
+  if (plainText === null || plainText === void 0) return null;
+  const trimmed = String(plainText).trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith(ENCRYPTION_PREFIX)) {
+    return trimmed;
+  }
+  const key = getEncryptionKey();
+  const iv = import_crypto.default.randomBytes(12);
+  const cipher = import_crypto.default.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(trimmed, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return `${ENCRYPTION_PREFIX}${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
+}
+function decryptField(storedValue) {
+  if (storedValue === null || storedValue === void 0) return null;
+  const trimmed = String(storedValue).trim();
+  if (!trimmed) return null;
+  if (!trimmed.startsWith(ENCRYPTION_PREFIX)) {
+    return trimmed;
+  }
+  try {
+    const payload = trimmed.slice(ENCRYPTION_PREFIX.length);
+    const [ivHex, authTagHex, cipherHex] = payload.split(":");
+    if (!ivHex || !authTagHex || !cipherHex) {
+      return null;
+    }
+    const key = getEncryptionKey();
+    const iv = Buffer.from(ivHex, "hex");
+    const authTag = Buffer.from(authTagHex, "hex");
+    const encrypted = Buffer.from(cipherHex, "hex");
+    const decipher = import_crypto.default.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(authTag);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return decrypted.toString("utf8");
+  } catch (err) {
+    console.error("Error decrypting field:", err);
+    return null;
+  }
+}
 
 // packages/api/src/services/csvReportService.ts
 var CSV_TRANSLATIONS = {
@@ -99062,6 +99110,7 @@ clientRouter.get("/employees", async (req, res) => {
       }
       return {
         ...emp,
+        phone: decryptField(emp.phone),
         isOnShift,
         lastLogAction: lastLog?.action ?? null,
         lastLogTime: activeClockInTime,
@@ -99081,6 +99130,7 @@ clientRouter.get("/employees", async (req, res) => {
 var createEmployeeSchema = external_exports.object({
   empId: external_exports.string().min(2),
   name: external_exports.string().min(2),
+  phone: external_exports.string().max(40).nullable().optional(),
   position: external_exports.string().max(120).nullable().optional(),
   isMobile: external_exports.boolean().default(false),
   strictGps: external_exports.boolean().default(false),
@@ -99129,7 +99179,9 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
       data: {
         clientId,
         empId: data.empId,
+        encryptedIdentity: encryptField(data.empId),
         name: data.name,
+        phone: encryptField(data.phone),
         position: cleanPosition,
         isMobile: data.isMobile,
         strictGps: data.strictGps,
@@ -99154,7 +99206,13 @@ clientRouter.post("/employees", requireRole("client", "foreman"), async (req, re
     if (cleanPosition) {
       await ensurePositionInClientList(clientId, cleanPosition);
     }
-    res.json({ success: true, employee: created });
+    res.json({
+      success: true,
+      employee: {
+        ...created,
+        phone: decryptField(created.phone)
+      }
+    });
   } catch (err) {
     if (err instanceof external_exports.ZodError) {
       res.status(400).json({ error: "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0435 \u043F\u043E\u043B\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u043E" });
@@ -99171,6 +99229,7 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
     const {
       name,
       newEmpId,
+      phone,
       position,
       isMobile,
       strictGps,
@@ -99233,7 +99292,9 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
       where: { id: employee.id },
       data: {
         empId: finalEmpId,
+        encryptedIdentity: encryptField(finalEmpId),
         ...name ? { name } : {},
+        ...phone !== void 0 ? { phone: encryptField(phone) } : {},
         ...cleanPosition !== void 0 ? { position: cleanPosition } : {},
         ...isMobile !== void 0 ? { isMobile } : {},
         ...strictGps !== void 0 ? { strictGps } : {},
@@ -99255,7 +99316,13 @@ clientRouter.put("/employees/:empId", requireRole("client", "foreman"), async (r
     if (cleanPosition) {
       await ensurePositionInClientList(clientId, cleanPosition);
     }
-    res.json({ success: true, employee: updated });
+    res.json({
+      success: true,
+      employee: {
+        ...updated,
+        phone: decryptField(updated.phone)
+      }
+    });
   } catch (err) {
     console.error("Update employee error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A\u0430" });
@@ -100457,7 +100524,7 @@ async function buildClientPayrollData(clientId, monthParam, foremanId) {
     ...shiftsObj.payrollConfig || {}
   };
   if (!payrollConfig.apiKey) {
-    const generatedKey = `tw_${clientId.slice(0, 6)}_${import_crypto.default.createHash("sha256").update(`${clientId}_payroll_secret`).digest("hex").slice(0, 20)}`;
+    const generatedKey = `tw_${clientId.slice(0, 6)}_${import_crypto2.default.createHash("sha256").update(`${clientId}_payroll_secret`).digest("hex").slice(0, 20)}`;
     payrollConfig = { ...payrollConfig, apiKey: generatedKey };
   }
   const activePayrollSystem = shiftsObj.activePayrollSystem || "michpal";
@@ -100514,7 +100581,7 @@ clientRouter.post("/integrations/config", requireRole("client"), async (req, res
       ...payrollConfig || {}
     };
     if (regenerateApiKey || !mergedConfig.apiKey) {
-      mergedConfig.apiKey = `tw_${clientId.slice(0, 6)}_${import_crypto.default.randomBytes(12).toString("hex")}`;
+      mergedConfig.apiKey = `tw_${clientId.slice(0, 6)}_${import_crypto2.default.randomBytes(12).toString("hex")}`;
     }
     const updatedShifts = {
       ...currentShifts,
@@ -100671,7 +100738,7 @@ publicRouter.get("/v1/payroll", async (req, res) => {
     const matchedClient = clients.find((c) => {
       const shifts = c.defaultShifts;
       const savedKey = shifts?.payrollConfig?.apiKey;
-      const defaultKey = `tw_${c.id.slice(0, 6)}_${import_crypto2.default.createHash("sha256").update(`${c.id}_payroll_secret`).digest("hex").slice(0, 20)}`;
+      const defaultKey = `tw_${c.id.slice(0, 6)}_${import_crypto3.default.createHash("sha256").update(`${c.id}_payroll_secret`).digest("hex").slice(0, 20)}`;
       return savedKey === apiKey || defaultKey === apiKey;
     });
     if (!matchedClient) {
@@ -101568,6 +101635,7 @@ workerRouter.get("/profile/:empId", async (req, res) => {
         autoCloseShift: employee.autoCloseShift ?? false,
         isGlobal: employee.isGlobal ?? false,
         contractMonthlyHours: employee.contractMonthlyHours ?? null,
+        privacyConsentAt: employee.privacyConsentAt ?? null,
         globalMonthlyStatus,
         geofence: employee.geofence,
         sites: sitesList,
@@ -101588,6 +101656,35 @@ workerRouter.get("/profile/:empId", async (req, res) => {
   } catch (err) {
     console.error("Worker profile error:", err);
     res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u043F\u0440\u043E\u0444\u0438\u043B\u044F" });
+  }
+});
+workerRouter.post("/consent", async (req, res) => {
+  try {
+    const { empId, acceptedAt } = req.body || {};
+    if (!empId || typeof empId !== "string") {
+      res.status(400).json({ error: "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D empId" });
+      return;
+    }
+    const employee = await prisma.employee.findUnique({ where: { empId } });
+    if (!employee) {
+      res.status(404).json({ error: "\u0421\u043E\u0442\u0440\u0443\u0434\u043D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+      return;
+    }
+    const consentTime = acceptedAt ? new Date(acceptedAt) : /* @__PURE__ */ new Date();
+    const updated = await prisma.employee.update({
+      where: { id: employee.id },
+      data: {
+        privacyConsentAt: employee.privacyConsentAt || consentTime,
+        ...!employee.encryptedIdentity ? { encryptedIdentity: encryptField(employee.empId) } : {}
+      }
+    });
+    res.json({
+      success: true,
+      privacyConsentAt: updated.privacyConsentAt
+    });
+  } catch (err) {
+    console.error("Worker consent error:", err);
+    res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0441\u043E\u0433\u043B\u0430\u0441\u0438\u044F" });
   }
 });
 var workerLogSchema = external_exports.object({

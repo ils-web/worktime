@@ -20,6 +20,7 @@ import {
   Share2,
   ChevronsRight,
   ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { api } from '../../lib/api';
@@ -61,6 +62,7 @@ interface WorkerProfile {
   isGlobal?: boolean;
   contractMonthlyHours?: number | null;
   globalMonthlyStatus?: GlobalMonthlyEvaluation | null;
+  privacyConsentAt?: string | null;
   geofence?: {
     lat: number;
     lng: number;
@@ -69,6 +71,62 @@ interface WorkerProfile {
   } | null;
   sites?: WorkerSite[];
   shifts?: any;
+}
+
+const PROFILE_CACHE_PREFIX = 'worktime_cached_profile_';
+const STATUS_CACHE_PREFIX = 'worktime_cached_status_';
+const CONSENT_LOCAL_PREFIX = 'worktime_consent_';
+const CONSENT_PENDING_PREFIX = 'worktime_pending_consent_';
+
+function loadCachedProfile(empId?: string): WorkerProfile | null {
+  if (!empId) return null;
+  try {
+    const raw = localStorage.getItem(`${PROFILE_CACHE_PREFIX}${empId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.empId === empId && parsed.name) {
+      return parsed as WorkerProfile;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return null;
+}
+
+function saveCachedProfile(empId: string, prof: WorkerProfile): void {
+  try {
+    localStorage.setItem(`${PROFILE_CACHE_PREFIX}${empId}`, JSON.stringify(prof));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function loadCachedStatus(empId?: string): WorkerStatus {
+  const defaultStatus: WorkerStatus = {
+    isOnShift: false,
+    lastAction: null,
+    lastActionTime: null,
+  };
+  if (!empId) return defaultStatus;
+  try {
+    const raw = localStorage.getItem(`${STATUS_CACHE_PREFIX}${empId}`);
+    if (!raw) return defaultStatus;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.isOnShift === 'boolean') {
+      return parsed as WorkerStatus;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return defaultStatus;
+}
+
+function saveCachedStatus(empId: string, st: WorkerStatus): void {
+  try {
+    localStorage.setItem(`${STATUS_CACHE_PREFIX}${empId}`, JSON.stringify(st));
+  } catch {
+    // ignore storage errors
+  }
 }
 
 interface WorkerStatus {
@@ -248,14 +306,21 @@ export function WorkerAppPage() {
   const { t, i18n } = useTranslation();
 
   const [activeTab, setActiveTab] = useState<'clock' | 'history' | 'notes'>('clock');
-  const [profile, setProfile] = useState<WorkerProfile | null>(null);
-  const [status, setStatus] = useState<WorkerStatus>({
-    isOnShift: false,
-    lastAction: null,
-    lastActionTime: null,
-  });
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [profile, setProfile] = useState<WorkerProfile | null>(() => loadCachedProfile(empId));
+  const [status, setStatus] = useState<WorkerStatus>(() => loadCachedStatus(empId));
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(() => !loadCachedProfile(empId));
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [hasPrivacyConsent, setHasPrivacyConsent] = useState<boolean>(() => {
+    if (!empId) return true;
+    try {
+      const localConsent = localStorage.getItem(`${CONSENT_LOCAL_PREFIX}${empId}`);
+      if (localConsent) return true;
+      const cached = loadCachedProfile(empId);
+      if (cached?.privacyConsentAt) return true;
+    } catch {}
+    return false;
+  });
+  const [isAcceptingConsent, setIsAcceptingConsent] = useState(false);
 
   // Network & Offline Queue
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -417,34 +482,109 @@ export function WorkerAppPage() {
     }
   }, [empId]);
 
-  // 2. Fetch worker profile
+  // 2. Fetch worker profile (with local cache instant startup & 4.5s dead-zone timeout)
+  const profileRef = useRef<WorkerProfile | null>(profile);
+  profileRef.current = profile;
+
   const fetchProfile = useCallback(async () => {
     if (!empId) return;
-    try {
+    if (!profileRef.current) {
       setIsLoadingProfile(true);
-      setProfileError(null);
+    }
+    setProfileError(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+    try {
       const res = await api.get<{
         success: boolean;
         employee: WorkerProfile;
         status: WorkerStatus;
-      }>(`/api/worker/profile/${empId}`);
+      }>(`/api/worker/profile/${empId}`, { signal: controller.signal });
 
+      setIsOnline(true);
       setProfile(res.employee);
-      setStatus(res.status);
-      setScheduledEndTime(res.status.scheduledEndTime ?? null);
-      if (res.status.autoClosedDueToStrictGps) {
-        setAutoCloseReason('STRICT_GPS');
-        setShowAutoCloseAlert(true);
-      } else if (res.status.autoClosedDueToShiftEnd) {
-        setAutoCloseReason('SCHEDULE');
-        setShowAutoCloseAlert(true);
+      saveCachedProfile(empId, res.employee);
+
+      if (res.employee.privacyConsentAt) {
+        try {
+          localStorage.setItem(`${CONSENT_LOCAL_PREFIX}${empId}`, res.employee.privacyConsentAt);
+        } catch {}
+        setHasPrivacyConsent(true);
+      }
+
+      // Only overwrite local shift status if there are no unsynced offline logs waiting to flush
+      const pendingCnt = await getPendingCount(empId);
+      if (pendingCnt === 0) {
+        setStatus(res.status);
+        saveCachedStatus(empId, res.status);
+        setScheduledEndTime(res.status.scheduledEndTime ?? null);
+        if (res.status.autoClosedDueToStrictGps) {
+          setAutoCloseReason('STRICT_GPS');
+          setShowAutoCloseAlert(true);
+        } else if (res.status.autoClosedDueToShiftEnd) {
+          setAutoCloseReason('SCHEDULE');
+          setShowAutoCloseAlert(true);
+        }
       }
     } catch (err: any) {
-      setProfileError(err.message || 'Worker not found');
+      // If we already have a cached profile locally (e.g. underground parking lot), keep working seamlessly!
+      if (profileRef.current) {
+        if (
+          err.name === 'AbortError' ||
+          err.message?.includes('aborted') ||
+          err.message?.includes('network') ||
+          err.message?.includes('Failed to fetch') ||
+          !navigator.onLine
+        ) {
+          setIsOnline(false);
+        }
+      } else {
+        setProfileError(err.message || 'Worker not found');
+      }
     } finally {
+      clearTimeout(timeoutId);
       setIsLoadingProfile(false);
     }
   }, [empId]);
+
+  const handleAcceptPrivacyConsent = async () => {
+    if (!empId || isAcceptingConsent) return;
+    setIsAcceptingConsent(true);
+    const acceptedAt = new Date().toISOString();
+
+    try {
+      localStorage.setItem(`${CONSENT_LOCAL_PREFIX}${empId}`, acceptedAt);
+    } catch {}
+    setHasPrivacyConsent(true);
+
+    if (profileRef.current) {
+      const updated = { ...profileRef.current, privacyConsentAt: acceptedAt };
+      setProfile(updated);
+      saveCachedProfile(empId, updated);
+    }
+
+    try {
+      const controller = new AbortController();
+      const tId = setTimeout(() => controller.abort(), 4500);
+      await api.post(
+        '/api/worker/consent',
+        { empId, acceptedAt },
+        { signal: controller.signal }
+      );
+      clearTimeout(tId);
+      try {
+        localStorage.removeItem(`${CONSENT_PENDING_PREFIX}${empId}`);
+      } catch {}
+    } catch {
+      try {
+        localStorage.setItem(`${CONSENT_PENDING_PREFIX}${empId}`, acceptedAt);
+      } catch {}
+    } finally {
+      setIsAcceptingConsent(false);
+    }
+  };
 
   useEffect(() => {
     fetchProfile();
@@ -481,6 +621,18 @@ export function WorkerAppPage() {
     if (!navigator.onLine || isSyncing) return;
     setIsSyncing(true);
     try {
+      // Flush any pending offline privacy consent first
+      try {
+        const pendingConsent = localStorage.getItem(`${CONSENT_PENDING_PREFIX}${targetEmpId}`);
+        if (pendingConsent) {
+          await api.post('/api/worker/consent', {
+            empId: targetEmpId,
+            acceptedAt: pendingConsent,
+          });
+          localStorage.removeItem(`${CONSENT_PENDING_PREFIX}${targetEmpId}`);
+        }
+      } catch {}
+
       const res = await flushOfflineQueue(targetEmpId, async (logs: OfflineLogItem[]) => {
         try {
           const syncRes = await api.post<{ success: boolean; count: number }>(
@@ -517,8 +669,6 @@ export function WorkerAppPage() {
   };
 
   // 5. GPS Location Check
-  const profileRef = useRef<WorkerProfile | null>(null);
-  profileRef.current = profile;
 
   const refreshLocation = useCallback(async () => {
     setIsLocating(true);
@@ -675,16 +825,22 @@ export function WorkerAppPage() {
       }
     }
 
-    // If CLOCK_IN, enforce GPS requirement and geofence boundary locally
+    // On manual CLOCK_OUT or offline CLOCK_IN: attach appropriate note
+    let effectiveNote = customNote;
+
+    // If CLOCK_IN, enforce GPS requirement and geofence boundary locally (unless in an offline underground zone without GPS)
     if (action === 'CLOCK_IN' && profile && !profile.isMobile) {
       const hasGeofenceConfig = (profile.sites && profile.sites.length > 0) || Boolean(profile.geofence);
       if (hasGeofenceConfig) {
         if (!activeGeo) {
-          alert(t('worker.geoDenied'));
-          setIsSubmittingAction(false);
-          return;
-        }
-        if (activeEval && !activeEval.isInside) {
+          if (!isOnline || !navigator.onLine) {
+            effectiveNote = effectiveNote || 'Вход в офлайн-зоне (подземный паркинг / слабый сигнал GPS)';
+          } else {
+            alert(t('worker.geoDenied'));
+            setIsSubmittingAction(false);
+            return;
+          }
+        } else if (activeEval && !activeEval.isInside) {
           alert(
             t('worker.geoOutBlock', {
               dist: activeEval.distanceMeters,
@@ -697,8 +853,6 @@ export function WorkerAppPage() {
       }
     }
 
-    // On manual CLOCK_OUT: if non-mobile worker is outside site geofence or without GPS, attach departure note
-    let effectiveNote = customNote;
     if (action === 'CLOCK_OUT' && profile && !profile.isMobile && !effectiveNote) {
       if (activeEval && !activeEval.isInside) {
         const targetSite = activeEval.targetName ? ` "${activeEval.targetName}"` : '';
@@ -732,11 +886,13 @@ export function WorkerAppPage() {
         note: effectiveNote,
       });
 
-      setStatus({
+      const nextOfflineStatus: WorkerStatus = {
         isOnShift: action === 'CLOCK_IN',
         lastAction: action,
         lastActionTime: actionTime,
-      });
+      };
+      setStatus(nextOfflineStatus);
+      saveCachedStatus(empId, nextOfflineStatus);
 
       if (action === 'CLOCK_IN') {
         setShowClockInConfirm(false);
@@ -756,7 +912,9 @@ export function WorkerAppPage() {
       return;
     }
 
-    // Online: Send direct API request
+    // Online: Send direct API request (with 5s timeout for dead-zone underground signal)
+    const logController = new AbortController();
+    const logTimeoutId = setTimeout(() => logController.abort(), 5000);
     try {
       const res = await api.post<{
         success: boolean;
@@ -764,29 +922,37 @@ export function WorkerAppPage() {
         shiftStartTime?: string;
         transitResumed?: { fromSite: string; toSite: string; transitMinutes: number } | null;
         todaySummary?: any;
-      }>('/api/worker/log', {
-        empId,
-        action,
-        lat,
-        lng,
-        note: effectiveNote,
-      });
+      }>(
+        '/api/worker/log',
+        {
+          empId,
+          action,
+          lat,
+          lng,
+          note: effectiveNote,
+        },
+        { signal: logController.signal }
+      );
 
       if (res.success) {
-        setStatus((prev) => ({
-          ...prev,
-          isOnShift: action === 'CLOCK_IN',
-          lastAction: res.log?.action || action,
-          lastActionTime: res.shiftStartTime || res.log.dateTime,
-          ...(action === 'CLOCK_IN'
-            ? {
-                lastExitedSiteName: null,
-                activeSiteName: res.transitResumed?.toSite || activeEval?.targetName || prev.activeSiteName,
-              }
-            : {
-                activeSiteName: null,
-              }),
-        }));
+        setStatus((prev) => {
+          const nextOnlineStatus: WorkerStatus = {
+            ...prev,
+            isOnShift: action === 'CLOCK_IN',
+            lastAction: res.log?.action || action,
+            lastActionTime: res.shiftStartTime || res.log.dateTime,
+            ...(action === 'CLOCK_IN'
+              ? {
+                  lastExitedSiteName: null,
+                  activeSiteName: res.transitResumed?.toSite || activeEval?.targetName || prev.activeSiteName,
+                }
+              : {
+                  activeSiteName: null,
+                }),
+          };
+          saveCachedStatus(empId, nextOnlineStatus);
+          return nextOnlineStatus;
+        });
         refreshLocation();
 
         if (action === 'CLOCK_IN') {
@@ -835,22 +1001,31 @@ export function WorkerAppPage() {
         }
       }
     } catch (err: any) {
-      // If network failed during online attempt, gracefully fallback to offline queue
-      if (err.message?.includes('network') || err.message?.includes('Failed to fetch') || !navigator.onLine) {
+      // If network failed or timed out during online attempt (e.g. underground parking lot), gracefully fallback to offline queue
+      if (
+        err.name === 'AbortError' ||
+        err.message?.includes('aborted') ||
+        err.message?.includes('network') ||
+        err.message?.includes('Failed to fetch') ||
+        !navigator.onLine
+      ) {
+        setIsOnline(false);
         await enqueueOfflineLog({
           empId,
           action,
           lat,
           lng,
           dateTime: actionTime,
-          note: effectiveNote,
+          note: effectiveNote || (action === 'CLOCK_IN' && !activeGeo ? 'Вход в офлайн-зоне (слабый сигнал)' : undefined),
         });
 
-        setStatus({
+        const nextOfflineStatus: WorkerStatus = {
           isOnShift: action === 'CLOCK_IN',
           lastAction: action,
           lastActionTime: actionTime,
-        });
+        };
+        setStatus(nextOfflineStatus);
+        saveCachedStatus(empId, nextOfflineStatus);
 
         if (action === 'CLOCK_IN') {
           setShowClockInConfirm(false);
@@ -870,6 +1045,7 @@ export function WorkerAppPage() {
         alert(err.message || 'Error recording shift action');
       }
     } finally {
+      clearTimeout(logTimeoutId);
       setIsSubmittingAction(false);
     }
   };
@@ -2114,6 +2290,103 @@ export function WorkerAppPage() {
             } active:scale-98 font-bold rounded-xl transition text-sm shadow-lg`}
           >
             {t('worker.shiftCompleteOk')}
+          </button>
+        </div>
+      </Modal>
+
+      {/* 5. Modal: First-Launch Personal Data & Encryption Consent */}
+      <Modal
+        isOpen={!hasPrivacyConsent && Boolean(profile)}
+        onClose={() => {}}
+        title={
+          i18n.language?.startsWith('he')
+            ? 'אבטחת מידע והגנת הפרטיות'
+            : i18n.language?.startsWith('en')
+            ? 'Data Privacy & Encryption Notice'
+            : i18n.language?.startsWith('ar')
+            ? 'حماية البيانات والخصوصية'
+            : 'Защита персональных данных'
+        }
+      >
+        <div className="py-2 space-y-4">
+          {/* Language Switcher inside Consent Modal */}
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-1 bg-slate-800 p-1 rounded-xl border border-slate-700/60">
+              <Globe className="w-3.5 h-3.5 text-slate-400 ml-1 mr-0.5" />
+              {(['ru', 'he', 'en', 'ar'] as const).map((lang) => (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => changeLanguage(lang)}
+                  className={`px-2.5 py-0.5 text-xs font-bold rounded-lg transition ${
+                    i18n.language === lang
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {lang.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 mx-auto flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/10">
+            <Lock className="w-7 h-7" />
+          </div>
+
+          <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+            <p className="text-center font-semibold text-white text-sm">
+              {i18n.language?.startsWith('he')
+                ? `שלום, ${profile.name}!`
+                : i18n.language?.startsWith('en')
+                ? `Welcome, ${profile.name}!`
+                : i18n.language?.startsWith('ar')
+                ? `مرحباً، ${profile.name}!`
+                : `Здравствуйте, ${profile.name}!`}
+            </p>
+
+            <div className="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-2.5">
+              <p>
+                {i18n.language?.startsWith('he')
+                  ? 'בעת החיבור והשימוש במערכת TickWork, הנתונים האישיים שלך (שם, מזהה עובד, מספר טלפון, שעות עבודה ומיקום GPS בעת דיווח כניסה/יציאה) מעובדים ונשמרים במסד הנתונים לצורך תיעוד משמרות וחישוב שכר בלבד.'
+                  : i18n.language?.startsWith('en')
+                  ? 'By connecting and using the TickWork system, your personal data (name, employee ID, phone number, work hours, and GPS coordinates during shift check-in/out) is processed and stored in the database solely for attendance tracking and payroll calculation.'
+                  : i18n.language?.startsWith('ar')
+                  ? 'عند الاتصال واستخدام نظام TickWork، تتم معالجة بياناتك الشخصية (الاسم، معرف الموظف، رقم الهاتف، ساعات العمل، وإحداثيات GPS عند تسجيل الدخول/الخروج) وتخزينها في قاعدة البيانات لغرض تتبع الدوام وحساب الرواتب فقط.'
+                  : 'Подключаясь к системе TickWork, вы даёте согласие на обработку и хранение ваших персональных данных (имя, табельный ID, номер телефона, отработанные часы и геолокация в момент отметки смены) в базе данных исключительно для учёта рабочего времени и расчёта зарплаты.'}
+              </p>
+
+              <div className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/30 flex items-start gap-2.5 text-emerald-200">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <span className="text-[11px] font-medium">
+                  {i18n.language?.startsWith('he')
+                    ? 'המזהה האישי (ID) ומספר הטלפון שלך נשמרים במסד הנתונים בצורה מוצפנת (AES-256) ואינם מועברים לעולם לצדדים שלישיים.'
+                    : i18n.language?.startsWith('en')
+                    ? 'Your personal ID and phone number are stored in the database in encrypted form (AES-256) and are never shared with third parties.'
+                    : i18n.language?.startsWith('ar')
+                    ? 'يتم تخزين معرفك الشخصي (ID) ورقم هاتفك في قاعدة البيانات بشكل مشفر (AES-256) ولا تتم مشاركتها أبداً مع أي طرف ثالث.'
+                    : 'Ваш персональный ID и номер телефона хранятся в базе данных в зашифрованном виде (AES-256) и никогда не передаются третьим лицам.'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAcceptPrivacyConsent}
+            disabled={isAcceptingConsent}
+            className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 active:scale-98 text-slate-950 font-black rounded-xl text-sm shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>
+              {i18n.language?.startsWith('he')
+                ? 'אני מסכים/ה, המשך לעבודה'
+                : i18n.language?.startsWith('en')
+                ? 'I Agree & Continue'
+                : i18n.language?.startsWith('ar')
+                ? 'أوافق وأتابع'
+                : 'Согласен, продолжить'}
+            </span>
           </button>
         </div>
       </Modal>

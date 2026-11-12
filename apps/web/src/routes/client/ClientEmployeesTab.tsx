@@ -25,6 +25,9 @@ import {
   CalendarCheck,
   Briefcase,
   Share2,
+  Phone,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import { normalizePositionsList } from '@timetracker/shared';
 
@@ -45,6 +48,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
   const [form, setForm] = useState({
     empId: '',
     name: '',
+    phone: '',
     positionMode: '',
     customPosition: '',
     isMobile: false,
@@ -65,6 +69,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
   const [editForm, setEditForm] = useState({
     name: '',
     newEmpId: '',
+    phone: '',
     positionMode: '',
     customPosition: '',
     isMobile: false,
@@ -112,6 +117,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
       setForm({
         empId: '',
         name: '',
+        phone: '',
         positionMode: '',
         customPosition: '',
         isMobile: false,
@@ -170,6 +176,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     (e) =>
       e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       e.empId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (e.phone && e.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (e.position && e.position.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
@@ -180,10 +187,26 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const shareWhatsAppLink = (emp: { empId: string; name: string }) => {
+  const shareWhatsAppLink = (emp: { empId: string; name: string; phone?: string | null }) => {
     const url = `${window.location.origin}/w/${emp.empId}`;
     const text = `שלום ${emp.name}! הנה הקישור האישי שלך לדיווח שעות ב-TickWork:\nЗдравствуйте, ${emp.name}! Ваша персональная ссылка для отметки смен:\n${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+    let phoneParam = '';
+    if (emp.phone) {
+      let digits = emp.phone.replace(/\D/g, '');
+      if (digits.startsWith('05') && digits.length === 10) {
+        digits = '972' + digits.slice(1);
+      } else if (digits.startsWith('5') && digits.length === 9) {
+        digits = '972' + digits;
+      }
+      if (digits.length >= 9) {
+        phoneParam = digits;
+      }
+    }
+    window.open(
+      `https://wa.me/${phoneParam}?text=${encodeURIComponent(text)}`,
+      '_blank',
+      'noopener,noreferrer'
+    );
   };
 
   return (
@@ -255,11 +278,31 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                     <tr key={emp.id} className="hover:bg-slate-800/40 transition">
                       <td className="p-4">
                         <div className="font-semibold text-white">{emp.name}</div>
+                        {emp.phone && (
+                          <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                            <Phone className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <span>{emp.phone}</span>
+                            <span title="Хранится в зашифрованном виде (AES-256)">
+                              <Lock className="w-2.5 h-2.5 text-emerald-500/80" />
+                            </span>
+                          </div>
+                        )}
                         {emp.position && (
                           <div className="mt-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
                               <Briefcase className="w-3 h-3 text-emerald-400 shrink-0" />
                               <span>{emp.position}</span>
+                            </span>
+                          </div>
+                        )}
+                        {emp.privacyConsentAt && (
+                          <div className="mt-1">
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-teal-500/10 text-teal-300 border border-teal-500/25"
+                              title={`Согласие на обработку данных получено: ${new Date(emp.privacyConsentAt).toLocaleString()}`}
+                            >
+                              <ShieldCheck className="w-3 h-3 text-teal-400 shrink-0" />
+                              <span>Согласие получено</span>
                             </span>
                           </div>
                         )}
@@ -420,6 +463,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                               setEditForm({
                                 name: emp.name,
                                 newEmpId: emp.empId,
+                                phone: emp.phone || '',
                                 positionMode: isPredefinedPos ? existingPos : '__OTHER__',
                                 customPosition: isPredefinedPos ? '' : existingPos,
                                 isMobile: !!emp.isMobile,
@@ -512,6 +556,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
             createMutation.mutate({
               empId: form.empId,
               name: form.name,
+              phone: form.phone.trim() || null,
               position: resolvedPosition || null,
               isMobile: form.isMobile,
               strictGps: form.strictGps,
@@ -560,6 +605,27 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 placeholder="E101"
               />
             </div>
+          </div>
+
+          {/* Phone Number (Encrypted AES-256) */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Номер телефона / מספר טלפון</span>
+              </span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400/90">
+                <Lock className="w-2.5 h-2.5" />
+                <span>Шифрование AES-256</span>
+              </span>
+            </label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="050-000-0000"
+            />
           </div>
 
           {/* Position / Specialty (תפקיד / מקצוע) */}
@@ -937,6 +1003,7 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                 body: {
                   name: editForm.name,
                   newEmpId: editForm.newEmpId,
+                  phone: editForm.phone.trim() || null,
                   position: resolvedPosition || null,
                   isMobile: editForm.isMobile,
                   strictGps: editForm.strictGps,
@@ -986,6 +1053,27 @@ export function ClientEmployeesTab({ userRole }: ClientEmployeesTabProps) {
                   className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
                 />
               </div>
+            </div>
+
+            {/* Phone Number (Encrypted AES-256) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Номер телефона / מספר טלפון</span>
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400/90">
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>Шифрование AES-256</span>
+                </span>
+              </label>
+              <input
+                type="tel"
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder="050-000-0000"
+              />
             </div>
 
             {/* Position / Specialty (תפקיד / מקצוע) */}
