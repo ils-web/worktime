@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   Loader2,
   Video,
+  Lock,
 } from 'lucide-react';
 
 type PresLang = 'ru' | 'he' | 'en';
@@ -39,7 +40,8 @@ interface SlideItem {
     | 'gps_modes'
     | 'labor_law'
     | 'global_norm'
-    | 'reports';
+    | 'reports'
+    | 'security';
 }
 
 const SLIDES_DATA: Record<PresLang, SlideItem[]> = {
@@ -188,6 +190,24 @@ const SLIDES_DATA: Record<PresLang, SlideItem[]> = {
       accentColor: 'emerald',
       mockupType: 'reports',
     },
+    {
+      id: 9,
+      badge: 'БЕЗОПАСНОСТЬ И КОНФИДЕНЦИАЛЬНОСТЬ • AES-256',
+      title: 'Все данные зашифрованы и ни при каких условиях никому не передаются',
+      subtitle:
+        'Максимальная защита персональных данных работников и коммерческой тайны вашей компании.',
+      bullets: [
+        'Банковское шифрование AES-256-GCM: табельные ID и номера телефонов хранятся в базе данных только в зашифрованном виде',
+        'Строгое соглашение: данные никогда и ни при каких обстоятельствах не передаются третьим лицам или внешним сервисам',
+        'Юридическая фиксация: при первом входе работник подтверждает согласие на обработку данных для расчёта зарплаты с записью времени',
+        'Полная конфиденциальность: доступ к данным есть исключительно у авторизованного руководства компании',
+      ],
+      highlightTitle: 'Стандарт шифрования',
+      highlightValue: 'AES-256',
+      highlightDesc: '100% конфиденциальность • Данные защищены и никому не передаются',
+      accentColor: 'emerald',
+      mockupType: 'security',
+    },
   ],
   he: [
     {
@@ -334,6 +354,24 @@ const SLIDES_DATA: Record<PresLang, SlideItem[]> = {
       accentColor: 'emerald',
       mockupType: 'reports',
     },
+    {
+      id: 9,
+      badge: 'אבטחת מידע והגנת פרטיות • AES-256',
+      title: 'כל הנתונים מוצפנים ולעולם אינם מועברים לאף גורם חיצוני',
+      subtitle:
+        'הגנה מקסימלית על המידע האישי של העובדים ועל הסודיות המסחרית של החברה שלך.',
+      bullets: [
+        'הצפנה מתקדמת בתקן בנקאי AES-256-GCM: תעודות זהות ומספרי טלפון נשמרים במסד הנתונים אך ורק בצורה מוצפנת',
+        'אי-העברת נתונים: המידע אינו נמכר, אינו משותף ואינו מועבר לצדדים שלישיים בשום פנים ואופן',
+        'הסכמת פרטיות מתועדת: בכניסה הראשונה העובד מאשר את עיבוד הנתונים לצורך שכר בלבד עם חותמת זמן מדויקת',
+        'סודיות מוחלטת: גישה לדוחות ולשעות מורשית אך ורק למנהלים המוסמכים של החברה',
+      ],
+      highlightTitle: 'תקן הצפנה מאובטח',
+      highlightValue: 'AES-256',
+      highlightDesc: '100% סודיות ואבטחה • המידע נשמר מוצפן ולעולם אינו מועבר לצד ג׳',
+      accentColor: 'emerald',
+      mockupType: 'security',
+    },
   ],
   en: [
     {
@@ -479,6 +517,24 @@ const SLIDES_DATA: Record<PresLang, SlideItem[]> = {
       highlightDesc: 'Michpal • Shiklolit • Priority • Rivhit • Hilan • Har-Gal • Okez • Excel • API',
       accentColor: 'emerald',
       mockupType: 'reports',
+    },
+    {
+      id: 9,
+      badge: 'SECURITY & PRIVACY • AES-256',
+      title: 'All Data is Encrypted & Strictly Never Shared with Anyone',
+      subtitle:
+        'Bank-grade privacy protection for employee personal information and company records.',
+      bullets: [
+        'AES-256-GCM Encryption: personal IDs and phone numbers are stored encrypted at rest in the database',
+        'Strict Privacy Guarantee: employee data is never sold, disclosed, or transferred to any third party under any circumstances',
+        'Verified Employee Consent: workers explicitly review and accept data processing terms on first launch with timestamp audit',
+        'Confidential & Compliant: only authorized company administrators have access to your shift and payroll reports',
+      ],
+      highlightTitle: 'Encryption Standard',
+      highlightValue: 'AES-256',
+      highlightDesc: '100% Confidential • Data is encrypted and never shared with 3rd parties',
+      accentColor: 'emerald',
+      mockupType: 'security',
     },
   ],
 };
@@ -1097,6 +1153,46 @@ export function PresentationPage() {
             </div>
           </div>
         );
+
+      case 'security':
+        return (
+          <div className="bg-slate-950/90 border border-emerald-500/40 rounded-2xl p-4 space-y-3 shadow-lg shadow-emerald-950/30">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-bold text-white">AES-256-GCM Vault</span>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                ENCRYPTED
+              </span>
+            </div>
+
+            <div className="space-y-1.5 font-mono text-[11px]">
+              <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between">
+                <span className="text-slate-400">Employee ID:</span>
+                <span className="text-emerald-400 font-semibold truncate max-w-[190px]">
+                  enc:v1:9a8f...4e21 (AES)
+                </span>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between">
+                <span className="text-slate-400">Phone:</span>
+                <span className="text-emerald-400 font-semibold truncate max-w-[190px]">
+                  enc:v1:7f3b...11a9 (AES)
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs text-emerald-200">
+              <span className="flex items-center gap-1.5 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Никакой передачи третьим лицам</span>
+              </span>
+              <span className="font-bold text-emerald-400">100% Защита</span>
+            </div>
+          </div>
+        );
     }
   };
 
@@ -1216,7 +1312,7 @@ export function PresentationPage() {
       {/* 2. Main Animated Video Card Stage */}
       <main className="relative z-10 flex-1 flex flex-col justify-start pt-3 sm:pt-5 pb-6 max-w-6xl w-full mx-auto px-4 sm:px-8">
         {/* Top Segmented Video Story Progress Bar */}
-        <div className="grid grid-cols-8 gap-1.5 mb-5 shrink-0" dir="ltr">
+        <div className="grid grid-cols-9 gap-1.5 mb-5 shrink-0" dir="ltr">
           {slides.map((s, idx) => {
             const pct =
               idx < currentIdx ? 100 : idx === currentIdx ? slideProgress : 0;

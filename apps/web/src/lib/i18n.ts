@@ -441,6 +441,7 @@ export const resources = {
           offline: 'Офлайн-режим на IndexedDB',
           qr: 'Вход по QR без паролей',
           reports: 'Табели в PDF/CSV за 1 клик',
+          security: 'Шифрование AES-256 • Данные защищены и не передаются',
         },
         features: {
           tag: 'Возможности системы',
@@ -965,6 +966,7 @@ export const resources = {
           offline: 'Offline mode with IndexedDB',
           qr: 'Instant QR login without passwords',
           reports: '1-click PDF & CSV timesheets',
+          security: 'AES-256 Encryption • 100% Confidential',
         },
         features: {
           tag: 'System Capabilities',
@@ -1489,6 +1491,7 @@ export const resources = {
           offline: 'מצב אופליין מלא מבוסס IndexedDB',
           qr: 'כניסה מהירה ב-QR ללא סיסמאות',
           reports: 'דוחות PDF ו-Excel בקליק אחד',
+          security: 'הצפנת AES-256 • מידע מאובטח ואינו מועבר לצד ג׳',
         },
         features: {
           tag: 'יכולות המערכת',
@@ -2008,6 +2011,7 @@ export const resources = {
           offline: 'وضع عدم الاتصال عبر IndexedDB',
           qr: 'تسجيل سريع عبر QR بدون كلمات مرور',
           reports: 'تقارير PDF وExcel بنقرة واحدة',
+          security: 'تشفير AES-256 • بيانات مشفرة وسرية 100%',
         },
         features: {
           tag: 'مميزات النظام',

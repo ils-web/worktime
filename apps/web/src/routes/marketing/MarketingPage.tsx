@@ -17,6 +17,7 @@ import {
   Check,
   Globe,
   Play,
+  Lock,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { changeLanguage } from '../../lib/i18n';
@@ -279,6 +280,33 @@ export function MarketingPage() {
               <span className="text-xs font-semibold text-slate-300">{t('marketing.badges.reports')}</span>
             </div>
           </div>
+
+          {/* Privacy & AES-256 Encryption Banner */}
+          <div className="mt-6 max-w-4xl mx-auto p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-slate-900/90 to-teal-950/70 border border-emerald-500/35 flex items-center justify-center gap-3 text-start shadow-lg">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center justify-center shrink-0">
+              <Lock className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="text-xs sm:text-sm text-slate-200">
+              <span className="font-bold text-emerald-300">
+                {currentLang === 'he'
+                  ? 'אבטחת מידע והגנת פרטיות מקסימלית (AES-256):'
+                  : currentLang === 'en'
+                    ? 'Maximum Data Security & Privacy (AES-256):'
+                    : currentLang === 'ar'
+                      ? 'أقصى درجات أمان وخصوصية البيانات (AES-256):'
+                      : 'Максимальная безопасность и защита данных (AES-256):'}
+              </span>{' '}
+              <span className="text-slate-300">
+                {currentLang === 'he'
+                  ? 'כל המזהים ומספרי הטלפון נשמרים במסד הנתונים בצורה מוצפנת ומאובטחת, ואינם מועברים לעולם לאף גורם חיצוני.'
+                  : currentLang === 'en'
+                    ? 'All personal IDs and phone numbers are encrypted in the database and strictly never shared with any third parties.'
+                    : currentLang === 'ar'
+                      ? 'يتم تخزين المعرفات الشخصية وأرقام الهواتف مشفرة تماماً في قاعدة البيانات ولا تتم مشاركتها إطلاقاً مع أي طرف ثالث.'
+                      : 'Все персональные ID и номера телефонов хранятся в базе данных в зашифрованном виде и ни при каких обстоятельствах никому не передаются.'}
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -294,17 +322,19 @@ export function MarketingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Feature 1 */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-8 relative hover:border-slate-700 transition">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-6">
-                <ShieldCheck className="w-7 h-7" />
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-7 relative hover:border-slate-700 transition flex flex-col justify-between">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-5">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">{t('marketing.features.f1Title')}</h3>
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mb-4">
+                  {t('marketing.features.f1Desc')}
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">{t('marketing.features.f1Title')}</h3>
-              <p className="text-sm text-slate-400 leading-relaxed mb-4">
-                {t('marketing.features.f1Desc')}
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300">
+              <ul className="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800/60">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>{t('marketing.features.f1Point1')}</span>
@@ -317,15 +347,17 @@ export function MarketingPage() {
             </div>
 
             {/* Feature 2 */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-8 relative hover:border-slate-700 transition">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-6">
-                <Smartphone className="w-7 h-7" />
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-7 relative hover:border-slate-700 transition flex flex-col justify-between">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-5">
+                  <Smartphone className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">{t('marketing.features.f2Title')}</h3>
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mb-4">
+                  {t('marketing.features.f2Desc')}
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">{t('marketing.features.f2Title')}</h3>
-              <p className="text-sm text-slate-400 leading-relaxed mb-4">
-                {t('marketing.features.f2Desc')}
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300">
+              <ul className="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800/60">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
                   <span>{t('marketing.features.f2Point1')}</span>
@@ -338,15 +370,17 @@ export function MarketingPage() {
             </div>
 
             {/* Feature 3 */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-8 relative hover:border-slate-700 transition">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mb-6">
-                <FileSpreadsheet className="w-7 h-7" />
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 sm:p-7 relative hover:border-slate-700 transition flex flex-col justify-between">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mb-5">
+                  <FileSpreadsheet className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">{t('marketing.features.f3Title')}</h3>
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mb-4">
+                  {t('marketing.features.f3Desc')}
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">{t('marketing.features.f3Title')}</h3>
-              <p className="text-sm text-slate-400 leading-relaxed mb-4">
-                {t('marketing.features.f3Desc')}
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300">
+              <ul className="space-y-2 text-xs text-slate-300 pt-2 border-t border-slate-800/60">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>{t('marketing.features.f3Point1')}</span>
@@ -354,6 +388,59 @@ export function MarketingPage() {
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>{t('marketing.features.f3Point2')}</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Feature 4: Security & Encryption */}
+            <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900/90 to-slate-900 border border-emerald-500/35 rounded-3xl p-6 sm:p-7 relative hover:border-emerald-500/60 transition flex flex-col justify-between shadow-lg shadow-emerald-950/40">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-5 border border-emerald-500/30">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">
+                  {currentLang === 'he'
+                    ? 'הצפנת נתונים ופרטיות (AES-256)'
+                    : currentLang === 'en'
+                      ? 'Encrypted & Confidential (AES-256)'
+                      : currentLang === 'ar'
+                        ? 'تشفير البيانات والخصوصية (AES-256)'
+                        : 'Шифрование и конфиденциальность (AES-256)'}
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
+                  {currentLang === 'he'
+                    ? 'כל המזהים האישיים ומספרי הטלפון של העובדים מוצפנים ברמת תקן בנקאי (AES-256-GCM). המידע נשמר אך ורק לחישוב השכר ואינו מועבר לצדדים שלישיים בשום מקרה.'
+                    : currentLang === 'en'
+                      ? 'Employee personal IDs and phone numbers are encrypted with bank-grade AES-256-GCM. Personal data is never sold or shared with any third parties under any circumstances.'
+                      : currentLang === 'ar'
+                        ? 'يتم تشفير المعرفات الشخصية وأرقام الهواتف بأعلى معايير التشفير (AES-256-GCM). البيانات محفوظة للشركة فقط ولا تتم مشاركتها مع أي طرف ثالث إطلاقاً.'
+                        : 'Персональные ID и номера телефонов сотрудников зашифрованы по стандарту AES-256-GCM. Данные хранятся строго конфиденциально и ни при каких условиях не передаются третьим лицам.'}
+                </p>
+              </div>
+              <ul className="space-y-2 text-xs text-emerald-200 pt-2 border-t border-emerald-500/20">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    {currentLang === 'he'
+                      ? 'הסכמת פרטיות מתועדת לעובד'
+                      : currentLang === 'en'
+                        ? 'Verified Privacy Consent'
+                        : currentLang === 'ar'
+                          ? 'موافقة خصوصية موثقة للعامل'
+                          : 'Фиксация согласия работника'}
+                  </span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    {currentLang === 'he'
+                      ? 'אבטחת מידע ללא שיתוף צד ג׳'
+                      : currentLang === 'en'
+                        ? 'Zero Third-Party Sharing'
+                        : currentLang === 'ar'
+                          ? 'لا مشاركة مع أي طرف ثالث'
+                          : 'Никакой передачи третьим лицам'}
+                  </span>
                 </li>
               </ul>
             </div>
@@ -662,6 +749,18 @@ export function MarketingPage() {
                 <div className="flex items-center gap-3">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>{t('marketing.contact.benefit2')}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    {currentLang === 'he'
+                      ? 'הצפנת AES-256 מלאה: המידע מאובטח ולעולם אינו מועבר לצדדים שלישיים'
+                      : currentLang === 'en'
+                        ? 'Full AES-256 Encryption: data is strictly confidential and never shared with 3rd parties'
+                        : currentLang === 'ar'
+                          ? 'تشفير كامل AES-256: بياناتك مشفرة وسرية تماماً ولا تتم مشاركتها مع أي طرف ثالث'
+                          : 'Полное шифрование AES-256: данные защищены и ни в коем случае никому не передаются'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
